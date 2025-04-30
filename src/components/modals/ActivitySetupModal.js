@@ -1,14 +1,20 @@
-// src/components/modals/ActivitySetupModal.js
-import React, { useState } from 'react';
+// src/components/modals/ActivitySetupModal.js (update for responsive design)
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
     TextInput,
     TouchableOpacity,
     StyleSheet,
-    FlatList
+    FlatList,
+    Dimensions,
+    Platform
 } from 'react-native';
 import BaseModal from './BaseModal';
+
+// Get device dimensions to handle iPad properly
+const { width, height } = Dimensions.get('window');
+const isTablet = width > 768 || height > 768;
 
 const ActivitySetupModal = ({ visible, onClose, onSave }) => {
     // State for managing activities
@@ -114,16 +120,18 @@ const ActivitySetupModal = ({ visible, onClose, onSave }) => {
 const styles = StyleSheet.create({
     container: {
         padding: 10,
-        width: '90%',       
+        width: '100%',
+        maxWidth: isTablet ? '80%' : '100%', 
+        alignSelf: 'center',
     },
     title: {
-        fontSize: 20,
+        fontSize: isTablet ? 24 : 20,
         fontWeight: 'bold',
         textAlign: 'center',
         marginBottom: 10,
     },
     instructionText: {
-        fontSize: 14,
+        fontSize: isTablet ? 16 : 14,
         color: '#6B7280',
         textAlign: 'center',
         marginBottom: 15,
@@ -134,26 +142,26 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 20,
         marginBottom: 20,
-        width: '100%',          // Ensure row takes full width
-        paddingHorizontal: 16,  // Add some padding from edges
+        width: '100%',
+        paddingHorizontal: 16,
     },
     colorCircle: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: isTablet ? 50 : 40,
+        height: isTablet ? 50 : 40,
+        borderRadius: isTablet ? 25 : 20,
         marginRight: 10,
         borderWidth: 1,
         borderColor: '#E5E7EB',
     },
     activityInput: {
         flex: 1,
-        height: 50,
+        height: isTablet ? 60 : 50,
         borderWidth: 1,
         width: '100%',   
         borderColor: '#E5E7EB',
         borderRadius: 8,
         paddingHorizontal: 15,
-        fontSize: 16,
+        fontSize: isTablet ? 18 : 16,
     },
     colorPickerContainer: {
         backgroundColor: 'white',
@@ -164,18 +172,19 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     colorOption: {
-        width: 40,
-        height: 40,
+        width: isTablet ? 50 : 40,
+        height: isTablet ? 50 : 40,
         margin: 5,
-        borderRadius: 20,
+        borderRadius: isTablet ? 25 : 20,
         borderWidth: 1,
         borderColor: '#E5E7EB',
     },
     saveButton: {
         backgroundColor: '#2563eb',
-        padding: 15,
+        padding: isTablet ? 18 : 15,
         borderRadius: 8,
         alignItems: 'center',
+        marginTop: 10,
     },
     saveButtonDisabled: {
         opacity: 0.5,
@@ -183,8 +192,13 @@ const styles = StyleSheet.create({
     saveButtonText: {
         color: 'white',
         fontWeight: 'bold',
-        fontSize: 16,
+        fontSize: isTablet ? 18 : 16,
     },
 });
 
 export default ActivitySetupModal;
+
+// Add similar responsive design changes to these files:
+// - src/components/modals/DurationSetupModal.js
+// - src/components/modals/GoalSetupModal.js 
+// - src/components/modals/WelcomeStatsModal.js
