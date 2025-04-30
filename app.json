@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "DeepBlox",
+    "slug": "DeepWorkApp",
+    "version": "1.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/applogo.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#2563EB",
+          "sounds": []
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.anonymous.DeepWorkApp",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "fetch",
+          "processing"
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.anonymous.DeepWorkApp",
+      "permissions": [
+        "NOTIFICATIONS",
+        "VIBRATE",
+        "FOREGROUND_SERVICE",
+        "WAKE_LOCK"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6154a390-07d0-416c-955b-63179fba2bc8"
+      }
+    },
+    "owner": "airraman",
+    "runtimeVersion": "1.0.1",
+    "updates": {
+      "url": "https://u.expo.dev/6154a390-07d0-416c-955b-63179fba2bc8"
+    },
+    "scripts": {
+      "postinstall": "npx pod-install"
+    }
+  }
+}
