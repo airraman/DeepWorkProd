@@ -12,31 +12,21 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-"plugins": [
-  [
-    "expo-notifications",
-    {
-      "icon": "./assets/notification-icon.png",
-      "color": "#2563EB",
-      "sounds": []
-    }
-  ],
-  "./backgroundTaskPlugin.js"
-],
-"ios": {
-  "supportsTablet": false,
-  "bundleIdentifier": "com.anonymous.DeepWorkApp",
-  "infoPlist": {
-    "UIBackgroundModes": [
-      "fetch",
-      "processing",
-      "audio"
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#2563EB",
+          "sounds": []
+        }
+      ],
+      "./ios-background-tasks-plugin.js"
     ],
-    "BGTaskSchedulerPermittedIdentifiers": [
-      "com.anonymous.DeepWorkApp.BACKGROUND_TIMER_TASK"
-    ]
-  }
-},
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.anonymous.DeepWorkApp"
+    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

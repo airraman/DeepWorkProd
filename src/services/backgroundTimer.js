@@ -5,15 +5,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deepWorkStore } from './deepWorkStore';
 import { Platform } from 'react-native';
 
-// Define constants
+// Define constants - UPDATED to match App.js
 const BACKGROUND_TIMER_TASK = 'com.expo.tasks.BACKGROUND_TIMER_TASK';
 const ACTIVE_SESSION_KEY = '@active_deep_work_session';
-
-await BackgroundFetch.registerTaskAsync(BACKGROUND_TIMER_TASK, {
-  minimumInterval: 15, // 15 seconds, minimum allowed by Expo
-  stopOnTerminate: false,
-  startOnBoot: true,
-});
 
 // Helper functions for session storage
 const saveActiveSessionToStorage = async (sessionData) => {
@@ -400,11 +394,17 @@ export const getCurrentSession = async () => {
   return await getActiveSessionFromStorage();
 };
 
+// Export all the functions needed by App.js
 export default {
   startTimerNotification,
   stopTimerNotification,
   updateTimerPauseState,
   configureNotifications,
   setupNotificationActions,
-  getCurrentSession
+  getCurrentSession,
+  // Additional exports needed for App.js
+  calculateRemainingTime,
+  sendCompletionNotification,
+  updateTimerNotification,
+  clearActiveSession
 };
