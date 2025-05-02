@@ -6,7 +6,7 @@ import { deepWorkStore } from './deepWorkStore';
 import { Platform } from 'react-native';
 
 // Define constants
-const BACKGROUND_TIMER_TASK = 'BACKGROUND_TIMER_TASK';
+const BACKGROUND_TIMER_TASK = 'com.anonymous.DeepWorkApp.BACKGROUND_TIMER_TASK';
 const ACTIVE_SESSION_KEY = '@active_deep_work_session';
 
 // Helper functions for session storage

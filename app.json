@@ -22,16 +22,20 @@
         }
       ]
     ],
-    "ios": {
-      "supportsTablet": false,
-      "bundleIdentifier": "com.anonymous.DeepWorkApp",
-      "infoPlist": {
-        "UIBackgroundModes": [
-          "fetch",
-          "processing"
-        ]
-      }
-    },
+"ios": {
+  "supportsTablet": false,
+  "bundleIdentifier": "com.anonymous.DeepWorkApp",
+  "infoPlist": {
+    "UIBackgroundModes": [
+      "fetch",
+      "processing",
+      "audio"
+    ],
+    "BGTaskSchedulerPermittedIdentifiers": [
+      "com.anonymous.DeepWorkApp.BACKGROUND_TIMER_TASK"
+    ]
+  }
+},
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
