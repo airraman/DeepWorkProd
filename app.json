@@ -12,16 +12,17 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "plugins": [
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/notification-icon.png",
-          "color": "#2563EB",
-          "sounds": []
-        }
-      ]
-    ],
+"plugins": [
+  [
+    "expo-notifications",
+    {
+      "icon": "./assets/notification-icon.png",
+      "color": "#2563EB",
+      "sounds": []
+    }
+  ],
+  "./backgroundTaskPlugin.js"
+],
 "ios": {
   "supportsTablet": false,
   "bundleIdentifier": "com.anonymous.DeepWorkApp",
