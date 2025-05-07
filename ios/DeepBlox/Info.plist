@@ -49,6 +49,10 @@
       <string>fetch</string>
       <string>processing</string>
     </array>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+      <string>com.expo.tasks.BACKGROUND_TIMER_TASK</string>
+    </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>
