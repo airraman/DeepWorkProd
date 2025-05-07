@@ -1,5 +1,5 @@
 // App.js
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -8,6 +8,7 @@ import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as Updates from 'expo-updates';
+import { Alert } from 'react-native';
 import { navigationRef } from './src/services/navigationService';
 import backgroundTimer from './src/services/backgroundTimer';
 
@@ -111,17 +112,37 @@ function App() {
     
     initApp();
     
-    // Set up update listener
-    const updateSubscription = Updates.addListener((event) => {
-      if (event.type === Updates.UpdateEventType.UPDATE_AVAILABLE) {
-        // New version available
-        console.log('New update available');
-      } else if (event.type === Updates.UpdateEventType.UPDATE_NO_UPDATE) {
-        // No update available, app is ready
-        console.log('App is up to date');
-        setupBackgroundTasks(); // Register tasks again to be safe
+    // Updated way to check for updates
+    const checkForUpdates = async () => {
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          console.log('New update available');
+          await Updates.fetchUpdateAsync();
+          // Alert user to reload
+          Alert.alert(
+            'Update Available',
+            'A new version is available. Would you like to restart now?',
+            [
+              { text: 'Later', style: 'cancel' },
+              { 
+                text: 'Restart', 
+                onPress: async () => {
+                  await Updates.reloadAsync();
+                }
+              }
+            ]
+          );
+        } else {
+          console.log('App is up to date');
+          setupBackgroundTasks(); // Register tasks again to be safe
+        }
+      } catch (error) {
+        console.log('Error checking for updates:', error);
       }
-    });
+    };
+    
+    checkForUpdates();
 
     // Set up notification response handler
     const notificationSubscription = Notifications.addNotificationResponseReceivedListener(response => {
@@ -160,8 +181,9 @@ function App() {
     
     // Clean up on unmount
     return () => {
-      updateSubscription.remove();
-      notificationSubscription.remove();
+      if (notificationSubscription) {
+        notificationSubscription.remove();
+      }
     };
   }, []);
   

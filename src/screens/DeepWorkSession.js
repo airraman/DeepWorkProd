@@ -12,12 +12,15 @@ import {
   TouchableOpacity,
   PanResponder
 } from 'react-native';
+
 import { deepWorkStore } from '../services/deepWorkStore';
 import SessionNotesModal from '../components/modals/SessionNotesModal';
 import { Pause, Play, ChevronLeft } from 'lucide-react-native';
 import backgroundTimer from '../services/backgroundTimer';
 import { audioService } from '../services/audioService'; // Import audio service
 
+const { width, height } = Dimensions.get('window');
+const isTablet = width > 768 || height > 768;
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Define colors for different activity types
@@ -613,9 +616,10 @@ const styles = StyleSheet.create({
     maxHeight: SCREEN_HEIGHT * 0.5,
   },
   columnContainer: {
-    width: 100,
+    
+    width: isTablet ? 140 : 100, // Slightly wider on tablets
     height: '100%',
-    maxHeight: SCREEN_HEIGHT * 0.45,
+    maxHeight: SCREEN_HEIGHT * (isTablet ? 0.35 : 0.45), // Adjusted for tablets
     backgroundColor: '#e5e7eb',
     borderRadius: 50,
     overflow: 'hidden',

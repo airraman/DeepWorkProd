@@ -17,7 +17,9 @@ import { deepWorkStore } from '../services/deepWorkStore';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import SharedHeader from '../components/SharedHeader';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+// Add tablet detection
+const isTablet = SCREEN_WIDTH > 768 || SCREEN_HEIGHT > 768;
 const HEADER_HEIGHT = Platform.OS === 'ios' ? 60 : 50;
 const CONTENT_PADDING_TOP = HEADER_HEIGHT - (Platform.OS === 'ios' ? 0 : 20);
 
@@ -156,7 +158,7 @@ const HomeScreen = () => {
           activity && styles.sectionCompleted
         ]}>
           <View style={styles.sectionHeader}>
-            <Pencil stroke={colors.textSecondary} size={20} />
+            <Pencil stroke={colors.textSecondary} size={isTablet ? 24 : 20} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Activity Name</Text>
           </View>
           <FlatList
@@ -179,7 +181,7 @@ const HomeScreen = () => {
           duration && styles.sectionCompleted
         ]}>
           <View style={styles.sectionHeader}>
-            <Clock stroke={colors.textSecondary} size={20} />
+            <Clock stroke={colors.textSecondary} size={isTablet ? 24 : 20} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Session Duration</Text>
           </View>
           <View style={styles.durationButtons}>
@@ -217,7 +219,7 @@ const HomeScreen = () => {
           musicChoice && styles.sectionCompleted
         ]}>
           <View style={styles.sectionHeader}>
-            <Music stroke={colors.textSecondary} size={20} />
+            <Music stroke={colors.textSecondary} size={isTablet ? 24 : 20} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Background Music</Text>
           </View>
           <View style={styles.musicButtons}>
@@ -246,7 +248,7 @@ const HomeScreen = () => {
         </View>
         
         {/* Extra padding at the bottom to ensure all content is visible above the footer */}
-        <View style={{ height: 80 }} />
+        <View style={{ height: isTablet ? 120 : 80 }} />
       </ScrollView>
 
       <View style={[styles.footer, { 
@@ -277,29 +279,35 @@ const styles = StyleSheet.create({
   // Content styles
   content: {
     flex: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: isTablet ? 24 : 12,
   },
   contentContainer: {
-    paddingBottom: 20,
+    paddingBottom: isTablet ? 32 : 20,
+    alignItems: isTablet ? 'center' : 'stretch',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: isTablet ? 16 : 10,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: isTablet ? 26 : 20,
     fontWeight: '600',
     textAlign: 'center',
   },
   divider: {
     height: 1,
-    marginBottom: 16,
+    marginBottom: isTablet ? 24 : 16,
+    width: isTablet ? '80%' : '100%',
+    alignSelf: 'center',
   },
   section: {
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    padding: isTablet ? 24 : 16,
+    marginBottom: isTablet ? 18 : 12,
     borderWidth: 2,
+    maxWidth: isTablet ? 800 : '100%',
+    alignSelf: 'center',
+    width: '100%',
   },
   sectionCompleted: {
     borderColor: '#2563eb',
@@ -307,68 +315,73 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
+    marginBottom: isTablet ? 16 : 12,
+    gap: isTablet ? 12 : 8,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: isTablet ? 20 : 16,
     fontWeight: '600',
   },
   durationButtons: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
+    gap: isTablet ? 16 : 8,
+    maxWidth: isTablet ? 600 : '100%',
+    alignSelf: 'center',
   },
   durationButton: {
-    width: (SCREEN_WIDTH - 96) / 3,
-    padding: 12,
+    width: isTablet ? 120 : (SCREEN_WIDTH - 96) / 3,
+    padding: isTablet ? 16 : 12,
     borderRadius: 8,
     alignItems: 'center',
   },
   durationButtonText: {
-    fontSize: 14,
+    fontSize: isTablet ? 18 : 14,
     fontWeight: '500',
   },
   // Activity Styles
   activitiesList: {
     flexGrow: 0,
+    paddingVertical: isTablet ? 16 : 8,
   },
   activityItem: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 8,
-    padding: 12,
-    marginRight: 8,
+    padding: isTablet ? 16 : 12,
+    marginRight: isTablet ? 16 : 8,
     borderWidth: 1,
-    width: SCREEN_WIDTH * 0.6,
+    width: isTablet ? SCREEN_WIDTH * 0.35 : SCREEN_WIDTH * 0.6,
   },
   activityItemSelected: {
     borderWidth: 2,
   },
   colorDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    marginRight: 8,
+    width: isTablet ? 28 : 20,
+    height: isTablet ? 28 : 20,
+    borderRadius: isTablet ? 14 : 10,
+    marginRight: isTablet ? 12 : 8,
   },
   activityName: {
-    fontSize: 14,
+    fontSize: isTablet ? 18 : 14,
     fontWeight: '500',
   },
   // Music Styles
   musicButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: isTablet ? 16 : 8,
+    maxWidth: isTablet ? 600 : '100%',
+    alignSelf: 'center',
   },
   musicButton: {
     flex: 1,
-    padding: 12,
+    padding: isTablet ? 16 : 12,
     borderRadius: 8,
     alignItems: 'center',
   },
   musicButtonText: {
-    fontSize: 14,
+    fontSize: isTablet ? 18 : 14,
     fontWeight: '500',
     textAlign: 'center',
   },
@@ -378,19 +391,21 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 16,
+    padding: isTablet ? 24 : 16,
     borderTopWidth: 1,
   },
   startButton: {
-    padding: 16,
+    padding: isTablet ? 20 : 16,
     borderRadius: 8,
     alignItems: 'center',
+    maxWidth: isTablet ? 600 : '100%',
+    alignSelf: 'center',
   },
   startButtonDisabled: {
     opacity: 0.5,
   },
   startButtonText: {
-    fontSize: 16,
+    fontSize: isTablet ? 20 : 16,
     fontWeight: '500',
   },
   // Loading state
@@ -400,7 +415,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    fontSize: 16,
+    fontSize: isTablet ? 18 : 16,
   },
 });
 

@@ -23,10 +23,20 @@
       ],
       "./ios-background-tasks-plugin.js"
     ],
-    "ios": {
-      "supportsTablet": false,
-      "bundleIdentifier": "com.anonymous.DeepWorkApp"
-    },
+"ios": {
+  "supportsTablet": true,
+  "bundleIdentifier": "com.anonymous.DeepWorkApp",
+  "infoPlist": {
+    "UIBackgroundModes": [
+      "fetch",
+      "processing",
+      "audio"
+    ],
+    "BGTaskSchedulerPermittedIdentifiers": [
+      "com.expo.tasks.BACKGROUND_TIMER_TASK"
+    ]
+  }
+},
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

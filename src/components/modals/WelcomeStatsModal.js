@@ -5,16 +5,21 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
+    Dimensions
 } from 'react-native';
 import BaseModal from './BaseModal';
 import { deepWorkStore } from '../../services/deepWorkStore';
+
+// Add detection for iPad/tablet
+const { width, height } = Dimensions.get('window');
+const isTablet = width > 768 || height > 768;
 
 const WelcomeStatsModal = ({ visible, onClose }) => {
     const [totalHours, setTotalHours] = useState(0);
 
     useEffect(() => {
         calculateTotalHours();
-    }, [visible]); // Recalculate when modal becomes visible
+    }, [visible]);
 
     const calculateTotalHours = async () => {
         try {
@@ -70,41 +75,43 @@ const WelcomeStatsModal = ({ visible, onClose }) => {
 
 const styles = StyleSheet.create({
     container: {
-        padding: 24,
+        padding: isTablet ? 36 : 24,
         alignItems: 'center',
+        width: isTablet ? '100%' : 'auto',
+        maxWidth: isTablet ? 500 : 'auto',
     },
     welcomeText: {
-        fontSize: 24,
+        fontSize: isTablet ? 32 : 24,
         fontWeight: 'bold',
         color: '#1F2937',
-        marginBottom: 16,
+        marginBottom: isTablet ? 24 : 16,
     },
     statsContainer: {
         alignItems: 'center',
-        marginVertical: 20,
+        marginVertical: isTablet ? 30 : 20,
     },
     statsText: {
-        fontSize: 18,
+        fontSize: isTablet ? 24 : 18,
         color: '#4B5563',
-        marginBottom: 8,
+        marginBottom: isTablet ? 12 : 8,
         textAlign: 'center',
     },
     hoursText: {
-        fontSize: 28,
+        fontSize: isTablet ? 36 : 28,
         fontWeight: 'bold',
         color: '#2563EB',
-        marginVertical: 8,
+        marginVertical: isTablet ? 12 : 8,
     },
     startButton: {
         backgroundColor: '#2563EB',
-        paddingVertical: 12,
-        paddingHorizontal: 24,
+        paddingVertical: isTablet ? 16 : 12,
+        paddingHorizontal: isTablet ? 36 : 24,
         borderRadius: 8,
-        marginTop: 16,
+        marginTop: isTablet ? 24 : 16,
     },
     startButtonText: {
         color: 'white',
-        fontSize: 16,
+        fontSize: isTablet ? 20 : 16,
         fontWeight: '600',
     },
 });

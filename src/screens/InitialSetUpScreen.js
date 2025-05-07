@@ -1,6 +1,6 @@
 // src/screens/InitialSetupScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Alert, Dimensions } from 'react-native';
 import { deepWorkStore } from '../services/deepWorkStore';
 
 // Import modals
@@ -8,6 +8,10 @@ import ActivitySetupModal from '../components/modals/ActivitySetupModal.js';
 import DurationSetupModal from '../components/modals/DurationSetupModal.js';
 import GoalSetupModal from '../components/modals/GoalSetupModal.js';
 import WelcomeStatsModal from '../components/modals/WelcomeStatsModal.js';
+
+// Add tablet detection
+const { width, height } = Dimensions.get('window');
+const isTablet = width > 768 || height > 768;
 
 const InitialSetupScreen = ({navigation}) => {
     // Modal visibility states
@@ -27,188 +31,24 @@ const InitialSetupScreen = ({navigation}) => {
     }, []);
 
     const checkFirstTimeUser = async () => {
-        try {
-            setIsLoading(true);
-            console.log('Checking first time user status...'); // Debug log
-
-            // Initialize storage
-            await deepWorkStore.initialize();
-            
-            // Get settings
-            const settings = await deepWorkStore.getSettings();
-            console.log('Current settings:', settings); // Debug log
-
-            // Check if this is a first-time user
-            const isFirstTimeUser = !settings.activities.length || 
-                                  !settings.durations.length;
-
-            console.log('Is first time user:', isFirstTimeUser); // Debug log
-
-            if (isFirstTimeUser) {
-                // Add a small delay before showing the first modal
-                setTimeout(() => {
-                    setShowActivityModal(true);
-                    setShowWelcomeStats(false);
-                    setIsLoading(false);
-                }, 500);
-            } else {
-                setShowActivityModal(false);
-                setShowWelcomeStats(true);
-                setIsLoading(false);
-            }
-        } catch (error) {
-            console.error('Error in checkFirstTimeUser:', error);
-            // Show an error alert and allow user to retry or go to main app
-            Alert.alert(
-                'Setup Error',
-                'There was a problem setting up the app. Would you like to try again?',
-                [
-                    {
-                        text: 'Retry',
-                        onPress: () => checkFirstTimeUser()
-                    },
-                    {
-                        text: 'Skip Setup',
-                        onPress: () => {
-                            // Skip setup and go to main app
-                            navigation.reset({
-                                index: 0,
-                                routes: [{ name: 'MainApp' }],
-                            });
-                        }
-                    }
-                ]
-            );
-            setIsLoading(false);
-        }
+        // ... existing code ...
     };
 
     const handleActivitySave = async (activities) => {
-        try {
-            console.log('Saving activities:', activities); // Debug log
-            const success = await deepWorkStore.updateActivities(activities);
-            
-            if (success) {
-                setShowActivityModal(false);
-                // Add a small delay before showing the next modal
-                setTimeout(() => {
-                    setShowDurationModal(true);
-                }, 300);
-            } else {
-                throw new Error('Failed to save activities');
-            }
-        } catch (error) {
-            console.error('Error saving activities:', error);
-            Alert.alert(
-                'Save Error',
-                'Could not save activities. Would you like to try again?',
-                [
-                    {
-                        text: 'Retry',
-                        onPress: () => {}  // Stay on current modal
-                    },
-                    {
-                        text: 'Skip Setup',
-                        onPress: () => {
-                            // Skip setup and go to main app
-                            navigation.reset({
-                                index: 0,
-                                routes: [{ name: 'MainApp' }],
-                            });
-                        }
-                    }
-                ]
-            );
-        }
+        // ... existing code ...
     };
 
     const handleDurationSave = async (durations) => {
-        try {
-            console.log('Saving durations:', durations); // Debug log
-            const success = await deepWorkStore.updateDurations(durations);
-            
-            if (success) {
-                setShowDurationModal(false);
-                // Add a small delay before showing the next modal
-                setTimeout(() => {
-                    setShowGoalModal(true);
-                }, 300);
-            } else {
-                throw new Error('Failed to save durations');
-            }
-        } catch (error) {
-            console.error('Error saving durations:', error);
-            Alert.alert(
-                'Save Error',
-                'Could not save durations. Would you like to try again?',
-                [
-                    {
-                        text: 'Retry',
-                        onPress: () => {}  // Stay on current modal
-                    },
-                    {
-                        text: 'Continue',
-                        onPress: () => {
-                            // Continue to next step anyway
-                            setShowDurationModal(false);
-                            setTimeout(() => {
-                                setShowGoalModal(true);
-                            }, 300);
-                        }
-                    }
-                ]
-            );
-        }
+        // ... existing code ...
     };
 
     const handleWelcomeStatsClose = () => {
-        setShowWelcomeStats(false);
-        // Add a small delay before navigation
-        setTimeout(() => {
-            // Use reset to clear the navigation stack
-            navigation.reset({
-                index: 0,
-                routes: [{ name: 'MainApp' }],
-            });
-        }, 300);
+        // ... existing code ...
     };
 
     const handleGoalSave = async (goals) => {
-        try {
-            console.log('Saving goals:', goals); // Debug log
-            const success = await deepWorkStore.updateGoals(goals);
-            
-            if (success) {
-                setShowGoalModal(false);
-                setSetupComplete(true);
-                // Add a small delay before showing the welcome stats
-                setTimeout(() => {
-                    setShowWelcomeStats(true);
-                }, 300);
-            } else {
-                throw new Error('Failed to save goals');
-            }
-        } catch (error) {
-            console.error('Error saving goals:', error);
-            // Even if there's an error, we should still proceed to the next screen
-            setShowGoalModal(false);
-            setSetupComplete(true);
-            setTimeout(() => {
-                setShowWelcomeStats(true);
-            }, 300);
-        }
+        // ... existing code ...
     };
-
-    // If setup is complete but welcome stats is not showing,
-    // make sure we navigate to main app
-    useEffect(() => {
-        if (setupComplete && !showWelcomeStats) {
-            navigation.reset({
-                index: 0,
-                routes: [{ name: 'MainApp' }],
-            });
-        }
-    }, [setupComplete, showWelcomeStats, navigation]);
 
     if (isLoading) {
         return (
@@ -222,81 +62,17 @@ const InitialSetupScreen = ({navigation}) => {
         <View style={styles.container}>
             <ActivitySetupModal
                 visible={showActivityModal}
-                onClose={() => {
-                    // Provide a way to skip setup if modal is closed
-                    Alert.alert(
-                        'Skip Setup',
-                        'Are you sure you want to skip the setup?',
-                        [
-                            {
-                                text: 'Cancel',
-                                style: 'cancel'
-                            },
-                            {
-                                text: 'Skip',
-                                onPress: () => {
-                                    navigation.reset({
-                                        index: 0,
-                                        routes: [{ name: 'MainApp' }],
-                                    });
-                                }
-                            }
-                        ]
-                    );
-                }} 
+                onClose={() => {}} 
                 onSave={handleActivitySave}
             />
             <DurationSetupModal
                 visible={showDurationModal}
-                onClose={() => {
-                    // Provide a way to skip this step
-                    Alert.alert(
-                        'Skip Step',
-                        'Are you sure you want to skip setting durations?',
-                        [
-                            {
-                                text: 'Cancel',
-                                style: 'cancel'
-                            },
-                            {
-                                text: 'Skip',
-                                onPress: () => {
-                                    setShowDurationModal(false);
-                                    setTimeout(() => {
-                                        setShowGoalModal(true);
-                                    }, 300);
-                                }
-                            }
-                        ]
-                    );
-                }} 
+                onClose={() => {}} 
                 onSave={handleDurationSave}
             />
             <GoalSetupModal
                 visible={showGoalModal}
-                onClose={() => {
-                    // Provide a way to skip this step
-                    Alert.alert(
-                        'Skip Step',
-                        'Are you sure you want to skip setting goals?',
-                        [
-                            {
-                                text: 'Cancel',
-                                style: 'cancel'
-                            },
-                            {
-                                text: 'Skip',
-                                onPress: () => {
-                                    setShowGoalModal(false);
-                                    setSetupComplete(true);
-                                    setTimeout(() => {
-                                        setShowWelcomeStats(true);
-                                    }, 300);
-                                }
-                            }
-                        ]
-                    );
-                }} 
+                onClose={() => {}} 
                 onSave={handleGoalSave}
             />
             <WelcomeStatsModal
@@ -310,7 +86,10 @@ const InitialSetupScreen = ({navigation}) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: 'white',
+        backgroundColor: 'white',  // Change from dark gray to white
+        // Remove any width constraints that might be creating the column effect
+        width: '100%',
+        height: '100%',
     },
     centered: {
         justifyContent: 'center',
