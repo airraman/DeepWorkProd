@@ -1,3 +1,4 @@
+// src/services/backgroundTimer.js - FIXED
 import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as Notifications from 'expo-notifications';
@@ -5,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deepWorkStore } from './deepWorkStore';
 import { Platform } from 'react-native';
 
-// Define constants - UPDATED to match App.js
+// Define constants
 const BACKGROUND_TIMER_TASK = 'com.expo.tasks.BACKGROUND_TIMER_TASK';
 const ACTIVE_SESSION_KEY = '@active_deep_work_session';
 
@@ -43,38 +44,66 @@ const calculateRemainingTime = (sessionData) => {
   return Math.max(0, sessionData.duration - elapsed);
 };
 
-// Register the background task
-TaskManager.defineTask(BACKGROUND_TIMER_TASK, async () => {
+// Function to ensure task is defined and registered
+const ensureTaskIsRegistered = async () => {
   try {
-    const sessionData = await getActiveSessionFromStorage();
+    // Check if task is already defined
+    const isTaskDefined = TaskManager.isTaskDefined(BACKGROUND_TIMER_TASK);
     
-    if (!sessionData) {
-      return BackgroundFetch.BackgroundFetchResult.NoData;
+    if (!isTaskDefined) {
+      // Define the task if it's not already defined
+      TaskManager.defineTask(BACKGROUND_TIMER_TASK, async () => {
+        try {
+          const sessionData = await getActiveSessionFromStorage();
+          
+          if (!sessionData) {
+            return BackgroundFetch.BackgroundFetchResult.NoData;
+          }
+      
+          // Don't update timer if paused
+          if (sessionData.isPaused) {
+            await updateTimerNotification(sessionData.remainingAtPause, sessionData);
+            return BackgroundFetch.BackgroundFetchResult.NewData;
+          }
+      
+          const timeRemaining = calculateRemainingTime(sessionData);
+          
+          if (timeRemaining <= 0) {
+            // Session complete
+            await sendCompletionNotification();
+            await clearActiveSession();
+            return BackgroundFetch.BackgroundFetchResult.NewData;
+          }
+          
+          // Update notification with current timer
+          await updateTimerNotification(timeRemaining, sessionData);
+          return BackgroundFetch.BackgroundFetchResult.NewData;
+        } catch (error) {
+          console.error("Background task error:", error);
+          return BackgroundFetch.BackgroundFetchResult.Failed;
+        }
+      });
     }
-
-    // Don't update timer if paused
-    if (sessionData.isPaused) {
-      await updateTimerNotification(sessionData.remainingAtPause, sessionData);
-      return BackgroundFetch.BackgroundFetchResult.NewData;
-    }
-
-    const timeRemaining = calculateRemainingTime(sessionData);
     
-    if (timeRemaining <= 0) {
-      // Session complete
-      await sendCompletionNotification();
-      await clearActiveSession();
-      return BackgroundFetch.BackgroundFetchResult.NewData;
+    // Check if task is already registered
+    const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_TIMER_TASK);
+    
+    if (!isRegistered) {
+      // Register the task if it's not already registered
+      await BackgroundFetch.registerTaskAsync(BACKGROUND_TIMER_TASK, {
+        minimumInterval: 15, // 15 seconds
+        stopOnTerminate: false,
+        startOnBoot: true,
+      });
+      console.log('Background task registered successfully');
     }
     
-    // Update notification with current timer
-    await updateTimerNotification(timeRemaining, sessionData);
-    return BackgroundFetch.BackgroundFetchResult.NewData;
+    return true;
   } catch (error) {
-    console.error("Background task error:", error);
-    return BackgroundFetch.BackgroundFetchResult.Failed;
+    console.error('Failed to ensure task is registered:', error);
+    return false;
   }
-});
+};
 
 // Send session completion notification
 const sendCompletionNotification = async () => {
@@ -193,7 +222,7 @@ ${progressText}`;
 };
 
 // Configure notifications system
-export const configureNotifications = async () => {
+const configureNotifications = async () => {
   // Only set up categories on iOS - Android handles this differently
   if (Platform.OS === 'ios') {
     await Notifications.setNotificationCategoryAsync('deepwork', [
@@ -225,10 +254,13 @@ export const configureNotifications = async () => {
       priority: Notifications.AndroidNotificationPriority.HIGH
     }),
   });
+
+  // Ensure the background task is registered after notifications are configured
+  await ensureTaskIsRegistered();
 };
 
 // Handle notification action responses
-export const setupNotificationActions = (navigation) => {
+const setupNotificationActions = (navigation) => {
   const subscription = Notifications.addNotificationResponseReceivedListener(response => {
     try {
       // Get the action identifier
@@ -278,17 +310,13 @@ const handlePauseResumeAction = async () => {
 };
 
 // Start background timer and notification
-export const startTimerNotification = async (duration, activity, musicChoice) => {
+const startTimerNotification = async (duration, activity, musicChoice) => {
   try {
     // Configure notifications first
     await configureNotifications();
     
-    // Register background task
-    await BackgroundFetch.registerTaskAsync(BACKGROUND_TIMER_TASK, {
-      minimumInterval: 15, // 15 seconds, minimum allowed by Expo
-      stopOnTerminate: false,
-      startOnBoot: true,
-    });
+    // Ensure task is registered
+    await ensureTaskIsRegistered();
     
     // Calculate duration in milliseconds
     const durationMs = parseInt(duration) * 60 * 1000;
@@ -315,10 +343,17 @@ export const startTimerNotification = async (duration, activity, musicChoice) =>
 };
 
 // Stop background timer and notification
-export const stopTimerNotification = async () => {
+const stopTimerNotification = async () => {
   try {
-    // Unregister background task
-    await BackgroundFetch.unregisterTaskAsync(BACKGROUND_TIMER_TASK);
+    // Try to unregister the task, but don't error if it fails
+    try {
+      const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_TIMER_TASK);
+      if (isRegistered) {
+        await BackgroundFetch.unregisterTaskAsync(BACKGROUND_TIMER_TASK);
+      }
+    } catch (e) {
+      console.warn("Error unregistering task:", e);
+    }
     
     // Clear active session data
     await clearActiveSession();
@@ -333,7 +368,7 @@ export const stopTimerNotification = async () => {
 };
 
 // Update timer when paused/resumed
-export const updateTimerPauseState = async (isPaused) => {
+const updateTimerPauseState = async (isPaused) => {
   try {
     const sessionData = await getActiveSessionFromStorage();
     if (!sessionData) return;
@@ -390,7 +425,7 @@ export const updateTimerPauseState = async (isPaused) => {
 };
 
 // Get the current session data
-export const getCurrentSession = async () => {
+const getCurrentSession = async () => {
   return await getActiveSessionFromStorage();
 };
 
@@ -402,9 +437,9 @@ export default {
   configureNotifications,
   setupNotificationActions,
   getCurrentSession,
-  // Additional exports needed for App.js
   calculateRemainingTime,
   sendCompletionNotification,
   updateTimerNotification,
-  clearActiveSession
+  clearActiveSession,
+  ensureTaskIsRegistered
 };
