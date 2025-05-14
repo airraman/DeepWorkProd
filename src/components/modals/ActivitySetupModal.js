@@ -1,5 +1,5 @@
-// src/components/modals/ActivitySetupModal.js (update for responsive design)
-import React, { useState, useEffect } from 'react';
+// src/components/modals/ActivitySetupModal.js
+import React, { useState } from 'react';
 import {
     View,
     Text,
@@ -8,13 +8,16 @@ import {
     StyleSheet,
     FlatList,
     Dimensions,
-    Platform
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView
 } from 'react-native';
 import BaseModal from './BaseModal';
 
-// Get device dimensions to handle iPad properly
+// Get device dimensions for responsive design
 const { width, height } = Dimensions.get('window');
-const isTablet = width > 768 || height > 768;
+const isTablet = width > 768;
+const isSmallPhone = height < 700; // For iPhone SE and similar small devices
 
 const ActivitySetupModal = ({ visible, onClose, onSave }) => {
     // State for managing activities
@@ -53,6 +56,7 @@ const ActivitySetupModal = ({ visible, onClose, onSave }) => {
         }
     };
 
+    // Small color picker component
     const ColorPicker = () => (
         <View style={styles.colorPickerContainer}>
             <FlatList
@@ -71,120 +75,141 @@ const ActivitySetupModal = ({ visible, onClose, onSave }) => {
 
     return (
         <BaseModal visible={visible} onClose={onClose}>
-            <View style={styles.container}>
-                <Text style={styles.title}>Activities</Text>
-                <Text style={styles.instructionText}>
-                    Set your Deep Work activities. Choose something you can do uninterrupted.
-                </Text>
-                
-                {activities.map(activity => (
-                    <View key={activity.id} style={styles.activityRow}>
-                        <TouchableOpacity
-                            style={[styles.colorCircle, { backgroundColor: activity.color }]}
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={styles.keyboardAvoidingView}
+            >
+                <ScrollView contentContainerStyle={styles.scrollContainer}>
+                    <View style={styles.container}>
+                        <Text style={styles.title}>Activities</Text>
+                        <Text style={styles.instructionText}>
+                            Set your Deep Work activities. Choose something you can do uninterrupted.
+                        </Text>
+                        
+                        {activities.map((activity, index) => (
+                            <View key={activity.id} style={styles.activityRow}>
+                                <TouchableOpacity
+                                    style={[styles.colorCircle, { backgroundColor: activity.color }]}
+                                    onPress={() => {
+                                        setSelectedActivityId(activity.id);
+                                        setShowColorPicker(true);
+                                    }}
+                                />
+                                <TextInput
+                                    style={styles.activityInput}
+                                    value={activity.name}
+                                    onChangeText={(text) => handleActivityChange(activity.id, text)}
+                                    placeholder="CREATE ACTIVITY"
+                                    placeholderTextColor="#AAAAAA"
+                                    autoCapitalize="none"
+                                />
+                            </View>
+                        ))}
+
+                        {showColorPicker && <ColorPicker />}
+
+                        <TouchableOpacity 
+                            style={[
+                                styles.saveButton,
+                                !activities.every(a => a.name.trim()) && styles.saveButtonDisabled
+                            ]}
                             onPress={() => {
-                                setSelectedActivityId(activity.id);
-                                setShowColorPicker(true);
+                                if (activities.every(a => a.name.trim())) {
+                                    onSave(activities);
+                                }
                             }}
-                        />
-                        <TextInput
-                            style={styles.activityInput}
-                            value={activity.name}
-                            onChangeText={(text) => handleActivityChange(activity.id, text)}
-                            placeholder="CREATE ACTIVITY"
-                            placeholderTextColor="#000"
-                        />
+                            disabled={!activities.every(a => a.name.trim())}
+                        >
+                            <Text style={styles.saveButtonText}>Save Activities</Text>
+                        </TouchableOpacity>
                     </View>
-                ))}
-
-                {showColorPicker && <ColorPicker />}
-
-                <TouchableOpacity 
-                    style={[
-                        styles.saveButton,
-                        !activities.every(a => a.name.trim()) && styles.saveButtonDisabled
-                    ]}
-                    onPress={() => {
-                        if (activities.every(a => a.name.trim())) {
-                            onSave(activities);
-                        }
-                    }}
-                    disabled={!activities.every(a => a.name.trim())}
-                >
-                    <Text style={styles.saveButtonText}>Save Activities</Text>
-                </TouchableOpacity>
-            </View>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </BaseModal>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        padding: 10,
+    keyboardAvoidingView: {
+        flex: 1,
         width: '100%',
-        maxWidth: isTablet ? '80%' : '100%', 
-        alignSelf: 'center',
+    },
+    scrollContainer: {
+        flexGrow: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 20,
+    },
+    container: {
+        width: '90%',
+        maxWidth: 500,
+        backgroundColor: 'white',
+        borderRadius: 12,
+        padding: 20,
+        alignItems: 'center',
     },
     title: {
-        fontSize: isTablet ? 24 : 20,
+        fontSize: isTablet ? 28 : 24,
         fontWeight: 'bold',
+        marginBottom: 12,
         textAlign: 'center',
-        marginBottom: 10,
+        width: '100%',
     },
     instructionText: {
-        fontSize: isTablet ? 16 : 14,
+        fontSize: isTablet ? 18 : 16,
         color: '#6B7280',
         textAlign: 'center',
-        marginBottom: 15,
-        lineHeight: 20,
+        marginBottom: 24,
+        lineHeight: 22,
+        paddingHorizontal: 8,
     },
     activityRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 20,
-        marginBottom: 20,
         width: '100%',
-        paddingHorizontal: 16,
+        marginBottom: isSmallPhone ? 12 : 20,
     },
     colorCircle: {
-        width: isTablet ? 50 : 40,
-        height: isTablet ? 50 : 40,
-        borderRadius: isTablet ? 25 : 20,
-        marginRight: 10,
+        width: isTablet ? 48 : 36,
+        height: isTablet ? 48 : 36,
+        borderRadius: isTablet ? 24 : 18,
+        marginRight: 12,
         borderWidth: 1,
         borderColor: '#E5E7EB',
     },
     activityInput: {
         flex: 1,
-        height: isTablet ? 60 : 50,
+        height: isTablet ? 54 : 44,
         borderWidth: 1,
-        width: '100%',   
         borderColor: '#E5E7EB',
         borderRadius: 8,
-        paddingHorizontal: 15,
-        fontSize: isTablet ? 18 : 16,
+        paddingHorizontal: 12,
+        fontSize: isTablet ? 16 : 14,
     },
     colorPickerContainer: {
+        width: '100%',
         backgroundColor: 'white',
-        padding: 10,
+        padding: 12,
         borderRadius: 8,
         borderWidth: 1,
         borderColor: '#E5E7EB',
         marginBottom: 20,
     },
     colorOption: {
-        width: isTablet ? 50 : 40,
-        height: isTablet ? 50 : 40,
-        margin: 5,
-        borderRadius: isTablet ? 25 : 20,
+        width: isTablet ? 46 : 36,
+        height: isTablet ? 46 : 36,
+        margin: 6,
+        borderRadius: isTablet ? 23 : 18,
         borderWidth: 1,
         borderColor: '#E5E7EB',
     },
     saveButton: {
         backgroundColor: '#2563eb',
-        padding: isTablet ? 18 : 15,
+        width: '100%',
+        padding: isTablet ? 16 : 14,
         borderRadius: 8,
         alignItems: 'center',
-        marginTop: 10,
+        marginTop: 12,
     },
     saveButtonDisabled: {
         opacity: 0.5,
@@ -197,8 +222,3 @@ const styles = StyleSheet.create({
 });
 
 export default ActivitySetupModal;
-
-// Add similar responsive design changes to these files:
-// - src/components/modals/DurationSetupModal.js
-// - src/components/modals/GoalSetupModal.js 
-// - src/components/modals/WelcomeStatsModal.js
