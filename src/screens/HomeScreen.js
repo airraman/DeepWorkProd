@@ -1,3 +1,4 @@
+// src/screens/HomeScreen.js
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -18,7 +19,6 @@ import { useTheme, THEMES } from '../context/ThemeContext';
 import SharedHeader from '../components/SharedHeader';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-// Add tablet detection
 const isTablet = SCREEN_WIDTH > 768 || SCREEN_HEIGHT > 768;
 const HEADER_HEIGHT = Platform.OS === 'ios' ? 60 : 50;
 const CONTENT_PADDING_TOP = HEADER_HEIGHT - (Platform.OS === 'ios' ? 0 : 20);
@@ -107,15 +107,15 @@ const HomeScreen = () => {
       style={[
         styles.activityItem,
         { 
-          backgroundColor: isDark ? colors.card : 'white',
-          borderColor: activity === item.id ? colors.primary : colors.border 
+          backgroundColor: isDark ? colors.card : '#1f1f1f',
+          borderColor: activity === item.id ? colors.primary : 'rgba(255,255,255,0.1)'
         },
         activity === item.id && styles.activityItemSelected
       ]}
       onPress={() => setActivity(item.id)}
     >
       <View style={[styles.colorDot, { backgroundColor: item.color }]} />
-      <Text style={[styles.activityName, { color: colors.text }]}>{item.name}</Text>
+      <Text style={[styles.activityName, { color: 'white' }]}>{item.name}</Text>
     </TouchableOpacity>
   );
 
@@ -148,18 +148,18 @@ const HomeScreen = () => {
         
         <View style={[styles.divider, { backgroundColor: colors.divider }]} />
         
-        {/* Activity Selection - Now using dynamic activities from settings */}
+        {/* Activity Selection - Section */}
         <View style={[
           styles.section, 
           { 
-            backgroundColor: colors.card,
+            backgroundColor: '#1f1f1f',
             borderColor: activity ? colors.primary : colors.border 
           },
           activity && styles.sectionCompleted
         ]}>
           <View style={styles.sectionHeader}>
-            <Pencil stroke={colors.textSecondary} size={isTablet ? 24 : 20} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Activity Name</Text>
+            <Pencil stroke={colors.textSecondary} size={20} />
+            <Text style={[styles.sectionTitle, { color: 'white' }]}>Activity Name</Text>
           </View>
           <FlatList
             data={activities}
@@ -171,18 +171,18 @@ const HomeScreen = () => {
           />
         </View>
         
-        {/* Duration Selection - Now using dynamic durations from settings */}
+        {/* Duration Selection - Section */}
         <View style={[
           styles.section, 
           { 
-            backgroundColor: colors.card,
+            backgroundColor: '#1f1f1f',
             borderColor: duration ? colors.primary : colors.border 
           },
           duration && styles.sectionCompleted
         ]}>
           <View style={styles.sectionHeader}>
-            <Clock stroke={colors.textSecondary} size={isTablet ? 24 : 20} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Session Duration</Text>
+            <Clock stroke={colors.textSecondary} size={20} />
+            <Text style={[styles.sectionTitle, { color: 'white' }]}>Session Duration</Text>
           </View>
           <View style={styles.durationButtons}>
             {availableDurations.map((time) => (
@@ -190,7 +190,7 @@ const HomeScreen = () => {
                 key={time}
                 style={[
                   styles.durationButton,
-                  { backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6' },
+                  { backgroundColor: '#2a2a2a' },
                   duration === time.toString() && { backgroundColor: colors.primary }
                 ]}
                 onPress={() => setDuration(time.toString())}
@@ -198,7 +198,7 @@ const HomeScreen = () => {
                 <Text
                   style={[
                     styles.durationButtonText,
-                    { color: isDark ? colors.textSecondary : '#1f2937' },
+                    { color: colors.textSecondary },
                     duration === time.toString() && { color: 'white' }
                   ]}
                 >
@@ -209,18 +209,18 @@ const HomeScreen = () => {
           </View>
         </View>
 
-        {/* Music Selection */}
+        {/* Music Selection - Section */}
         <View style={[
           styles.section, 
           { 
-            backgroundColor: colors.card,
+            backgroundColor: '#1f1f1f',
             borderColor: musicChoice ? colors.primary : colors.border 
           },
           musicChoice && styles.sectionCompleted
         ]}>
           <View style={styles.sectionHeader}>
-            <Music stroke={colors.textSecondary} size={isTablet ? 24 : 20} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Background Music</Text>
+            <Music stroke={colors.textSecondary} size={20} />
+            <Text style={[styles.sectionTitle, { color: 'white' }]}>Background Music</Text>
           </View>
           <View style={styles.musicButtons}>
             {musicOptions.map((option) => (
@@ -228,7 +228,7 @@ const HomeScreen = () => {
                 key={option.value}
                 style={[
                   styles.musicButton,
-                  { backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6' },
+                  { backgroundColor: '#2a2a2a' },
                   musicChoice === option.value && { backgroundColor: colors.primary }
                 ]}
                 onPress={() => setMusicChoice(option.value)}
@@ -236,7 +236,7 @@ const HomeScreen = () => {
                 <Text
                   style={[
                     styles.musicButtonText,
-                    { color: isDark ? colors.textSecondary : '#1f2937' },
+                    { color: colors.textSecondary },
                     musicChoice === option.value && { color: 'white' }
                   ]}
                 >
@@ -248,23 +248,23 @@ const HomeScreen = () => {
         </View>
         
         {/* Extra padding at the bottom to ensure all content is visible above the footer */}
-        <View style={{ height: isTablet ? 120 : 80 }} />
+        <View style={{ height: 80 }} />
       </ScrollView>
 
       <View style={[styles.footer, { 
-        backgroundColor: colors.card, 
+        backgroundColor: '#1f1f1f', 
         borderTopColor: colors.border 
       }]}>
         <TouchableOpacity
           style={[
             styles.startButton,
-            { backgroundColor: colors.primary },
+            { backgroundColor: '#2563EB' },
             (!duration || !activity || !musicChoice) && styles.startButtonDisabled
           ]}
           onPress={handleStartSession}
           disabled={!duration || !activity || !musicChoice}
         >
-          <Text style={[styles.startButtonText, { color: colors.buttonText }]}>Begin Deep Work Timer</Text>
+          <Text style={[styles.startButtonText, { color: 'white' }]}>Begin Deep Work Timer</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -279,35 +279,34 @@ const styles = StyleSheet.create({
   // Content styles
   content: {
     flex: 1,
-    paddingHorizontal: isTablet ? 24 : 12,
+    paddingHorizontal: 16,
   },
   contentContainer: {
-    paddingBottom: isTablet ? 32 : 20,
-    alignItems: isTablet ? 'center' : 'stretch',
+    paddingBottom: 20,
+    alignItems: 'stretch',
   },
   header: {
     alignItems: 'center',
-    marginBottom: isTablet ? 16 : 10,
+    marginBottom: 10,
   },
   headerTitle: {
-    fontSize: isTablet ? 26 : 20,
+    fontSize: 20,
     fontWeight: '600',
     textAlign: 'center',
   },
   divider: {
     height: 1,
-    marginBottom: isTablet ? 24 : 16,
-    width: isTablet ? '80%' : '100%',
+    marginBottom: 16,
+    width: '100%',
     alignSelf: 'center',
   },
   section: {
     borderRadius: 12,
-    padding: isTablet ? 24 : 16,
-    marginBottom: isTablet ? 18 : 12,
-    borderWidth: 2,
-    maxWidth: isTablet ? 800 : '100%',
-    alignSelf: 'center',
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
     width: '100%',
+    alignSelf: 'center',
   },
   sectionCompleted: {
     borderColor: '#2563eb',
@@ -315,73 +314,69 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: isTablet ? 16 : 12,
-    gap: isTablet ? 12 : 8,
+    marginBottom: 12,
+    gap: 8,
   },
   sectionTitle: {
-    fontSize: isTablet ? 20 : 16,
+    fontSize: 16,
     fontWeight: '600',
   },
   durationButtons: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: isTablet ? 16 : 8,
-    maxWidth: isTablet ? 600 : '100%',
-    alignSelf: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   durationButton: {
-    width: isTablet ? 120 : (SCREEN_WIDTH - 96) / 3,
-    padding: isTablet ? 16 : 12,
+    flex: 1,
+    padding: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
   durationButtonText: {
-    fontSize: isTablet ? 18 : 14,
+    fontSize: 14,
     fontWeight: '500',
   },
   // Activity Styles
   activitiesList: {
     flexGrow: 0,
-    paddingVertical: isTablet ? 16 : 8,
+    paddingVertical: 8,
   },
   activityItem: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 8,
-    padding: isTablet ? 16 : 12,
-    marginRight: isTablet ? 16 : 8,
+    padding: 12,
+    marginRight: 8,
     borderWidth: 1,
-    width: isTablet ? SCREEN_WIDTH * 0.35 : SCREEN_WIDTH * 0.6,
+    width: SCREEN_WIDTH * 0.42, // Adjusted for better fit
   },
   activityItemSelected: {
     borderWidth: 2,
   },
   colorDot: {
-    width: isTablet ? 28 : 20,
-    height: isTablet ? 28 : 20,
-    borderRadius: isTablet ? 14 : 10,
-    marginRight: isTablet ? 12 : 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 8,
   },
   activityName: {
-    fontSize: isTablet ? 18 : 14,
+    fontSize: 14,
     fontWeight: '500',
   },
   // Music Styles
   musicButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: isTablet ? 16 : 8,
-    maxWidth: isTablet ? 600 : '100%',
-    alignSelf: 'center',
+    gap: 8,
   },
   musicButton: {
     flex: 1,
-    padding: isTablet ? 16 : 12,
+    padding: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
   musicButtonText: {
-    fontSize: isTablet ? 18 : 14,
+    fontSize: 14,
     fontWeight: '500',
     textAlign: 'center',
   },
@@ -391,21 +386,19 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    padding: isTablet ? 24 : 16,
+    padding: 16,
     borderTopWidth: 1,
   },
   startButton: {
-    padding: isTablet ? 20 : 16,
+    padding: 16,
     borderRadius: 8,
     alignItems: 'center',
-    maxWidth: isTablet ? 600 : '100%',
-    alignSelf: 'center',
   },
   startButtonDisabled: {
     opacity: 0.5,
   },
   startButtonText: {
-    fontSize: isTablet ? 20 : 16,
+    fontSize: 16,
     fontWeight: '500',
   },
   // Loading state
@@ -415,7 +408,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    fontSize: isTablet ? 18 : 16,
+    fontSize: 16,
   },
 });
 

@@ -35,7 +35,7 @@ const DurationSetupModal = ({ visible, onClose, onSave }) => {
             <View style={styles.container}>
                 <Text style={styles.title}>Select Session Durations</Text>
                 <Text style={styles.instructionText}>
-                Choose your durations. This is how long you'll work uninterrupted.
+                    Choose your durations. This is how long you'll work uninterrupted.
                 </Text>
                 <Text style={styles.subtitle}>
                     Choose up to 3 durations ({selectedDurations.length}/3)
@@ -86,16 +86,21 @@ const DurationSetupModal = ({ visible, onClose, onSave }) => {
 };
 
 const styles = StyleSheet.create({
-// Change this in DurationSetupModal.js
     container: {
-        padding: 20, // Changed from 0 to 20
-        width: '90%'
+        width: '100%',
     },
     title: {
         fontSize: 20,
         fontWeight: 'bold',
         textAlign: 'center',
         marginBottom: 10,
+    },
+    instructionText: {
+        fontSize: 14,
+        color: '#6B7280',
+        textAlign: 'center',
+        marginBottom: 10,
+        lineHeight: 20,
     },
     subtitle: {
         fontSize: 14,
@@ -111,7 +116,7 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     durationButton: {
-        width: '48%',  // Allow 2 buttons per row with spacing
+        width: '48%',
         height: 50,
         borderWidth: 1,
         borderColor: '#E5E7EB',
@@ -133,9 +138,10 @@ const styles = StyleSheet.create({
     },
     saveButton: {
         backgroundColor: '#2563EB',
-        padding: 10,
+        padding: 14,
         borderRadius: 8,
         alignItems: 'center',
+        width: '100%',
     },
     saveButtonDisabled: {
         opacity: 0.5,
@@ -145,13 +151,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
-    instructionText: {
-        fontSize: 14,
-        color: '#6B7280',
-        textAlign: 'center',
-        marginBottom: 10,
-        lineHeight: 20,
-      }
 });
 
 export default DurationSetupModal;

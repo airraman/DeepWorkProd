@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { X } from 'lucide-react-native';
 
-// Add detection for iPad/tablet
 const { width, height } = Dimensions.get('window');
 const isTablet = width > 768 || height > 768;
 
@@ -24,31 +23,28 @@ const BaseModal = ({ visible, onClose, children }) => {
             animationType="fade"
             onRequestClose={onClose}
         >
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.modalOverlay}
-            >
+            <View style={styles.modalOverlay}>
                 <Pressable 
-                    style={styles.modalOverlay} 
+                    style={styles.backdropPressable} 
                     onPress={onClose}
                 >
-                    <Pressable 
-                        style={styles.modalContent} 
-                        onPress={e => e.stopPropagation()}
+                    <View 
+                        style={styles.modalContent}
                     >
                         <TouchableOpacity 
                             style={styles.closeButton}
                             onPress={onClose}
                             accessible={true}
                             accessibilityLabel="Close modal"
-                            accessibilityHint="Closes the current modal"
                         >
-                            <X size={isTablet ? 30 : 24} color="#6b7280" />
+                            <X size={24} color="#6b7280" />
                         </TouchableOpacity>
-                        {children}
-                    </Pressable>
+                        <View style={styles.childrenContainer}>
+                            {children}
+                        </View>
+                    </View>
                 </Pressable>
-            </KeyboardAvoidingView>
+            </View>
         </Modal>
     );
 };
@@ -59,38 +55,39 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
         justifyContent: 'center',
         alignItems: 'center',
-        margin: 0,
-        padding: isTablet ? 40 : 20,
-        width: '100%',     // Ensure full width
-        height: '100%',    // Ensure full height
-        left: 0,           // Position at left edge
-        top: 0,            // Position at top edge
-        right: 0,          // Extend to right edge
-        bottom: 0,         // Extend to bottom edge
-        position: 'absolute', // Make sure it covers the entire screen
+    },
+    backdropPressable: {
+        width: '100%',
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     modalContent: {
         backgroundColor: 'white',
         borderRadius: 12,
-        width: isTablet ? '70%' : '100%',
-        maxWidth: isTablet ? 600 : 400,
-        minHeight: isTablet ? 400 : 300,
+        width: isTablet ? '80%' : '85%',
+        maxWidth: isTablet ? 500 : 350,
+        minHeight: 200,
         maxHeight: '80%',
-        padding: isTablet ? 32 : 24,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 3.84,
         elevation: 5,
+        position: 'relative',
+    },
+    childrenContainer: {
+        padding: 20,
+        paddingTop: 40, // Make room for the close button
     },
     closeButton: {
         position: 'absolute',
-        right: isTablet ? 24 : 16,
-        top: isTablet ? 24 : 16,
-        zIndex: 1,
-        width: isTablet ? 48 : 40,
-        height: isTablet ? 48 : 40,
-        borderRadius: isTablet ? 24 : 20,
+        right: 10,
+        top: 10,
+        zIndex: 10,
+        width: 30,
+        height: 30,
+        borderRadius: 15,
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: 'rgba(229, 231, 235, 0.5)',

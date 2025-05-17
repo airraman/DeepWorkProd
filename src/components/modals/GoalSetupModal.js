@@ -74,8 +74,8 @@ const GoalSetupModal = ({ visible, onClose, onSave }) => {
             <View style={styles.container}>
                 <Text style={styles.title}>Set Your Goals</Text>
                 <Text style={styles.instructionText}>
-  Now choose something to work towards. We will track your time towards this.
-</Text>
+                    Now choose something to work towards. We will track your time towards this.
+                </Text>
 
                 {/* Goal Input Form */}
                 <View style={styles.inputForm}>
@@ -86,6 +86,7 @@ const GoalSetupModal = ({ visible, onClose, onSave }) => {
                             setCurrentGoal(prev => ({ ...prev, name: text }))
                         }
                         placeholder="GOAL NAME"
+                        placeholderTextColor="#AAAAAA"
                     />
 
                     <View style={styles.inputRow}>
@@ -103,7 +104,7 @@ const GoalSetupModal = ({ visible, onClose, onSave }) => {
                             />
                         </View>
 
-                        {/* Hours Dropdown */}
+                        {/* Hours Dropdown - Fixed Container */}
                         <View style={styles.hoursContainer}>
                             <Dropdown
                                 options={hoursOptions}
@@ -163,9 +164,7 @@ const GoalSetupModal = ({ visible, onClose, onSave }) => {
 
 const styles = StyleSheet.create({
     container: {
-        padding: 20,
-        width: '90%',       
-
+        width: '100%',
     },
     title: {
         fontSize: 20,
@@ -173,8 +172,15 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginBottom: 10,
     },
+    instructionText: {
+        fontSize: 14,
+        color: '#6B7280',
+        textAlign: 'center',
+        marginBottom: 15,
+        lineHeight: 20,
+    },
     inputForm: {
-        // marginBottom: 10,
+        width: '100%',
     },
     nameInput: {
         height: 50,
@@ -196,6 +202,7 @@ const styles = StyleSheet.create({
     },
     hoursContainer: {
         flex: 1,
+        minWidth: 80, // Added minimum width to prevent text wrapping
     },
     dropdownTrigger: {
         height: 50,
@@ -236,6 +243,7 @@ const styles = StyleSheet.create({
         padding: 15,
         borderRadius: 8,
         alignItems: 'center',
+        marginTop: 5,
     },
     addButtonDisabled: {
         opacity: 0.5,
@@ -245,6 +253,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     goalsList: {
+        marginTop: 20,
         marginBottom: 20,
     },
     goalItem: {
@@ -266,6 +275,7 @@ const styles = StyleSheet.create({
         padding: 15,
         borderRadius: 8,
         alignItems: 'center',
+        marginTop: 5,
     },
     saveButtonDisabled: {
         opacity: 0.5,
@@ -274,13 +284,6 @@ const styles = StyleSheet.create({
         color: 'white',
         fontWeight: 'bold',
     },
-    instructionText: {
-        fontSize: 14,
-        color: '#6B7280',
-        textAlign: 'center',
-        marginBottom: 15,
-        lineHeight: 20,
-    }
 });
 
 export default GoalSetupModal;
