@@ -107,15 +107,15 @@ const HomeScreen = () => {
       style={[
         styles.activityItem,
         { 
-          backgroundColor: isDark ? colors.card : '#1f1f1f',
-          borderColor: activity === item.id ? colors.primary : 'rgba(255,255,255,0.1)'
+          backgroundColor: isDark ? colors.card : colors.background, // This is the key fix
+          borderColor: activity === item.id ? colors.primary : colors.border // Use theme colors
         },
         activity === item.id && styles.activityItemSelected
       ]}
       onPress={() => setActivity(item.id)}
     >
       <View style={[styles.colorDot, { backgroundColor: item.color }]} />
-      <Text style={[styles.activityName, { color: 'white' }]}>{item.name}</Text>
+      <Text style={[styles.activityName, { color: colors.text }]}>{item.name}</Text>
     </TouchableOpacity>
   );
 
@@ -152,14 +152,14 @@ const HomeScreen = () => {
         <View style={[
           styles.section, 
           { 
-            backgroundColor: '#1f1f1f',
+            backgroundColor: isDark ? '#1f1f1f' : colors.card, // Use theme colors
             borderColor: activity ? colors.primary : colors.border 
           },
           activity && styles.sectionCompleted
         ]}>
           <View style={styles.sectionHeader}>
             <Pencil stroke={colors.textSecondary} size={20} />
-            <Text style={[styles.sectionTitle, { color: 'white' }]}>Activity Name</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Activity Name</Text>
           </View>
           <FlatList
             data={activities}
@@ -175,14 +175,14 @@ const HomeScreen = () => {
         <View style={[
           styles.section, 
           { 
-            backgroundColor: '#1f1f1f',
+            backgroundColor: isDark ? '#1f1f1f' : colors.card, // Use theme colors
             borderColor: duration ? colors.primary : colors.border 
           },
           duration && styles.sectionCompleted
         ]}>
           <View style={styles.sectionHeader}>
             <Clock stroke={colors.textSecondary} size={20} />
-            <Text style={[styles.sectionTitle, { color: 'white' }]}>Session Duration</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Session Duration</Text>
           </View>
           <View style={styles.durationButtons}>
             {availableDurations.map((time) => (
@@ -190,7 +190,7 @@ const HomeScreen = () => {
                 key={time}
                 style={[
                   styles.durationButton,
-                  { backgroundColor: '#2a2a2a' },
+                  { backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6' }, // Use light/dark specific colors
                   duration === time.toString() && { backgroundColor: colors.primary }
                 ]}
                 onPress={() => setDuration(time.toString())}
@@ -198,7 +198,7 @@ const HomeScreen = () => {
                 <Text
                   style={[
                     styles.durationButtonText,
-                    { color: colors.textSecondary },
+                    { color: isDark ? colors.textSecondary : '#6b7280' }, // Use theme appropriate text color
                     duration === time.toString() && { color: 'white' }
                   ]}
                 >
@@ -213,14 +213,14 @@ const HomeScreen = () => {
         <View style={[
           styles.section, 
           { 
-            backgroundColor: '#1f1f1f',
+            backgroundColor: isDark ? '#1f1f1f' : colors.card, // Use theme colors
             borderColor: musicChoice ? colors.primary : colors.border 
           },
           musicChoice && styles.sectionCompleted
         ]}>
           <View style={styles.sectionHeader}>
             <Music stroke={colors.textSecondary} size={20} />
-            <Text style={[styles.sectionTitle, { color: 'white' }]}>Background Music</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Background Music</Text>
           </View>
           <View style={styles.musicButtons}>
             {musicOptions.map((option) => (
@@ -228,7 +228,7 @@ const HomeScreen = () => {
                 key={option.value}
                 style={[
                   styles.musicButton,
-                  { backgroundColor: '#2a2a2a' },
+                  { backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6' }, // Use light/dark specific colors
                   musicChoice === option.value && { backgroundColor: colors.primary }
                 ]}
                 onPress={() => setMusicChoice(option.value)}
@@ -236,7 +236,7 @@ const HomeScreen = () => {
                 <Text
                   style={[
                     styles.musicButtonText,
-                    { color: colors.textSecondary },
+                    { color: isDark ? colors.textSecondary : '#6b7280' }, // Use theme appropriate text color
                     musicChoice === option.value && { color: 'white' }
                   ]}
                 >
@@ -252,7 +252,7 @@ const HomeScreen = () => {
       </ScrollView>
 
       <View style={[styles.footer, { 
-        backgroundColor: '#1f1f1f', 
+        backgroundColor: isDark ? '#1f1f1f' : colors.card, // Use theme colors
         borderTopColor: colors.border 
       }]}>
         <TouchableOpacity

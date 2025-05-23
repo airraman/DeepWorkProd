@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import BaseModal from './BaseModal';
 
-const GoalSetupModal = ({ visible, onClose, onSave }) => {
+const GoalSetupModal = ({ visible, onClose, onSave, preventClose = false }) => {
     // State for goals list and current goal being created
     const [goals, setGoals] = useState([]);
     const [currentGoal, setCurrentGoal] = useState({
@@ -70,7 +70,11 @@ const GoalSetupModal = ({ visible, onClose, onSave }) => {
     );
 
     return (
-        <BaseModal visible={visible} onClose={onClose}>
+        <BaseModal 
+            visible={visible} 
+            onClose={onClose} 
+            preventClose={preventClose}
+        >
             <View style={styles.container}>
                 <Text style={styles.title}>Set Your Goals</Text>
                 <Text style={styles.instructionText}>
@@ -150,10 +154,13 @@ const GoalSetupModal = ({ visible, onClose, onSave }) => {
                     onPress={() => {
                         if (goals.length > 0) {
                             onSave(goals);
-                            onClose();
+                        } else {
+                            // If no goals are added, still allow saving an empty array
+                            // This makes the goal setup optional
+                            onSave([]);
                         }
                     }}
-                    disabled={!goals.length}
+                    // Enabled even with no goals to allow users to skip goal setup
                 >
                     <Text style={styles.saveButtonText}>Save Goals</Text>
                 </TouchableOpacity>

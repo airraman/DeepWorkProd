@@ -18,7 +18,7 @@ const ActivitySetupModal = ({ visible, onClose, onSave }) => {
     // State for managing activities
     const [activities, setActivities] = useState([
         { id: '1', name: '', color: '#E4D0FF' },
-        { id: '2', name: '', color: '#E4D0FF' }
+        { id: '2', name: '', color: '#D0FFDB' }
     ]);
     
     // State for color picker
@@ -52,7 +52,7 @@ const ActivitySetupModal = ({ visible, onClose, onSave }) => {
     };
 
     return (
-        <BaseModal visible={visible} onClose={onClose}>
+        <BaseModal visible={visible} onClose={onClose} preventClose={true}>
             <View style={styles.container}>
                 <Text style={styles.title}>Activities</Text>
                 

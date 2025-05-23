@@ -6,8 +6,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { ThemeProvider } from './src/context/ThemeContext';
 import * as Notifications from 'expo-notifications';
 import * as Updates from 'expo-updates';
-import { Alert } from 'react-native';
-import { navigationRef } from './src/services/navigationService';
+import { Alert, View, Text } from 'react-native';
+import { navigationRef, safeNavigate } from './src/services/navigationService';
 import backgroundTimer from './src/services/backgroundTimer';
 
 // Import screens
@@ -35,21 +35,37 @@ function TabNavigator() {
 }
 
 // Main App component using both navigators
-function App() {
+function MainApp() {
+  const [notificationSubscription, setNotificationSubscription] = useState(null);
+  const [isAppReady, setIsAppReady] = useState(false);
+
   useEffect(() => {
     // Initialize app
     const initApp = async () => {
       try {
-        // Configure notifications
-        await backgroundTimer.configureNotifications();
+        // Set app as ready first to ensure UI is visible 
+        // even if there are issues with background services
+        setIsAppReady(true);
+        
+        // Delay background services initialization
+        setTimeout(async () => {
+          try {
+            // Configure notifications
+            await backgroundTimer.configureNotifications();
+            console.log('Notifications configured successfully');
+          } catch (error) {
+            console.error('Error initializing background services:', error);
+          }
+        }, 1500); // Delay by 1.5 seconds
       } catch (error) {
         console.error('Error initializing app:', error);
+        setIsAppReady(true); // Still set app as ready so UI is visible
       }
     };
     
     initApp();
     
-    // Check for updates
+    // Check for updates with error handling
     const checkForUpdates = async () => {
       try {
         const update = await Updates.checkForUpdateAsync();
@@ -65,7 +81,11 @@ function App() {
               { 
                 text: 'Restart', 
                 onPress: async () => {
-                  await Updates.reloadAsync();
+                  try {
+                    await Updates.reloadAsync();
+                  } catch (updateError) {
+                    console.error('Failed to reload with update:', updateError);
+                  }
                 }
               }
             ]
@@ -75,53 +95,90 @@ function App() {
         }
       } catch (error) {
         console.log('Error checking for updates:', error);
+        // Non-fatal error, don't block app startup
       }
     };
     
-    checkForUpdates();
+    // Delay update check to prioritize UI rendering
+    setTimeout(() => {
+      checkForUpdates();
+    }, 3000);
 
-    // Set up notification response handler
-    const notificationSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+    // Set up notification response handler after app is ready
+    const setupNotifications = async () => {
       try {
-        // Get the action identifier
-        const actionId = response.actionIdentifier;
-        
-        if (actionId === Notifications.DEFAULT_ACTION_IDENTIFIER) {
-          // Notification was tapped - navigate to the session screen
-          const { screen, params } = response.notification.request.content.data;
-          if (screen) {
-            navigationRef.current?.navigate(screen, params);
-          }
-        }
-        else if (actionId === 'PAUSE_RESUME') {
-          // Toggle pause state
-          const handlePauseResumeAction = async () => {
-            const sessionData = await backgroundTimer.getCurrentSession();
-            if (sessionData) {
-              await backgroundTimer.updateTimerPauseState(!sessionData.isPaused);
+        // Set up notification response handler
+        const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+          try {
+            // Get the action identifier
+            const actionId = response.actionIdentifier;
+            
+            if (actionId === Notifications.DEFAULT_ACTION_IDENTIFIER) {
+              // Notification was tapped - navigate to the session screen
+              const { screen, params } = response.notification.request.content.data;
+              if (screen) {
+                safeNavigate(screen, params);
+              }
             }
-          };
-          handlePauseResumeAction();
-        }
-        else if (actionId === 'END_SESSION') {
-          // End session
-          backgroundTimer.stopTimerNotification();
-          if (navigationRef.current) {
-            navigationRef.current.navigate('MainApp', { screen: 'Home' });
+            else if (actionId === 'PAUSE_RESUME') {
+              // Toggle pause state
+              const handlePauseResumeAction = async () => {
+                try {
+                  const sessionData = await backgroundTimer.getCurrentSession();
+                  if (sessionData) {
+                    await backgroundTimer.updateTimerPauseState(!sessionData.isPaused);
+                  }
+                } catch (error) {
+                  console.error("Error handling pause/resume action:", error);
+                }
+              };
+              handlePauseResumeAction();
+            }
+            else if (actionId === 'END_SESSION') {
+              // End session
+              try {
+                backgroundTimer.stopTimerNotification();
+                safeNavigate('MainApp', { screen: 'Home' });
+              } catch (error) {
+                console.error("Error ending session:", error);
+              }
+            }
+          } catch (error) {
+            console.error("Error handling notification action:", error);
           }
-        }
+        });
+        
+        setNotificationSubscription(subscription);
       } catch (error) {
-        console.error("Error handling notification action:", error);
+        console.error("Error setting up notification handler:", error);
       }
-    });
+    };
+
+    // Delay notification setup
+    setTimeout(() => {
+      setupNotifications();
+    }, 2000);
     
     // Clean up on unmount
     return () => {
       if (notificationSubscription) {
-        notificationSubscription.remove();
+        try {
+          notificationSubscription.remove();
+        } catch (error) {
+          console.error("Error removing notification subscription:", error);
+        }
       }
     };
   }, []);
+  
+  // Show a loading screen if app is not ready
+  if (!isAppReady) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Loading DeepWork.io...</Text>
+      </View>
+    );
+  }
   
   return (
     <ThemeProvider>
@@ -148,4 +205,27 @@ function App() {
   );
 }
 
-export default App;
+// Safe initialization wrapper to catch any critical errors
+const SafeApp = () => {
+  try {
+    return <MainApp />;
+  } catch (error) {
+    console.error('Critical error during app initialization:', error);
+    // Return a simple error screen
+    return (
+      <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20}}>
+        <Text style={{fontSize: 18, fontWeight: 'bold', marginBottom: 10}}>
+          Something went wrong
+        </Text>
+        <Text style={{textAlign: 'center', marginBottom: 20}}>
+          We encountered a problem starting the app. Please try again.
+        </Text>
+        <Text style={{color: '#666', fontSize: 12}}>
+          Error details: {error.message || 'Unknown error'}
+        </Text>
+      </View>
+    );
+  }
+};
+
+export default SafeApp;

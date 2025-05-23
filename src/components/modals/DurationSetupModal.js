@@ -31,7 +31,7 @@ const DurationSetupModal = ({ visible, onClose, onSave }) => {
     };
 
     return (
-        <BaseModal visible={visible} onClose={onClose}>
+        <BaseModal visible={visible} onClose={onClose} preventClose={true}>
             <View style={styles.container}>
                 <Text style={styles.title}>Select Session Durations</Text>
                 <Text style={styles.instructionText}>

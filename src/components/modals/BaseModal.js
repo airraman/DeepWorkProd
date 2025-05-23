@@ -1,4 +1,4 @@
-// src/components/modals/BaseModal.js
+// src/components/modals/BaseModal.js - FIXED
 import React from 'react';
 import {
     Modal,
@@ -15,30 +15,47 @@ import { X } from 'lucide-react-native';
 const { width, height } = Dimensions.get('window');
 const isTablet = width > 768 || height > 768;
 
-const BaseModal = ({ visible, onClose, children }) => {
+const BaseModal = ({ visible, onClose, children, preventClose = false }) => {
+    // Function to handle close attempts
+    const handleCloseAttempt = (e) => {
+        // If we should prevent closing, call onClose which will show the warning
+        // Otherwise, just close normally
+        if (preventClose) {
+            e.stopPropagation();
+            onClose();
+        } else {
+            onClose();
+        }
+    };
+
     return (
         <Modal
             visible={visible}
             transparent={true}
             animationType="fade"
-            onRequestClose={onClose}
+            onRequestClose={handleCloseAttempt}
         >
             <View style={styles.modalOverlay}>
                 <Pressable 
                     style={styles.backdropPressable} 
-                    onPress={onClose}
+                    onPress={preventClose ? (e) => e.stopPropagation() : onClose}
                 >
                     <View 
                         style={styles.modalContent}
+                        // This prevents taps on the modal content from closing the modal
+                        onStartShouldSetResponder={() => true}
+                        onTouchEnd={(e) => e.stopPropagation()}
                     >
-                        <TouchableOpacity 
-                            style={styles.closeButton}
-                            onPress={onClose}
-                            accessible={true}
-                            accessibilityLabel="Close modal"
-                        >
-                            <X size={24} color="#6b7280" />
-                        </TouchableOpacity>
+                        {!preventClose && (
+                            <TouchableOpacity 
+                                style={styles.closeButton}
+                                onPress={onClose}
+                                accessible={true}
+                                accessibilityLabel="Close modal"
+                            >
+                                <X size={24} color="#6b7280" />
+                            </TouchableOpacity>
+                        )}
                         <View style={styles.childrenContainer}>
                             {children}
                         </View>

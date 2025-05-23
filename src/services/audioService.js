@@ -1,7 +1,18 @@
+// src/services/audioService.js
 import { Audio } from 'expo-av';
 
 // Track the current sound object
 let soundObject = null;
+
+// Simple approach to define audio assets
+const getAudioSource = (type) => {
+  if (type === 'lofi') {
+    return require('../../assets/lofi.mp3');
+  } else if (type === 'whitenoise') {
+    return require('../../assets/whitenoise.mp3');
+  }
+  return null;
+};
 
 export const audioService = {
   // Initialize audio
@@ -13,8 +24,12 @@ export const audioService = {
         staysActiveInBackground: true,
         shouldDuckAndroid: true,
       });
+      
+      console.log('Audio service initialized successfully');
+      return true;
     } catch (error) {
       console.error('Failed to initialize audio:', error);
+      return false;
     }
   },
 
@@ -25,25 +40,42 @@ export const audioService = {
       await this.stopMusic();
       
       // If user selected "none", don't play anything
-      if (musicChoice === 'none') return;
+      if (musicChoice === 'none') {
+        console.log('No music selected, skipping audio playback');
+        return;
+      }
       
-      // Determine which file to play
-      const audioSource = 
-        musicChoice === 'lofi' 
-          ? require('../../assets/lofi.mp3')
-          : require('../../assets/whitenoise.mp3');
-      
-      // Create and load a new sound object
-      soundObject = new Audio.Sound();
-      await soundObject.loadAsync(audioSource);
-      
-      // Play and loop the audio
-      await soundObject.setIsLoopingAsync(true);
-      await soundObject.playAsync();
-      
-      console.log(`Now playing: ${musicChoice}`);
+      try {
+        // Create a new sound object with createAsync (more compatible approach)
+        const source = getAudioSource(musicChoice);
+        if (!source) {
+          console.error(`Unknown music choice: ${musicChoice}`);
+          return;
+        }
+        
+        const { sound } = await Audio.Sound.createAsync(
+          source,
+          { shouldPlay: true, isLooping: true }
+        );
+        
+        soundObject = sound;
+        console.log(`Now playing: ${musicChoice}`);
+      } catch (loadError) {
+        console.error(`Error loading audio for ${musicChoice}:`, loadError);
+        throw loadError;
+      }
     } catch (error) {
       console.error('Failed to play audio:', error);
+      
+      // Reset the sound object on error
+      if (soundObject) {
+        try {
+          await soundObject.unloadAsync();
+        } catch (unloadError) {
+          // Ignore unload errors
+        }
+        soundObject = null;
+      }
     }
   },
 
@@ -57,6 +89,8 @@ export const audioService = {
       }
     } catch (error) {
       console.error('Failed to stop audio:', error);
+      // Reset sound object even if there was an error
+      soundObject = null;
     }
   },
 

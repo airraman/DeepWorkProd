@@ -1,5 +1,5 @@
 // src/screens/InitialSetupScreen.js - FIXED
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   StyleSheet, 
@@ -36,6 +36,9 @@ const InitialSetupScreen = ({navigation}) => {
     const [setupStep, setSetupStep] = useState(0);
     // Add state for error handling
     const [error, setError] = useState(null);
+    
+    // Track transitions to prevent multiple alerts
+    const isTransitioning = useRef(false);
 
     useEffect(() => {
         const initializeApp = async () => {
@@ -91,6 +94,9 @@ const InitialSetupScreen = ({navigation}) => {
 
     const handleActivitySave = async (activities) => {
         try {
+            // Mark as transitioning to prevent alerts
+            isTransitioning.current = true;
+            
             // Hide the activity modal
             setShowActivityModal(false);
             
@@ -103,18 +109,27 @@ const InitialSetupScreen = ({navigation}) => {
             
             // Move to next step
             setSetupStep(2);
-            setShowDurationModal(true);
+            
+            // Short delay before showing next modal to prevent UI glitches
+            setTimeout(() => {
+                setShowDurationModal(true);
+                isTransitioning.current = false;
+            }, 300);
         } catch (error) {
             console.error('Error saving activities:', error);
             Alert.alert('Error', 'Failed to save activities. Please try again.');
             
             // Go back to activity setup
             setShowActivityModal(true);
+            isTransitioning.current = false;
         }
     };
 
     const handleDurationSave = async (durations) => {
         try {
+            // Mark as transitioning to prevent alerts
+            isTransitioning.current = true;
+            
             // Hide the duration modal
             setShowDurationModal(false);
             
@@ -127,18 +142,27 @@ const InitialSetupScreen = ({navigation}) => {
             
             // Move to next step 
             setSetupStep(3);
-            setShowGoalModal(true);
+            
+            // Short delay before showing next modal to prevent UI glitches
+            setTimeout(() => {
+                setShowGoalModal(true);
+                isTransitioning.current = false;
+            }, 300);
         } catch (error) {
             console.error('Error saving durations:', error);
             Alert.alert('Error', 'Failed to save durations. Please try again.');
             
             // Go back to duration setup
             setShowDurationModal(true);
+            isTransitioning.current = false;
         }
     };
 
     const handleGoalSave = async (goals) => {
         try {
+            // Mark as transitioning to prevent alerts
+            isTransitioning.current = true;
+            
             // Hide the goal modal
             setShowGoalModal(false);
             
@@ -153,14 +177,18 @@ const InitialSetupScreen = ({navigation}) => {
             setSetupComplete(true);
             setSetupStep(4);
             
-            // Show welcome stats
-            setShowWelcomeStats(true);
+            // Short delay before showing welcome stats to prevent UI glitches
+            setTimeout(() => {
+                setShowWelcomeStats(true);
+                isTransitioning.current = false;
+            }, 300);
         } catch (error) {
             console.error('Error saving goals:', error);
             Alert.alert('Error', 'Failed to save goals. Please try again.');
             
             // Go back to goal setup
             setShowGoalModal(true);
+            isTransitioning.current = false;
         }
     };
 
@@ -170,6 +198,20 @@ const InitialSetupScreen = ({navigation}) => {
         
         // Navigate to main app
         navigation.replace('MainApp');
+    };
+    
+    // Functions to handle modal attempt to close
+    const handleModalClose = () => {
+        // Don't show alert if we're in the middle of transitioning between modals
+        if (isTransitioning.current) {
+            return;
+        }
+        
+        Alert.alert(
+            'Setup Required', 
+            'Please complete the setup to continue.',
+            [{ text: 'OK' }]
+        );
     };
 
     // Loading state
@@ -198,45 +240,21 @@ const InitialSetupScreen = ({navigation}) => {
         <SafeAreaView style={styles.container}>
             <ActivitySetupModal
                 visible={showActivityModal}
-                onClose={() => {
-                    // Prevent closing during setup
-                    if (!setupComplete) {
-                        Alert.alert(
-                            'Setup Required', 
-                            'Please complete the setup to continue.',
-                            [{ text: 'OK' }]
-                        );
-                    }
-                }} 
+                onClose={handleModalClose}
                 onSave={handleActivitySave}
+                preventClose={true}
             />
             <DurationSetupModal
                 visible={showDurationModal}
-                onClose={() => {
-                    // Prevent closing during setup
-                    if (!setupComplete) {
-                        Alert.alert(
-                            'Setup Required', 
-                            'Please complete the setup to continue.',
-                            [{ text: 'OK' }]
-                        );
-                    }
-                }} 
+                onClose={handleModalClose}
                 onSave={handleDurationSave}
+                preventClose={true}
             />
             <GoalSetupModal
                 visible={showGoalModal}
-                onClose={() => {
-                    // Prevent closing during setup
-                    if (!setupComplete) {
-                        Alert.alert(
-                            'Setup Required', 
-                            'Please complete the setup to continue.',
-                            [{ text: 'OK' }]
-                        );
-                    }
-                }} 
+                onClose={handleModalClose}
                 onSave={handleGoalSave}
+                preventClose={true}
             />
             <WelcomeStatsModal
                 visible={showWelcomeStats}
@@ -244,7 +262,7 @@ const InitialSetupScreen = ({navigation}) => {
             />
             
             {/* Fallback loading view if no modals are displayed */}
-            {!showActivityModal && !showDurationModal && !showGoalModal && !showWelcomeStats && (
+            {!showActivityModal && !showDurationModal && !showGoalModal && !showWelcomeStats && !isTransitioning.current && (
                 <View style={styles.centered}>
                     <ActivityIndicator size="large" color="#2563EB" />
                     <Text style={styles.loadingText}>Preparing setup...</Text>
