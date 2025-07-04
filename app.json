@@ -21,7 +21,15 @@
           "sounds": []
         }
       ],
-      "./ios-background-tasks-plugin.js"
+      "./ios-background-tasks-plugin.js",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ]
     ],
     "assets": [
       "./assets/lofi.mp3",
@@ -31,20 +39,20 @@
       "**/*",
       "assets/*"
     ],
-"ios": {
-  "supportsTablet": true,
-  "bundleIdentifier": "com.anonymous.DeepWorkApp",
-  "infoPlist": {
-    "UIBackgroundModes": [
-      "fetch",
-      "processing",
-      "audio"
-    ],
-    "BGTaskSchedulerPermittedIdentifiers": [
-      "com.expo.tasks.BACKGROUND_TIMER_TASK"
-    ]
-  }
-},
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.DeepWorkApp",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "fetch",
+          "processing",
+          "audio"
+        ],
+        "BGTaskSchedulerPermittedIdentifiers": [
+          "com.expo.tasks.BACKGROUND_TIMER_TASK"
+        ]
+      }
+    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
