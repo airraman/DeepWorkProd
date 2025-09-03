@@ -1,9 +1,10 @@
-// src/services/backgroundTimer.js - iPad-Safe Version
+// src/services/backgroundTimer.js - Complete iPad-Safe Version with Alarm Integration
 import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deepWorkStore } from './deepWorkStore';
+import { alarmService } from './alarmService'; // NEW: Import alarm service
 import { Platform } from 'react-native';
 
 // Constants
@@ -81,6 +82,309 @@ const calculateRemainingTime = (sessionData) => {
   }
 };
 
+// NEW: Attempt to play alarm in background (limited success expected)
+const attemptBackgroundAlarm = async () => {
+  try {
+    // Note: Background audio playback is very limited in React Native
+    // This is more of a fallback attempt - the main alarm should happen 
+    // when the user returns to the app
+    
+    debugLog('🔔 Attempting background alarm...');
+    
+    // Try to initialize and play alarm (this may not work on all platforms/scenarios)
+    const alarmInitialized = await alarmService.init();
+    if (!alarmInitialized) {
+      debugLog('🔔 Background alarm initialization failed');
+      return false;
+    }
+    
+    const alarmPlayed = await alarmService.playCompletionAlarm({
+      volume: 0.7, // Slightly lower volume for background
+      autoStopAfter: 5 // Shorter duration for background (if it works)
+    });
+    
+    if (alarmPlayed) {
+      debugLog('🔔 Background alarm successfully started');
+    } else {
+      debugLog('🔔 Background alarm failed to start - will trigger when app opens');
+    }
+    
+    return alarmPlayed;
+  } catch (error) {
+    debugLog('🔔 Background alarm error:', error);
+    return false;
+  }
+};
+
+// NEW: Enhanced completion notification with alarm-triggering data
+const sendCompletionNotification = async () => {
+  try {
+    debugLog('🔔 Session completed in background - sending enhanced notification');
+    
+    // Get session data for more personalized notification
+    let sessionInfo = { activity: 'Focus Session', duration: 'Unknown' };
+    try {
+      const sessionData = await getActiveSessionFromStorage();
+      if (sessionData) {
+        const settings = await deepWorkStore.getSettings();
+        const activityDetails = settings.activities.find(a => a.id === sessionData.activity);
+        
+        sessionInfo = {
+          activity: activityDetails ? activityDetails.name : 'Focus Session',
+          duration: Math.floor(sessionData.duration / 60000), // Convert to minutes
+          color: activityDetails ? activityDetails.color : '#4ADE80'
+        };
+      }
+    } catch (error) {
+      debugLog('Error getting session info for notification:', error);
+    }
+    
+    // Schedule a prominent completion notification
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '🎉 Deep Work Session Complete!',
+        body: `Great job! Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has ended. Tap to see your progress.`,
+        data: { 
+          screen: 'MainApp', 
+          params: { screen: 'Metrics' },
+          // KEY: Add flag to trigger alarm when app opens
+          shouldPlayAlarm: true,
+          completedAt: new Date().toISOString(),
+          sessionInfo: sessionInfo
+        },
+        sound: true, // Enable system notification sound
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+        // Make the notification more noticeable
+        color: sessionInfo.color,
+        // Add vibration pattern for Android (also works on some iOS versions)
+        vibrationPattern: [0, 250, 250, 250],
+        // iOS-specific enhancements
+        ...(Platform.OS === 'ios' && {
+          subtitle: `${sessionInfo.activity} • ${sessionInfo.duration} minutes`,
+          badge: 1,
+          // More prominent sound on iOS
+          sound: 'default',
+          critical: false, // Don't use critical unless you have special entitlements
+        }),
+        // Android-specific enhancements
+        ...(Platform.OS === 'android' && {
+          // Use high importance channel for better visibility
+          channelId: 'session-completion',
+          // Make it persistent until user interacts
+          sticky: false, // Don't make it too annoying
+          autoCancel: true,
+          // LED and vibration
+          lights: true,
+          lightColor: sessionInfo.color,
+        })
+      },
+      trigger: null,
+    });
+    
+    debugLog('Enhanced completion notification sent successfully');
+  } catch (error) {
+    debugLog('Failed to send completion notification:', error);
+  }
+};
+
+// Update timer notification with iPad optimizations
+const updateTimerNotification = async (timeRemaining, sessionData) => {
+  try {
+    const minutes = Math.floor(timeRemaining / 60000);
+    const seconds = Math.floor((timeRemaining % 60000) / 1000);
+    const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    
+    const totalDuration = sessionData?.duration || 0;
+    const progress = totalDuration > 0 ? Math.max(0, Math.min(1, (totalDuration - timeRemaining) / totalDuration)) : 0;
+    const progressPercentage = Math.round(progress * 100);
+    
+    const progressBar = generateTextProgressBar(progressPercentage);
+    
+    // Get activity details safely
+    let activityName = 'Focus Session';
+    let activityColor = '#2563eb';
+    
+    try {
+      const settings = await deepWorkStore.getSettings();
+      const activityDetails = settings.activities.find(a => a.id === sessionData?.activity);
+      if (activityDetails) {
+        activityName = activityDetails.name;
+        activityColor = activityDetails.color;
+      }
+    } catch (error) {
+      debugLog('Could not get activity details:', error);
+    }
+    
+    const statusMessage = sessionData?.isPaused
+      ? `PAUSED - ${timeString} remaining`
+      : `${timeString} remaining`;
+      
+    const durationMinutes = Math.floor(totalDuration / 60000);
+    const completedMinutes = Math.floor((totalDuration - timeRemaining) / 60000);
+    const progressText = `${completedMinutes} of ${durationMinutes} minutes`;
+    
+    const body = `${statusMessage}
+${progressBar} ${progressPercentage}%
+${progressText}`;
+    
+    // iPad-specific notification settings
+    const notificationContent = {
+      title: `Deep Work: ${activityName}`,
+      body: body,
+      data: { 
+        screen: 'DeepWorkSession',
+        sessionData: sessionData,
+        isTimerUpdate: true // Flag to distinguish from completion notifications
+      },
+      color: activityColor,
+      sticky: !isTablet, // Don't force sticky on iPad
+      autoDismiss: isTablet, // Allow auto-dismiss on iPad
+    };
+    
+    // Add progress indicator for Android and iPad differently
+    if (Platform.OS === 'android' || isTablet) {
+      notificationContent.progress = {
+        max: 100,
+        current: progressPercentage,
+        indeterminate: false
+      };
+    }
+
+    await Notifications.scheduleNotificationAsync({
+      content: notificationContent,
+      trigger: null
+    });
+    
+    debugLog('Timer notification updated successfully');
+  } catch (error) {
+    debugLog('Failed to update notification:', error);
+  }
+};
+
+// iPad-safe notification configuration - ENHANCED
+const configureNotifications = async () => {
+  try {
+    debugLog('Configuring notifications system');
+    
+    // Create Android notification channels for better control
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('session-completion', {
+        name: 'Session Completion',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#4ADE80',
+        sound: 'default',
+        description: 'Notifications for completed deep work sessions',
+      });
+      
+      await Notifications.setNotificationChannelAsync('session-progress', {
+        name: 'Session Progress',
+        importance: Notifications.AndroidImportance.LOW,
+        vibrationPattern: [0, 100],
+        sound: false,
+        description: 'Timer updates during active sessions',
+      });
+    }
+    
+    // iPad-specific notification categories with action buttons
+    if (Platform.OS === 'ios') {
+      const categories = [
+        {
+          identifier: 'TIMER_ACTIONS',
+          actions: [
+            {
+              identifier: 'PAUSE_RESUME',
+              buttonTitle: isTablet ? 'Toggle' : 'Pause/Resume',
+              options: {
+                opensApp: false,
+                authenticationRequired: false,
+                destructive: false
+              }
+            },
+            {
+              identifier: 'END_SESSION',
+              buttonTitle: 'End Session',
+              options: {
+                opensApp: true,
+                authenticationRequired: false,
+                destructive: true
+              }
+            }
+          ],
+          intentIdentifiers: [],
+          options: {
+            categorySummaryFormat: 'Deep work session in progress'
+          }
+        },
+        {
+          identifier: 'COMPLETION_ACTIONS',
+          actions: [
+            {
+              identifier: 'VIEW_PROGRESS',
+              buttonTitle: 'View Progress',
+              options: {
+                opensApp: true,
+                authenticationRequired: false,
+                destructive: false
+              }
+            },
+            {
+              identifier: 'NEW_SESSION',
+              buttonTitle: 'New Session',
+              options: {
+                opensApp: true,
+                authenticationRequired: false,
+                destructive: false
+              }
+            }
+          ],
+          intentIdentifiers: [],
+          options: {
+            categorySummaryFormat: 'Session completed successfully'
+          }
+        }
+      ];
+      
+      await Promise.all(categories.map(category =>
+        Notifications.setNotificationCategoryAsync(category.identifier, category)
+      ));
+      
+      debugLog('iOS notification categories configured');
+    }
+
+    // Enhanced notification handler for iPad and alarm integration
+    await Notifications.setNotificationHandler({
+      handleNotification: async (notification) => {
+        const isCompletion = notification.request.content.data?.shouldPlayAlarm;
+        const isTimerUpdate = notification.request.content.data?.isTimerUpdate;
+        
+        return {
+          shouldShowAlert: true,
+          shouldPlaySound: isCompletion, // Only play system sound for completions
+          shouldSetBadge: isCompletion,
+          priority: isCompletion 
+            ? Notifications.AndroidNotificationPriority.HIGH 
+            : (isTablet ? Notifications.AndroidNotificationPriority.DEFAULT : Notifications.AndroidNotificationPriority.HIGH)
+        };
+      },
+    });
+    
+    // Register background task after notifications are configured
+    const taskRegistered = await ensureTaskIsRegistered();
+    
+    if (!taskRegistered) {
+      debugLog('Warning: Background task registration failed');
+      // Don't throw error - app should still work without background tasks
+    }
+    
+    debugLog('Notification configuration completed');
+    return taskRegistered;
+  } catch (error) {
+    debugLog('Notification configuration failed:', error);
+    throw error;
+  }
+};
+
 // iPad-safe task registration
 const ensureTaskIsRegistered = async () => {
   try {
@@ -131,8 +435,21 @@ const ensureTaskIsRegistered = async () => {
             
             if (timeRemaining <= 0) {
               debugLog('Session completed via background task');
+              
+              // NEW: Attempt to play background alarm (may not work on all platforms)
+              const backgroundAlarmWorked = await attemptBackgroundAlarm();
+              if (backgroundAlarmWorked) {
+                debugLog('🔔 Background alarm successfully played');
+              } else {
+                debugLog('🔔 Background alarm failed - notification will trigger alarm when app opens');
+              }
+              
+              // Send enhanced completion notification
               await sendCompletionNotification();
+              
+              // Clear session data
               await clearActiveSession();
+              
               return BackgroundFetch.BackgroundFetchResult.NewData;
             }
             
@@ -197,153 +514,7 @@ const ensureTaskIsRegistered = async () => {
   }
 };
 
-// Send completion notification
-const sendCompletionNotification = async () => {
-  try {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'Deep Work Session Complete!',
-        body: 'Great job! Your focus session has ended.',
-        data: { screen: 'MainApp', params: { screen: 'Metrics' } },
-      },
-      trigger: null,
-    });
-    debugLog('Completion notification sent');
-  } catch (error) {
-    debugLog('Failed to send completion notification:', error);
-  }
-};
-
-// Update timer notification with iPad optimizations
-const updateTimerNotification = async (timeRemaining, sessionData) => {
-  try {
-    const minutes = Math.floor(timeRemaining / 60000);
-    const seconds = Math.floor((timeRemaining % 60000) / 1000);
-    const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    
-    const totalDuration = sessionData?.duration || 0;
-    const progress = totalDuration > 0 ? Math.max(0, Math.min(1, (totalDuration - timeRemaining) / totalDuration)) : 0;
-    const progressPercentage = Math.round(progress * 100);
-    
-    const progressBar = generateTextProgressBar(progressPercentage);
-    
-    // Get activity details safely
-    let activityName = 'Focus Session';
-    let activityColor = '#2563eb';
-    
-    try {
-      const settings = await deepWorkStore.getSettings();
-      const activityDetails = settings.activities.find(a => a.id === sessionData?.activity);
-      if (activityDetails) {
-        activityName = activityDetails.name;
-        activityColor = activityDetails.color;
-      }
-    } catch (error) {
-      debugLog('Could not get activity details:', error);
-    }
-    
-    const statusMessage = sessionData?.isPaused
-      ? `PAUSED - ${timeString} remaining`
-      : `${timeString} remaining`;
-      
-    const durationMinutes = Math.floor(totalDuration / 60000);
-    const completedMinutes = Math.floor((totalDuration - timeRemaining) / 60000);
-    const progressText = `${completedMinutes} of ${durationMinutes} minutes`;
-    
-    const body = `${statusMessage}
-${progressBar} ${progressPercentage}%
-${progressText}`;
-    
-    // iPad-specific notification settings
-    const notificationContent = {
-      title: `Deep Work: ${activityName}`,
-      body: body,
-      data: { 
-        screen: 'DeepWorkSession',
-        sessionData: sessionData
-      },
-      color: activityColor,
-      sticky: !isTablet, // Don't force sticky on iPad
-      autoDismiss: isTablet, // Allow auto-dismiss on iPad
-    };
-    
-    // Add progress indicator for Android and iPad differently
-    if (Platform.OS === 'android' || isTablet) {
-      notificationContent.progress = {
-        max: 100,
-        current: progressPercentage,
-        indeterminate: false
-      };
-    }
-
-    await Notifications.scheduleNotificationAsync({
-      content: notificationContent,
-      trigger: null
-    });
-    
-    debugLog('Timer notification updated successfully');
-  } catch (error) {
-    debugLog('Failed to update notification:', error);
-  }
-};
-
-// iPad-safe notification configuration
-const configureNotifications = async () => {
-  try {
-    debugLog('Configuring notifications system');
-    
-    // iPad-specific notification categories
-    if (Platform.OS === 'ios') {
-      const categories = [
-        {
-          identifier: 'PAUSE_RESUME',
-          buttonTitle: isTablet ? 'Toggle' : 'Pause/Resume',
-          options: {
-            isDestructive: false,
-            isAuthenticationRequired: false
-          }
-        },
-        {
-          identifier: 'END_SESSION',
-          buttonTitle: 'End Session',
-          options: {
-            isDestructive: true,
-            isAuthenticationRequired: false
-          }
-        }
-      ];
-      
-      await Notifications.setNotificationCategoryAsync('deepwork', categories);
-      debugLog('iOS notification categories configured');
-    }
-
-    // Enhanced notification handler for iPad
-    await Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: false,
-        shouldSetBadge: false,
-        priority: isTablet ? Notifications.AndroidNotificationPriority.DEFAULT : Notifications.AndroidNotificationPriority.HIGH
-      }),
-    });
-    
-    // Register background task after notifications are configured
-    const taskRegistered = await ensureTaskIsRegistered();
-    
-    if (!taskRegistered) {
-      debugLog('Warning: Background task registration failed');
-      // Don't throw error - app should still work without background tasks
-    }
-    
-    debugLog('Notification configuration completed');
-    return taskRegistered;
-  } catch (error) {
-    debugLog('Notification configuration failed:', error);
-    throw error;
-  }
-};
-
-// Start timer with iPad optimizations
+// Start timer with iPad optimizations and alarm preparation
 const startTimerNotification = async (duration, activity, musicChoice) => {
   try {
     debugLog('Starting timer notification', { duration, activity, musicChoice });
@@ -358,6 +529,19 @@ const startTimerNotification = async (duration, activity, musicChoice) => {
       await Promise.race([configPromise, timeoutPromise]);
     } catch (error) {
       debugLog('Configuration failed, continuing anyway:', error);
+    }
+    
+    // NEW: Pre-initialize alarm service for faster response on completion
+    try {
+      debugLog('🔔 Pre-initializing alarm service for background completion...');
+      const alarmReady = await alarmService.init();
+      if (alarmReady) {
+        debugLog('🔔 Alarm service ready for session completion');
+      } else {
+        debugLog('🔔 Alarm service initialization failed - will retry on completion');
+      }
+    } catch (error) {
+      debugLog('🔔 Alarm pre-initialization error (non-critical):', error);
     }
     
     const durationMs = parseInt(duration) * 60 * 1000;
@@ -382,10 +566,18 @@ const startTimerNotification = async (duration, activity, musicChoice) => {
   }
 };
 
-// Safe stop function
+// Safe stop function with alarm cleanup
 const stopTimerNotification = async () => {
   try {
     debugLog('Stopping timer notification');
+    
+    // NEW: Clean up alarm service when stopping timer
+    try {
+      debugLog('🔔 Cleaning up alarm service...');
+      await alarmService.cleanup();
+    } catch (error) {
+      debugLog('🔔 Alarm cleanup error (non-critical):', error);
+    }
     
     // Try to unregister task with timeout
     try {
@@ -469,7 +661,7 @@ const getCurrentSession = async () => {
   }
 };
 
-// Export all functions
+// Export all functions including new alarm-related ones
 export default {
   startTimerNotification,
   stopTimerNotification,
@@ -480,5 +672,7 @@ export default {
   sendCompletionNotification,
   updateTimerNotification,
   clearActiveSession,
-  ensureTaskIsRegistered
+  ensureTaskIsRegistered,
+  // NEW: Export alarm-related functions
+  attemptBackgroundAlarm
 };

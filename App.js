@@ -10,6 +10,9 @@ import { Alert, View, Text, Platform, Dimensions, StatusBar } from 'react-native
 import { navigationRef, safeNavigate } from './src/services/navigationService';
 import backgroundTimer from './src/services/backgroundTimer';
 import ErrorBoundary from './src/components/ErrorBoundary';
+import { alarmService } from './src/services/alarmService';
+import { Audio } from 'expo-av';
+
 
 // Import screens
 import InitialSetupScreen from './src/screens/InitialSetUpScreen';
@@ -57,6 +60,12 @@ const initializeBackgroundServices = async () => {
     
     if (Platform.OS === 'ios' && isTablet) {
       console.log('iPad detected - using conservative background task setup');
+    }
+    
+    // Initialize alarm service along with other services
+    const alarmInitialized = await alarmService.init();
+    if (!alarmInitialized) {
+      console.warn('⚠️ Alarm service failed to initialize - alarms may not work');
     }
     
     const configPromise = backgroundTimer.configureNotifications();
@@ -162,9 +171,17 @@ function MainApp() {
         const subscription = Notifications.addNotificationResponseReceivedListener(response => {
           try {
             const actionId = response.actionIdentifier;
+            const notificationData = response.notification.request.content.data || {};
             
             if (actionId === Notifications.DEFAULT_ACTION_IDENTIFIER) {
-              const { screen, params } = response.notification.request.content.data || {};
+              // Check if this notification should trigger an alarm
+              if (notificationData.shouldPlayAlarm) {
+                console.log('🔔 User opened app from completion notification - playing alarm');
+                handleCompletionAlarmFromNotification(notificationData);
+              }
+              
+              // Navigate to the specified screen
+              const { screen, params } = notificationData;
               if (screen) {
                 safeNavigate(screen, params);
               }
@@ -194,6 +211,27 @@ function MainApp() {
         }));
       }
     };
+
+    const handleCompletionAlarmFromNotification = async (notificationData) => {
+      try {
+        // Initialize alarm service if needed
+        await alarmService.init();
+        
+        // Play the completion alarm
+        await alarmService.playCompletionAlarm({
+          volume: 0.8,
+          autoStopAfter: 8, // Auto-stop after 8 seconds
+        });
+        
+        // Optional: Show a brief celebration message
+        // You could add a toast or modal here
+        console.log('🎉 Session completed! Playing celebration alarm.');
+        
+      } catch (error) {
+        console.error('Error playing completion alarm from notification:', error);
+      }
+    };
+    
 
     setTimeout(setupNotifications, isTablet ? 4000 : 2000);
     
@@ -316,6 +354,36 @@ function MainApp() {
     </ErrorBoundary>
   );
 }
+
+const debugAudioConstants = () => {
+  console.log('🔍 Debugging Audio constants...');
+  
+  try {
+    console.log('Audio object keys:', Object.keys(Audio));
+    
+    if (Audio.InterruptionModeIOS) {
+      console.log('InterruptionModeIOS:', Object.keys(Audio.InterruptionModeIOS));
+      console.log('InterruptionModeIOS values:', Audio.InterruptionModeIOS);
+    }
+    
+    if (Audio.InterruptionModeAndroid) {
+      console.log('InterruptionModeAndroid:', Object.keys(Audio.InterruptionModeAndroid));
+      console.log('InterruptionModeAndroid values:', Audio.InterruptionModeAndroid);
+    }
+    
+    // Check if old-style constants exist
+    if (Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX !== undefined) {
+      console.log('Old-style iOS constant exists:', Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX);
+    }
+    
+    if (Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX !== undefined) {
+      console.log('Old-style Android constant exists:', Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX);
+    }
+    
+  } catch (error) {
+    console.error('Error debugging audio constants:', error);
+  }
+};
 
 // Safety wrapper
 const SafeApp = () => {

@@ -1,4 +1,4 @@
-package com.anonymous.DeepWorkApp
+package com.airraman.deepwork
 
 import android.app.Application
 import android.content.res.Configuration

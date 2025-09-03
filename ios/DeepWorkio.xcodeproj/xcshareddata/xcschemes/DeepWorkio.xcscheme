@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "DeepBlox.app"
-               BlueprintName = "DeepBlox"
-               ReferencedContainer = "container:DeepBlox.xcodeproj">
+               BuildableName = "DeepWorkio.app"
+               BlueprintName = "DeepWorkio"
+               ReferencedContainer = "container:DeepWorkio.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "DeepBloxTests.xctest"
-               BlueprintName = "DeepBloxTests"
-               ReferencedContainer = "container:DeepBlox.xcodeproj">
+               BuildableName = "DeepWorkioTests.xctest"
+               BlueprintName = "DeepWorkioTests"
+               ReferencedContainer = "container:DeepWorkio.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "DeepBlox.app"
-            BlueprintName = "DeepBlox"
-            ReferencedContainer = "container:DeepBlox.xcodeproj">
+            BuildableName = "DeepWorkio.app"
+            BlueprintName = "DeepWorkio"
+            ReferencedContainer = "container:DeepWorkio.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "DeepBlox.app"
-            BlueprintName = "DeepBlox"
-            ReferencedContainer = "container:DeepBlox.xcodeproj">
+            BuildableName = "DeepWorkio.app"
+            BlueprintName = "DeepWorkio"
+            ReferencedContainer = "container:DeepWorkio.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

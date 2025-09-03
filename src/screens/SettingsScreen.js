@@ -13,8 +13,9 @@ import {
   Platform,
   Dimensions
 } from 'react-native';
-import { Plus, X, Save, Clock, Pencil } from 'lucide-react-native';
+import { Plus, X, Save, Clock, Pencil, Volume2 } from 'lucide-react-native';
 import { deepWorkStore } from '../services/deepWorkStore';
+import { alarmService } from '../services/alarmService'; // NEW: Import alarm service
 import SharedHeader from '../components/SharedHeader';
 import { useTheme, THEMES } from '../context/ThemeContext';
 
@@ -31,6 +32,10 @@ const SettingsScreen = () => {
   const [newActivity, setNewActivity] = useState('');
   const [selectedColor, setSelectedColor] = useState('#c8b2d6');
   const [selectedDurations, setSelectedDurations] = useState([]);
+  
+  // NEW: Alarm settings state
+  const [alarmEnabled, setAlarmEnabled] = useState(true);
+  const [alarmVolume, setAlarmVolume] = useState(0.8);
   
   // UI state management
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -57,6 +62,11 @@ const SettingsScreen = () => {
       const settings = await deepWorkStore.getSettings();
       setActivities(settings.activities);
       setSelectedDurations(settings.durations);
+      
+      // NEW: Load alarm settings (with defaults if not present)
+      setAlarmEnabled(settings.alarmEnabled !== undefined ? settings.alarmEnabled : true);
+      setAlarmVolume(settings.alarmVolume !== undefined ? settings.alarmVolume : 0.8);
+      
     } catch (error) {
       showFeedback('Error loading settings');
       console.error('Failed to load settings:', error);
@@ -157,6 +167,74 @@ const SettingsScreen = () => {
     }
   };
 
+  // NEW: Handle alarm setting changes
+  const handleAlarmEnabledChange = async (enabled) => {
+    try {
+      setAlarmEnabled(enabled);
+      // Save immediately to storage
+      const currentSettings = await deepWorkStore.getSettings();
+      const success = await deepWorkStore.updateSettings({
+        ...currentSettings,
+        alarmEnabled: enabled
+      });
+      
+      if (!success) {
+        // Revert on failure
+        setAlarmEnabled(!enabled);
+        showFeedback('Failed to update alarm setting');
+      }
+    } catch (error) {
+      console.error('Error updating alarm enabled setting:', error);
+      setAlarmEnabled(!enabled);
+      showFeedback('Error updating alarm setting');
+    }
+  };
+
+  const handleAlarmVolumeChange = async (volume) => {
+    try {
+      setAlarmVolume(volume);
+      // Save immediately to storage
+      const currentSettings = await deepWorkStore.getSettings();
+      const success = await deepWorkStore.updateSettings({
+        ...currentSettings,
+        alarmVolume: volume
+      });
+      
+      if (!success) {
+        // Revert on failure
+        setAlarmVolume(alarmVolume);
+        showFeedback('Failed to update volume setting');
+      }
+    } catch (error) {
+      console.error('Error updating alarm volume setting:', error);
+      showFeedback('Error updating volume setting');
+    }
+  };
+
+  // NEW: Handle alarm testing
+  const handleTestAlarm = async () => {
+    try {
+      setIsSaving(true);
+      showFeedback('Testing alarm...');
+      
+      // Test the alarm with current settings
+      await alarmService.playCompletionAlarm({
+        volume: alarmVolume,
+        autoStopAfter: 3 // Short test duration
+      });
+      
+      setTimeout(() => {
+        showFeedback('Alarm test complete!');
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Error testing alarm:', error);
+      showFeedback('Alarm test failed');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSaveSettings = async () => {
     if (selectedDurations.length !== 3) {
       showFeedback('Please select exactly 3 durations');
@@ -168,6 +246,9 @@ const SettingsScreen = () => {
       const success = await deepWorkStore.updateSettings({
         activities,
         durations: selectedDurations,
+        // NEW: Include alarm settings in save
+        alarmEnabled,
+        alarmVolume,
       });
 
       if (success) {
@@ -373,6 +454,96 @@ const SettingsScreen = () => {
           </View>
         </View>
 
+        {/* NEW: Alarm Settings Section */}
+        <View style={[
+          styles.section, 
+          { 
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            borderRadius: 12, 
+            borderWidth: 2
+          }
+        ]}>
+          <View style={styles.sectionHeader}>
+            <Volume2 stroke={colors.textSecondary} size={20} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Session Alarm</Text>
+          </View>
+          
+          <Text style={[styles.helpText, { color: colors.textSecondary }]}>
+            Configure completion alarm settings
+          </Text>
+          
+          {/* Alarm Enable/Disable Toggle */}
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: colors.text }]}>
+              Enable Completion Alarm
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                { backgroundColor: alarmEnabled ? colors.primary : colors.border }
+              ]}
+              onPress={() => handleAlarmEnabledChange(!alarmEnabled)}
+            >
+              <View style={[
+                styles.toggleIndicator,
+                { 
+                  backgroundColor: 'white',
+                  transform: [{ translateX: alarmEnabled ? 24 : 2 }]
+                }
+              ]} />
+            </TouchableOpacity>
+          </View>
+          
+          {/* Alarm Volume Slider */}
+          {alarmEnabled && (
+            <View style={styles.settingRow}>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>
+                Alarm Volume: {Math.round(alarmVolume * 100)}%
+              </Text>
+              <View style={styles.volumeControls}>
+                {[0.3, 0.5, 0.8, 1.0].map((volume) => (
+                  <TouchableOpacity
+                    key={volume}
+                    style={[
+                      styles.volumeButton,
+                      { backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6' },
+                      alarmVolume === volume && { backgroundColor: colors.primary }
+                    ]}
+                    onPress={() => handleAlarmVolumeChange(volume)}
+                  >
+                    <Text
+                      style={[
+                        styles.volumeButtonText,
+                        { color: isDark ? colors.textSecondary : '#1f2937' },
+                        alarmVolume === volume && { color: 'white' }
+                      ]}
+                    >
+                      {Math.round(volume * 100)}%
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+          
+          {/* Test Alarm Button */}
+          {alarmEnabled && (
+            <TouchableOpacity
+              style={[
+                styles.testAlarmButton,
+                { backgroundColor: colors.textSecondary }
+              ]}
+              onPress={handleTestAlarm}
+              disabled={isSaving}
+            >
+              <Text style={styles.testAlarmButtonText}>
+                Test Alarm Sound
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         {/* Update Button */}
         <TouchableOpacity
           style={[
@@ -572,6 +743,61 @@ const styles = StyleSheet.create({
   },
   disabledDuration: {
     opacity: 0.5,
+  },
+  // NEW: Alarm Settings Styles
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingVertical: 8,
+  },
+  settingLabel: {
+    fontSize: 16,
+    flex: 1,
+  },
+  toggleButton: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  toggleIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  volumeControls: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  volumeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    minWidth: 50,
+    alignItems: 'center',
+  },
+  volumeButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  testAlarmButton: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  testAlarmButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
   },
   updateButton: {
     padding: 16,

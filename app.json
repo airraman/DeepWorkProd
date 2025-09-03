@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "DeepBlox",
+    "name": "DeepWork.io",
     "slug": "DeepWorkApp",
     "version": "1.0.1",
     "orientation": "portrait",
@@ -34,14 +34,15 @@
     "assets": [
       "./assets/lofi.mp3",
       "./assets/whitenoise.mp3"
-    ], 
+    ],
     "assetBundlePatterns": [
       "**/*",
       "assets/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.DeepWorkApp",
+      "bundleIdentifier": "com.airraman.deepwork",
+      "buildNumber": "1",
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch",
@@ -50,7 +51,14 @@
         ],
         "BGTaskSchedulerPermittedIdentifiers": [
           "com.expo.tasks.BACKGROUND_TIMER_TASK"
-        ]
+        ],
+        "NSUserNotificationsUsageDescription": "This app uses notifications to remind you when your deep work sessions are complete and to track session progress.",
+        "NSUserTrackingUsageDescription": "This app does not track users.",
+        "CFBundleDisplayName": "DeepWork.io",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
@@ -58,7 +66,8 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.anonymous.DeepWorkApp",
+      "package": "com.airraman.deepwork",
+      "versionCode": 1,
       "permissions": [
         "NOTIFICATIONS",
         "VIBRATE",
@@ -78,9 +87,6 @@
     "runtimeVersion": "1.0.1",
     "updates": {
       "url": "https://u.expo.dev/6154a390-07d0-416c-955b-63179fba2bc8"
-    },
-    "scripts": {
-      "postinstall": "npx pod-install"
     }
   }
 }
