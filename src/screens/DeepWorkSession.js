@@ -116,40 +116,40 @@ const DeepWorkSession = ({ route, navigation }) => {
     loadActivityDetails();
   }, [activity]);
 
-  // Set up audio playback and alarm service
-  useEffect(() => {
-    const setupServices = async () => {
-      try {
-        // Initialize background music service
-        await audioService.init();
+  // // Set up audio playback and alarm service
+  // useEffect(() => {
+  //   const setupServices = async () => {
+  //     try {
+  //       // Initialize background music service
+  //       await audioService.init();
         
-        // NEW: Initialize alarm service for completion alerts
-        console.log('🔔 Initializing alarm service for session...');
-        const alarmInitialized = await alarmService.init();
-        if (!alarmInitialized) {
-          console.warn('⚠️ Alarm service failed to initialize - completion alerts may not work');
-        } else {
-          console.log('🔔 Alarm service ready for session completion');
-        }
+  //       // NEW: Initialize alarm service for completion alerts
+  //       console.log('🔔 Initializing alarm service for session...');
+  //       const alarmInitialized = await alarmService.init();
+  //       if (!alarmInitialized) {
+  //         console.warn('⚠️ Alarm service failed to initialize - completion alerts may not work');
+  //       } else {
+  //         console.log('🔔 Alarm service ready for session completion');
+  //       }
         
-        // Start playing the selected background music
-        if (musicChoice !== 'none') {
-          await audioService.playMusic(musicChoice);
-        }
-      } catch (error) {
-        console.error('Error setting up services:', error);
-      }
-    };
+  //       // Start playing the selected background music
+  //       if (musicChoice !== 'none') {
+  //         await audioService.playMusic(musicChoice);
+  //       }
+  //     } catch (error) {
+  //       console.error('Error setting up services:', error);
+  //     }
+  //   };
     
-    setupServices();
+  //   setupServices();
     
-    // Cleanup function to stop audio AND alarm when component unmounts
-    return () => {
-      console.log('🔧 Cleaning up session services...');
-      audioService.stopMusic();
-      alarmService.cleanup(); // NEW: Clean up alarm service
-    };
-  }, [musicChoice]);
+  //   // Cleanup function to stop audio AND alarm when component unmounts
+  //   return () => {
+  //     console.log('🔧 Cleaning up session services...');
+  //     audioService.stopMusic();
+  //     alarmService.cleanup(); // NEW: Clean up alarm service
+  //   };
+  // }, [musicChoice]);
 
   // Initialize background timer
   useEffect(() => {
@@ -190,7 +190,7 @@ const DeepWorkSession = ({ route, navigation }) => {
           text: 'End Session',
           onPress: async () => {
             await backgroundTimer.stopTimerNotification();
-            await audioService.stopMusic(); // Stop background music
+            // await audioService.stopMusic(); // Stop background music
             await alarmService.cleanup(); // NEW: Clean up alarm service
             navigation.navigate('MainApp', { screen: 'Home' });
           },
@@ -220,9 +220,9 @@ const DeepWorkSession = ({ route, navigation }) => {
       backgroundTimer.updateTimerPauseState(false);
       
       // Resume background music playback if not "none"
-      if (musicChoice !== 'none') {
-        audioService.resumeMusic();
-      }
+      // if (musicChoice !== 'none') {
+      //   audioService.resumeMusic();
+      // }
     } else {
       // Pause the animation
       animatedHeight.stopAnimation();
@@ -231,9 +231,9 @@ const DeepWorkSession = ({ route, navigation }) => {
       backgroundTimer.updateTimerPauseState(true);
       
       // Pause background music playback if not "none"
-      if (musicChoice !== 'none') {
-        audioService.pauseMusic();
-      }
+      // if (musicChoice !== 'none') {
+      //   audioService.pauseMusic();
+      // }
     }
 
     setIsPaused(!isPaused);
@@ -263,9 +263,9 @@ const DeepWorkSession = ({ route, navigation }) => {
       setIsPaused(true);
       
       // Stop background music when time is up
-      if (musicChoice !== 'none') {
-        audioService.pauseMusic();
-      }
+      // if (musicChoice !== 'none') {
+      //   audioService.pauseMusic();
+      // }
       
       // NEW: Play completion alarm - this is the key addition!
       console.log('🔔 Session completed - playing completion alarm');
@@ -326,7 +326,7 @@ const DeepWorkSession = ({ route, navigation }) => {
       await backgroundTimer.stopTimerNotification();
       
       // Stop background music playback
-      await audioService.stopMusic();
+      // await audioService.stopMusic();
       
       // NEW: Ensure alarm is stopped and cleaned up
       console.log('🔔 Session completing - ensuring alarm is stopped');
