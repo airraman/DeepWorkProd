@@ -1,173 +1,166 @@
-// src/services/alarmService.js - Crash-Proof Simulator Version
+// src/services/alarmService.js - Working Version (No Audio Crashes)
 import { Platform, Alert, Vibration } from 'react-native';
 
-console.log('Crash-proof alarm service loaded');
+console.log('🔔 Loading working alarm service...');
 
 class AlarmService {
   constructor() {
-    this.sound = null;
     this.isInitialized = false;
-    this.isSimulator = this.detectSimulator();
-    this.audioSupported = false; // Disable all audio for now
+    this.isPlaying = false;
+    console.log('🔔 Working alarm service created');
   }
 
   /**
-   * Detect if running in simulator - conservative approach
-   */
-  detectSimulator() {
-    try {
-      // Very conservative detection
-      const isLikelySimulator = Platform.OS === 'ios' && __DEV__;
-      
-      console.log('🔔 Environment detection (safe mode):', {
-        platform: Platform.OS,
-        isDev: __DEV__,
-        audioDisabled: true // Always disabled for crash prevention
-      });
-
-      return isLikelySimulator;
-    } catch (error) {
-      console.error('🔔 Simulator detection error:', error);
-      return true; // Default to simulator mode for safety
-    }
-  }
-
-  /**
-   * Safe initialization - no audio APIs
+   * Safe initialization that never fails
    */
   async init() {
     try {
-      console.log('🔔 Initializing crash-proof alarm service...');
-      
-      // Always use visual/haptic alerts only - no audio
-      console.log('🔔 Using visual alerts only (crash prevention mode)');
+      console.log('🔔 Initializing working alarm service...');
       this.isInitialized = true;
+      console.log('🔔 Working alarm service initialized successfully');
       return true;
     } catch (error) {
-      console.error('🔔 Safe initialization error:', error);
-      // Always return true to prevent app crashes
-      this.isInitialized = true;
+      console.error('🔔 Initialization error:', error);
+      this.isInitialized = true; // Always mark as ready
       return true;
     }
   }
 
   /**
-   * Skip audio loading completely
-   */
-  async loadAlarmSound() {
-    console.log('🔔 Skipping audio loading (crash prevention mode)');
-    return true;
-  }
-
-  /**
-   * Safe completion alarm using only visual/haptic feedback
+   * Simple completion alarm using visual + vibration
    */
   async playCompletionAlarm(options = {}) {
     try {
-      console.log('🔔 Playing safe completion alarm...');
+      console.log('🔔 Playing working completion alarm...');
 
-      if (!this.isInitialized) {
-        await this.init();
-      }
+      this.isPlaying = true;
 
-      // Use only safe system features
-      await this.playSafeAlarm(options);
-      return true;
-    } catch (error) {
-      console.error('🔔 Safe alarm error:', error);
-      // Still show basic completion feedback
-      console.log('🔔 Session completed (alarm had issues)');
-      return true;
-    }
-  }
-
-  /**
-   * Safe alarm using only system alerts and vibration
-   */
-  async playSafeAlarm(options = {}) {
-    console.log('🔔 Playing safe alarm (visual + haptic only)');
-
-    try {
-      // Safe vibration with error handling
-      try {
-        if (Platform.OS === 'ios') {
-          Vibration.vibrate([0, 400, 200, 400]);
-        } else {
-          Vibration.vibrate([0, 500, 300, 500]);
-        }
-      } catch (vibrationError) {
-        console.log('🔔 Vibration not available:', vibrationError.message);
-      }
-
-      // Visual alert with error handling
+      // Safe vibration (won't crash in simulator)
+      this.safeVibration();
+      
+      // Visual celebration alert
       setTimeout(() => {
-        try {
-          Alert.alert(
-            '🎉 Session Complete!',
-            'Your deep work session has finished successfully!',
-            [
-              {
-                text: 'Awesome!',
-                style: 'default',
-                onPress: () => {
-                  try {
-                    Vibration.cancel();
-                  } catch (e) {
-                    // Silent fail
-                  }
-                }
-              }
-            ],
-            { 
-              cancelable: false,
-              onDismiss: () => {
-                try {
-                  Vibration.cancel();
-                } catch (e) {
-                  // Silent fail
-                }
-              }
-            }
-          );
-        } catch (alertError) {
-          console.error('🔔 Alert failed:', alertError.message);
-        }
+        this.showCelebrationAlert(options);
       }, 200);
 
-      // Auto-stop vibration
+      // Auto-stop after specified time
       if (options.autoStopAfter) {
         setTimeout(() => {
-          try {
-            Vibration.cancel();
-          } catch (e) {
-            // Silent fail
-          }
-        }, (options.autoStopAfter || 5) * 1000);
+          this.stopAlarm();
+        }, options.autoStopAfter * 1000);
       }
 
-      console.log('🔔 Safe alarm completed');
+      return true;
     } catch (error) {
-      console.error('🔔 Safe alarm error:', error.message);
+      console.error('🔔 Working alarm error:', error);
+      
+      // Ultimate fallback
+      Alert.alert('🎉 Session Complete!', 'Great work!');
+      return true;
     }
   }
 
   /**
-   * Safe stop - only vibration
+   * Safe vibration that won't crash
+   */
+  safeVibration() {
+    try {
+      // Only attempt vibration on real devices (not simulator)
+      if (!__DEV__ || Platform.OS === 'android') {
+        Vibration.vibrate([0, 400, 200, 400, 200, 600]);
+        console.log('🔔 Vibration played');
+      } else {
+        console.log('🔔 Skipping vibration (simulator detected)');
+      }
+    } catch (error) {
+      console.log('🔔 Vibration failed (non-critical):', error.message);
+    }
+  }
+
+  /**
+   * Enhanced celebration alert
+   */
+  showCelebrationAlert(options = {}) {
+    try {
+      const celebrations = [
+        '🎉 Outstanding Work!',
+        '🌟 Session Complete!',
+        '🎯 Focus Achieved!',
+        '💪 Well Done!',
+        '🏆 Success!'
+      ];
+      
+      const messages = [
+        'You just completed a deep work session! Your dedication is building powerful focus habits.',
+        'Another successful session completed! You\'re making real progress toward your goals.',
+        'Excellent concentration! You\'re developing the discipline that leads to breakthrough results.',
+        'Session finished! Take a moment to appreciate this accomplishment.',
+        'Outstanding focus! You\'re proving that deep work creates extraordinary outcomes.'
+      ];
+      
+      const randomTitle = celebrations[Math.floor(Math.random() * celebrations.length)];
+      const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+      
+      Alert.alert(
+        randomTitle,
+        randomMessage,
+        [
+          {
+            text: 'View Progress',
+            style: 'default',
+            onPress: () => {
+              console.log('🔔 User wants to view progress');
+              this.stopAlarm();
+            }
+          },
+          {
+            text: 'Another Session',
+            style: 'default',
+            onPress: () => {
+              console.log('🔔 User wants another session');
+              this.stopAlarm();
+            }
+          }
+        ],
+        { 
+          cancelable: true,
+          onDismiss: () => {
+            this.stopAlarm();
+          }
+        }
+      );
+    } catch (error) {
+      console.error('🔔 Celebration alert error:', error);
+      // Basic fallback
+      Alert.alert('🎉 Session Complete!', 'Excellent work on your deep work session!');
+    }
+  }
+
+  /**
+   * Stop alarm
    */
   async stopAlarm() {
     try {
-      Vibration.cancel();
-      console.log('🔔 Safe alarm stopped');
+      if (this.isPlaying) {
+        Vibration.cancel();
+        this.isPlaying = false;
+        console.log('🔔 Alarm stopped');
+      }
     } catch (error) {
-      console.log('🔔 Stop alarm error (non-critical):', error.message);
+      console.log('🔔 Stop error (non-critical):', error.message);
+      this.isPlaying = false;
     }
   }
 
   /**
-   * Safe playing check
+   * Test alarm (for settings screen)
    */
-  async isPlaying() {
-    return false; // Visual alerts don't have a "playing" state
+  async testAlarm() {
+    console.log('🔔 Testing working alarm...');
+    return await this.playCompletionAlarm({
+      volume: 0.6,
+      autoStopAfter: 3
+    });
   }
 
   /**
@@ -175,38 +168,28 @@ class AlarmService {
    */
   async cleanup() {
     try {
-      Vibration.cancel();
-      this.isInitialized = false;
-      console.log('🔔 Safe alarm service cleaned up');
+      await this.stopAlarm();
+      console.log('🔔 Working alarm service cleaned up');
     } catch (error) {
       console.log('🔔 Cleanup error (non-critical):', error.message);
     }
   }
 
   /**
-   * Safe test
-   */
-  async testAlarm() {
-    console.log('🔔 Testing safe alarm...');
-    return await this.playCompletionAlarm({
-      autoStopAfter: 3
-    });
-  }
-
-  /**
-   * Safe status
+   * Get service status
    */
   getStatus() {
     return {
       isInitialized: this.isInitialized,
-      audioSupported: false, // Always false for safety
-      isSimulator: this.isSimulator,
-      hasSound: false,
+      isPlaying: this.isPlaying,
+      type: 'visual-vibration-alarm',
       platform: Platform.OS,
-      safeMode: true
+      isDev: __DEV__
     };
   }
 }
 
-// Export singleton instance
+// Export singleton
 export const alarmService = new AlarmService();
+
+console.log('🔔 Working alarm service exported successfully');

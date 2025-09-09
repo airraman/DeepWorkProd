@@ -1,10 +1,10 @@
-// src/services/backgroundTimer.js - Complete iPad-Safe Version with Alarm Integration
+// src/services/backgroundTimer.js - Complete Version with Simple Alarm Integration
 import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deepWorkStore } from './deepWorkStore';
-import { alarmService } from './alarmService'; // NEW: Import alarm service
+import { alarmService } from './alarmService'; // Simple alarm service integration
 import { Platform } from 'react-native';
 
 // Constants
@@ -14,7 +14,7 @@ const ACTIVE_SESSION_KEY = '@active_deep_work_session';
 // iPad detection
 const isTablet = Platform.isPad || false;
 
-// Enhanced logging for debugging iPad issues
+// Enhanced logging for debugging
 const debugLog = (message, data = null) => {
   const timestamp = new Date().toISOString();
   const deviceInfo = `[${Platform.OS}${isTablet ? '-iPad' : ''}]`;
@@ -82,46 +82,12 @@ const calculateRemainingTime = (sessionData) => {
   }
 };
 
-// NEW: Attempt to play alarm in background (limited success expected)
-const attemptBackgroundAlarm = async () => {
-  try {
-    // Note: Background audio playback is very limited in React Native
-    // This is more of a fallback attempt - the main alarm should happen 
-    // when the user returns to the app
-    
-    debugLog('🔔 Attempting background alarm...');
-    
-    // Try to initialize and play alarm (this may not work on all platforms/scenarios)
-    const alarmInitialized = await alarmService.init();
-    if (!alarmInitialized) {
-      debugLog('🔔 Background alarm initialization failed');
-      return false;
-    }
-    
-    const alarmPlayed = await alarmService.playCompletionAlarm({
-      volume: 0.7, // Slightly lower volume for background
-      autoStopAfter: 5 // Shorter duration for background (if it works)
-    });
-    
-    if (alarmPlayed) {
-      debugLog('🔔 Background alarm successfully started');
-    } else {
-      debugLog('🔔 Background alarm failed to start - will trigger when app opens');
-    }
-    
-    return alarmPlayed;
-  } catch (error) {
-    debugLog('🔔 Background alarm error:', error);
-    return false;
-  }
-};
-
-// NEW: Enhanced completion notification with alarm-triggering data
+// Enhanced completion notification with alarm trigger
 const sendCompletionNotification = async () => {
   try {
-    debugLog('🔔 Session completed in background - sending enhanced notification');
+    debugLog('🔔 Session completed - sending notification with alarm trigger');
     
-    // Get session data for more personalized notification
+    // Get session data for personalized notification
     let sessionInfo = { activity: 'Focus Session', duration: 'Unknown' };
     try {
       const sessionData = await getActiveSessionFromStorage();
@@ -131,7 +97,7 @@ const sendCompletionNotification = async () => {
         
         sessionInfo = {
           activity: activityDetails ? activityDetails.name : 'Focus Session',
-          duration: Math.floor(sessionData.duration / 60000), // Convert to minutes
+          duration: Math.floor(sessionData.duration / 60000),
           color: activityDetails ? activityDetails.color : '#4ADE80'
         };
       }
@@ -139,41 +105,40 @@ const sendCompletionNotification = async () => {
       debugLog('Error getting session info for notification:', error);
     }
     
-    // Schedule a prominent completion notification
+    // Schedule completion notification with alarm trigger
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '🎉 Deep Work Session Complete!',
-        body: `Great job! Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has ended. Tap to see your progress.`,
+        body: `Congratulations! Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has finished. Tap to celebrate your achievement!`,
         data: { 
           screen: 'MainApp', 
           params: { screen: 'Metrics' },
-          // KEY: Add flag to trigger alarm when app opens
+          // CRITICAL: Flag to trigger alarm when app opens
           shouldPlayAlarm: true,
           completedAt: new Date().toISOString(),
-          sessionInfo: sessionInfo
+          sessionInfo: sessionInfo,
+          alarmSettings: {
+            volume: 0.8,
+            autoStopAfter: 10
+          }
         },
-        sound: true, // Enable system notification sound
+        sound: true,
         priority: Notifications.AndroidNotificationPriority.HIGH,
-        // Make the notification more noticeable
         color: sessionInfo.color,
-        // Add vibration pattern for Android (also works on some iOS versions)
         vibrationPattern: [0, 250, 250, 250],
+        
         // iOS-specific enhancements
         ...(Platform.OS === 'ios' && {
-          subtitle: `${sessionInfo.activity} • ${sessionInfo.duration} minutes`,
+          subtitle: `${sessionInfo.activity} • ${sessionInfo.duration} minutes completed!`,
           badge: 1,
-          // More prominent sound on iOS
           sound: 'default',
-          critical: false, // Don't use critical unless you have special entitlements
         }),
+        
         // Android-specific enhancements
         ...(Platform.OS === 'android' && {
-          // Use high importance channel for better visibility
           channelId: 'session-completion',
-          // Make it persistent until user interacts
-          sticky: false, // Don't make it too annoying
+          sticky: false,
           autoCancel: true,
-          // LED and vibration
           lights: true,
           lightColor: sessionInfo.color,
         })
@@ -234,14 +199,14 @@ ${progressText}`;
       data: { 
         screen: 'DeepWorkSession',
         sessionData: sessionData,
-        isTimerUpdate: true // Flag to distinguish from completion notifications
+        isTimerUpdate: true
       },
       color: activityColor,
-      sticky: !isTablet, // Don't force sticky on iPad
-      autoDismiss: isTablet, // Allow auto-dismiss on iPad
+      sticky: !isTablet,
+      autoDismiss: isTablet,
     };
     
-    // Add progress indicator for Android and iPad differently
+    // Add progress indicator for Android and iPad
     if (Platform.OS === 'android' || isTablet) {
       notificationContent.progress = {
         max: 100,
@@ -261,12 +226,12 @@ ${progressText}`;
   }
 };
 
-// iPad-safe notification configuration - ENHANCED
+// Safe notification configuration
 const configureNotifications = async () => {
   try {
     debugLog('Configuring notifications system');
     
-    // Create Android notification channels for better control
+    // Create Android notification channels
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('session-completion', {
         name: 'Session Completion',
@@ -286,7 +251,7 @@ const configureNotifications = async () => {
       });
     }
     
-    // iPad-specific notification categories with action buttons
+    // Set up notification categories for iOS
     if (Platform.OS === 'ios') {
       const categories = [
         {
@@ -352,57 +317,69 @@ const configureNotifications = async () => {
       debugLog('iOS notification categories configured');
     }
 
-    // Enhanced notification handler for iPad and alarm integration
-    await Notifications.setNotificationHandler({
-      handleNotification: async (notification) => {
-        const isCompletion = notification.request.content.data?.shouldPlayAlarm;
-        const isTimerUpdate = notification.request.content.data?.isTimerUpdate;
-        
-        return {
-          shouldShowAlert: true,
-          shouldPlaySound: isCompletion, // Only play system sound for completions
-          shouldSetBadge: isCompletion,
-          priority: isCompletion 
-            ? Notifications.AndroidNotificationPriority.HIGH 
-            : (isTablet ? Notifications.AndroidNotificationPriority.DEFAULT : Notifications.AndroidNotificationPriority.HIGH)
-        };
-      },
-    });
-    
-    // Register background task after notifications are configured
-    const taskRegistered = await ensureTaskIsRegistered();
-    
-    if (!taskRegistered) {
-      debugLog('Warning: Background task registration failed');
-      // Don't throw error - app should still work without background tasks
+    // Set notification handler with safe defaults
+    try {
+      await Notifications.setNotificationHandler({
+        handleNotification: async (notification) => {
+          try {
+            const isCompletion = notification.request.content.data?.shouldPlayAlarm;
+            const isTimerUpdate = notification.request.content.data?.isTimerUpdate;
+            
+            return {
+              shouldShowAlert: true,
+              shouldPlaySound: isCompletion,
+              shouldSetBadge: isCompletion,
+              priority: isCompletion 
+                ? Notifications.AndroidNotificationPriority.HIGH 
+                : (isTablet ? Notifications.AndroidNotificationPriority.DEFAULT : Notifications.AndroidNotificationPriority.HIGH)
+            };
+          } catch (handlerError) {
+            debugLog('Notification handler error:', handlerError);
+            return {
+              shouldShowAlert: true,
+              shouldPlaySound: false,
+              shouldSetBadge: false
+            };
+          }
+        },
+      });
+    } catch (handlerError) {
+      debugLog('Failed to set notification handler:', handlerError);
     }
     
-    debugLog('Notification configuration completed');
-    return taskRegistered;
+    // Register background task
+    let taskRegistered = false;
+    try {
+      taskRegistered = await ensureTaskIsRegistered();
+    } catch (taskError) {
+      debugLog('Background task registration failed (non-critical):', taskError);
+    }
+    
+    debugLog('Notification configuration completed', { taskRegistered });
+    return true;
   } catch (error) {
     debugLog('Notification configuration failed:', error);
-    throw error;
+    return true; // Don't block app startup
   }
 };
 
-// iPad-safe task registration
+// Safe task registration
 const ensureTaskIsRegistered = async () => {
   try {
     debugLog('Starting task registration check');
     
-    // Special handling for iPad
     if (isTablet) {
       debugLog('iPad detected - using conservative task registration');
     }
     
-    // Check task definition with timeout
+    const TASK_TIMEOUT = 10000;
+    
+    // Check if task is already defined
     let isTaskDefined = false;
     try {
-      const taskCheckPromise = new Promise((resolve) => {
-        resolve(TaskManager.isTaskDefined(BACKGROUND_TIMER_TASK));
-      });
+      const taskCheckPromise = TaskManager.isTaskDefined(BACKGROUND_TIMER_TASK);
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Task check timeout')), 5000)
+        setTimeout(() => reject(new Error('Task check timeout')), TASK_TIMEOUT)
       );
       
       isTaskDefined = await Promise.race([taskCheckPromise, timeoutPromise]);
@@ -425,7 +402,7 @@ const ensureTaskIsRegistered = async () => {
               return BackgroundFetch.BackgroundFetchResult.NoData;
             }
         
-            // Don't update if paused
+            // Handle paused sessions
             if (sessionData.isPaused) {
               await updateTimerNotification(sessionData.remainingAtPause, sessionData);
               return BackgroundFetch.BackgroundFetchResult.NewData;
@@ -436,15 +413,7 @@ const ensureTaskIsRegistered = async () => {
             if (timeRemaining <= 0) {
               debugLog('Session completed via background task');
               
-              // NEW: Attempt to play background alarm (may not work on all platforms)
-              const backgroundAlarmWorked = await attemptBackgroundAlarm();
-              if (backgroundAlarmWorked) {
-                debugLog('🔔 Background alarm successfully played');
-              } else {
-                debugLog('🔔 Background alarm failed - notification will trigger alarm when app opens');
-              }
-              
-              // Send enhanced completion notification
+              // Send completion notification (alarm will trigger when app opens)
               await sendCompletionNotification();
               
               // Clear session data
@@ -471,12 +440,12 @@ const ensureTaskIsRegistered = async () => {
     // Check registration status
     let isRegistered = false;
     try {
-      const registrationCheckPromise = TaskManager.isTaskRegisteredAsync(BACKGROUND_TIMER_TASK);
+      const registrationPromise = TaskManager.isTaskRegisteredAsync(BACKGROUND_TIMER_TASK);
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Registration check timeout')), 5000)
+        setTimeout(() => reject(new Error('Registration check timeout')), TASK_TIMEOUT)
       );
       
-      isRegistered = await Promise.race([registrationCheckPromise, timeoutPromise]);
+      isRegistered = await Promise.race([registrationPromise, timeoutPromise]);
     } catch (error) {
       debugLog('Registration check failed:', error);
       return false;
@@ -486,16 +455,18 @@ const ensureTaskIsRegistered = async () => {
       debugLog('Registering background task');
       
       try {
-        // iPad-specific registration settings
         const registrationOptions = {
-          minimumInterval: isTablet ? 30 : 15, // Longer interval for iPad
+          minimumInterval: isTablet ? 30 : 15,
           stopOnTerminate: false,
           startOnBoot: true,
         };
         
-        const registrationPromise = BackgroundFetch.registerTaskAsync(BACKGROUND_TIMER_TASK, registrationOptions);
+        const registrationPromise = BackgroundFetch.registerTaskAsync(
+          BACKGROUND_TIMER_TASK, 
+          registrationOptions
+        );
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Registration timeout')), 10000)
+          setTimeout(() => reject(new Error('Registration timeout')), TASK_TIMEOUT)
         );
         
         await Promise.race([registrationPromise, timeoutPromise]);
@@ -514,7 +485,7 @@ const ensureTaskIsRegistered = async () => {
   }
 };
 
-// Start timer with iPad optimizations and alarm preparation
+// Start timer with alarm preparation
 const startTimerNotification = async (duration, activity, musicChoice) => {
   try {
     debugLog('Starting timer notification', { duration, activity, musicChoice });
@@ -531,9 +502,9 @@ const startTimerNotification = async (duration, activity, musicChoice) => {
       debugLog('Configuration failed, continuing anyway:', error);
     }
     
-    // NEW: Pre-initialize alarm service for faster response on completion
+    // Pre-initialize alarm service for faster response
     try {
-      debugLog('🔔 Pre-initializing alarm service for background completion...');
+      debugLog('🔔 Pre-initializing alarm service...');
       const alarmReady = await alarmService.init();
       if (alarmReady) {
         debugLog('🔔 Alarm service ready for session completion');
@@ -571,7 +542,7 @@ const stopTimerNotification = async () => {
   try {
     debugLog('Stopping timer notification');
     
-    // NEW: Clean up alarm service when stopping timer
+    // Clean up alarm service
     try {
       debugLog('🔔 Cleaning up alarm service...');
       await alarmService.cleanup();
@@ -604,7 +575,7 @@ const stopTimerNotification = async () => {
   }
 };
 
-// Update pause state with error handling
+// Update pause state
 const updateTimerPauseState = async (isPaused) => {
   try {
     debugLog('Updating pause state:', isPaused);
@@ -661,7 +632,7 @@ const getCurrentSession = async () => {
   }
 };
 
-// Export all functions including new alarm-related ones
+// Export all functions
 export default {
   startTimerNotification,
   stopTimerNotification,
@@ -672,7 +643,5 @@ export default {
   sendCompletionNotification,
   updateTimerNotification,
   clearActiveSession,
-  ensureTaskIsRegistered,
-  // NEW: Export alarm-related functions
-  attemptBackgroundAlarm
+  ensureTaskIsRegistered
 };

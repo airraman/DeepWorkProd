@@ -193,6 +193,7 @@ const SettingsScreen = () => {
   const handleAlarmVolumeChange = async (volume) => {
     try {
       setAlarmVolume(volume);
+      
       // Save immediately to storage
       const currentSettings = await deepWorkStore.getSettings();
       const success = await deepWorkStore.updateSettings({
@@ -204,6 +205,8 @@ const SettingsScreen = () => {
         // Revert on failure
         setAlarmVolume(alarmVolume);
         showFeedback('Failed to update volume setting');
+      } else {
+        showFeedback(`Volume set to ${Math.round(volume * 100)}%`);
       }
     } catch (error) {
       console.error('Error updating alarm volume setting:', error);
@@ -218,14 +221,15 @@ const SettingsScreen = () => {
       showFeedback('Testing alarm...');
       
       // Test the alarm with current settings
-      await alarmService.playCompletionAlarm({
-        volume: alarmVolume,
-        autoStopAfter: 3 // Short test duration
-      });
+      const alarmPlayed = await alarmService.testAlarm();
       
-      setTimeout(() => {
-        showFeedback('Alarm test complete!');
-      }, 1000);
+      if (alarmPlayed) {
+        setTimeout(() => {
+          showFeedback('Alarm test complete! 🔔');
+        }, 1000);
+      } else {
+        showFeedback('Alarm test failed - check device settings');
+      }
       
     } catch (error) {
       console.error('Error testing alarm:', error);

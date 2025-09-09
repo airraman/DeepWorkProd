@@ -32,7 +32,8 @@
       ]
     ],
     "assets": [
-      "./assets/lofi.mp3",
+      "./assets/alarm.mp3",
+      "./assets/lofi.mp3", 
       "./assets/whitenoise.mp3"
     ],
     "assetBundlePatterns": [

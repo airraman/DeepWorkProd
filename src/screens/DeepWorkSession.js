@@ -1,3 +1,4 @@
+// src/screens/DeepWorkSession.js - MINIMAL VERSION FOR CRASH TESTING
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -16,22 +17,17 @@ import {
 import { deepWorkStore } from '../services/deepWorkStore';
 import SessionNotesModal from '../components/modals/SessionNotesModal';
 import { Pause, Play, ChevronLeft } from 'lucide-react-native';
-import backgroundTimer from '../services/backgroundTimer';
-import { audioService } from '../services/audioService'; // Background music service
-import { alarmService } from '../services/alarmService'; // NEW: Alarm service for completion alerts
+// TESTING: Comment out all service imports that might cause crashes
+// import backgroundTimer from '../services/backgroundTimer';
+// import { alarmService } from '../services/alarmService';
 
 const { width, height } = Dimensions.get('window');
 const isTablet = width > 768 || height > 768;
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Define colors for different activity types
-const ACTIVITY_COLORS = {
-  'write': '#4f46e5',     // indigo
-  'code': '#0891b2',      // cyan
-  'produce-music': '#7c3aed' // violet
-};
-
 const DeepWorkSession = ({ route, navigation }) => {
+  console.log('🔍 DeepWorkSession starting...');
+  
   // Get session parameters from navigation
   const { duration, activity, musicChoice } = route.params;
 
@@ -52,11 +48,10 @@ const DeepWorkSession = ({ route, navigation }) => {
   const startTimeRef = useRef(Date.now());
   const intervalRef = useRef(null);
   const saveRetryCountRef = useRef(0);
-  const animatedHeight = useRef(new Animated.Value(0)).current; // Start from 0 (empty)
+  const animatedHeight = useRef(new Animated.Value(0)).current;
   const animation = useRef(null);
   const swipeAnim = useRef(new Animated.Value(0)).current;
 
-  // Maximum number of save retries before giving up
   const MAX_SAVE_RETRIES = 3;
 
   // Configure the pan responder for swipe gestures
@@ -64,21 +59,17 @@ const DeepWorkSession = ({ route, navigation }) => {
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (evt, gestureState) => {
-        // Only set pan responder for horizontal swipes
         return Math.abs(gestureState.dx) > 20 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
       },
       onPanResponderMove: (evt, gestureState) => {
-        // Only track right swipes (dx > 0)
         if (gestureState.dx > 0) {
           swipeAnim.setValue(gestureState.dx);
         }
       },
       onPanResponderRelease: (evt, gestureState) => {
-        // If swiped more than 1/3 of the screen width to the right
         if (gestureState.dx > SCREEN_WIDTH / 3) {
           confirmEndSession();
         } else {
-          // Reset animation if swipe not far enough
           Animated.spring(swipeAnim, {
             toValue: 0,
             useNativeDriver: true,
@@ -90,12 +81,10 @@ const DeepWorkSession = ({ route, navigation }) => {
 
   // Load activity details
   useEffect(() => {
+    console.log('🔍 Loading activity details...');
     const loadActivityDetails = async () => {
       try {
-        // Get settings which contains the activities
         const settings = await deepWorkStore.getSettings();
-        
-        // Find the activity with the matching ID
         const foundActivity = settings.activities.find(a => a.id === activity);
         
         if (foundActivity) {
@@ -103,12 +92,10 @@ const DeepWorkSession = ({ route, navigation }) => {
           setActivityDetails(foundActivity);
         } else {
           console.log('Activity not found:', activity);
-          // Set a default activity if not found
           setActivityDetails({ name: 'Focus Session', color: '#2563eb' });
         }
       } catch (error) {
         console.error('Error loading activity details:', error);
-        // Fallback to default
         setActivityDetails({ name: 'Focus Session', color: '#2563eb' });
       }
     };
@@ -116,62 +103,20 @@ const DeepWorkSession = ({ route, navigation }) => {
     loadActivityDetails();
   }, [activity]);
 
-  // // Set up audio playback and alarm service
+  // TESTING: Comment out ALL service initialization
   // useEffect(() => {
-  //   const setupServices = async () => {
-  //     try {
-  //       // Initialize background music service
-  //       await audioService.init();
-        
-  //       // NEW: Initialize alarm service for completion alerts
-  //       console.log('🔔 Initializing alarm service for session...');
-  //       const alarmInitialized = await alarmService.init();
-  //       if (!alarmInitialized) {
-  //         console.warn('⚠️ Alarm service failed to initialize - completion alerts may not work');
-  //       } else {
-  //         console.log('🔔 Alarm service ready for session completion');
-  //       }
-        
-  //       // Start playing the selected background music
-  //       if (musicChoice !== 'none') {
-  //         await audioService.playMusic(musicChoice);
-  //       }
-  //     } catch (error) {
-  //       console.error('Error setting up services:', error);
-  //     }
-  //   };
-    
-  //   setupServices();
-    
-  //   // Cleanup function to stop audio AND alarm when component unmounts
-  //   return () => {
-  //     console.log('🔧 Cleaning up session services...');
-  //     audioService.stopMusic();
-  //     alarmService.cleanup(); // NEW: Clean up alarm service
-  //   };
-  // }, [musicChoice]);
+  //   console.log('🔍 Would initialize alarm service...');
+  //   // Alarm service initialization commented out for testing
+  // }, []);
 
-  // Initialize background timer
-  useEffect(() => {
-    // Start background timer when session begins
-    const initBackgroundTimer = async () => {
-      await backgroundTimer.startTimerNotification(
-        parseInt(duration),
-        activity,
-        musicChoice
-      );
-    };
-    
-    initBackgroundTimer();
-    
-    // Clean up when component unmounts
-    return () => {
-      backgroundTimer.stopTimerNotification();
-    };
-  }, [duration, activity, musicChoice]);
+  // useEffect(() => {
+  //   console.log('🔍 Would initialize background timer...');
+  //   // Background timer initialization commented out for testing
+  // }, [duration, activity, musicChoice]);
 
   // Function to confirm ending the session
   const confirmEndSession = () => {
+    console.log('🔍 Confirm end session...');
     Alert.alert(
       'End Session?',
       'Are you sure you want to end your deep work session early? This session will not be saved.',
@@ -189,9 +134,8 @@ const DeepWorkSession = ({ route, navigation }) => {
         {
           text: 'End Session',
           onPress: async () => {
-            await backgroundTimer.stopTimerNotification();
-            // await audioService.stopMusic(); // Stop background music
-            await alarmService.cleanup(); // NEW: Clean up alarm service
+            console.log('🔍 Ending session...');
+            // No service cleanup for testing
             navigation.navigate('MainApp', { screen: 'Home' });
           },
           style: 'destructive',
@@ -202,38 +146,20 @@ const DeepWorkSession = ({ route, navigation }) => {
 
   // Handle pause/resume
   const togglePause = () => {
+    console.log('🔍 Toggle pause...');
     if (isPaused) {
-      // Resume the timer
       startTimeRef.current = Date.now() - (totalDuration - timeLeft);
 
-      // Calculate the progress value (0 to 1)
-      const progress = 1 - (timeLeft / totalDuration);
-
-      // Resume the animation from current position
       Animated.timing(animatedHeight, {
         toValue: 1,
         duration: timeLeft,
         useNativeDriver: false,
       }).start();
       
-      // Update background timer pause state
-      backgroundTimer.updateTimerPauseState(false);
-      
-      // Resume background music playback if not "none"
-      // if (musicChoice !== 'none') {
-      //   audioService.resumeMusic();
-      // }
+      // No background timer update for testing
     } else {
-      // Pause the animation
       animatedHeight.stopAnimation();
-      
-      // Update background timer pause state
-      backgroundTimer.updateTimerPauseState(true);
-      
-      // Pause background music playback if not "none"
-      // if (musicChoice !== 'none') {
-      //   audioService.pauseMusic();
-      // }
+      // No background timer update for testing
     }
 
     setIsPaused(!isPaused);
@@ -241,6 +167,7 @@ const DeepWorkSession = ({ route, navigation }) => {
 
   // Start or resume the timer
   const startTimer = () => {
+    console.log('🔍 Starting timer...');
     startTimeRef.current = Date.now() - (totalDuration - timeLeft);
 
     intervalRef.current = setInterval(() => {
@@ -256,50 +183,31 @@ const DeepWorkSession = ({ route, navigation }) => {
     }, 1000);
   };
 
-  // Handle timer completion - UPDATED with alarm integration
+  // TESTING: Simplified timeout handler with NO alarm service
   const handleTimeout = async () => {
+    console.log('🔍 Session timeout - simplified version');
     try {
       clearInterval(intervalRef.current);
       setIsPaused(true);
       
-      // Stop background music when time is up
-      // if (musicChoice !== 'none') {
-      //   audioService.pauseMusic();
-      // }
+      // TESTING: No alarm service calls
+      console.log('🎉 Session completed - would play alarm here');
       
-      // NEW: Play completion alarm - this is the key addition!
-      console.log('🔔 Session completed - playing completion alarm');
-      try {
-        await alarmService.playCompletionAlarm({
-          volume: 0.8, // 80% volume - loud enough to notice but not jarring
-          autoStopAfter: 10 // Stop alarm after 10 seconds automatically
-        });
-        console.log('🔔 Completion alarm started successfully');
-      } catch (alarmError) {
-        console.error('🔔 Failed to play completion alarm:', alarmError);
-        // Continue with the session completion even if alarm fails
-      }
-      
-      // Show the notes modal
+      // Just show the notes modal
       setShowNotesModal(true);
     } catch (error) {
       console.error('Error handling timeout:', error);
-      // Still show the modal even if there are errors
       setShowNotesModal(true);
     }
   };
 
-  // Handle notes submission - UPDATED to stop alarm
+  // Handle notes submission
   const handleNotesSubmit = async (notes) => {
+    console.log('🔍 Notes submitted...');
     setShowNotesModal(false);
     
-    // NEW: Stop the completion alarm when user starts interacting
-    console.log('🔔 User interacting with session completion - stopping alarm');
-    try {
-      await alarmService.stopAlarm();
-    } catch (error) {
-      console.error('🔔 Error stopping alarm:', error);
-    }
+    // TESTING: No alarm service calls
+    console.log('🔍 Would stop alarm here');
     
     const success = await handleSessionComplete(notes);
 
@@ -308,41 +216,26 @@ const DeepWorkSession = ({ route, navigation }) => {
     } else {
       startTimer();
       setIsPaused(false);
-      // Resume background music if session continues
-      if (musicChoice !== 'none' && !isPaused) {
-        audioService.resumeMusic();
-      }
     }
   };
 
-  // Handle session completion and data saving - UPDATED with alarm cleanup
+  // TESTING: Simplified session completion
   const handleSessionComplete = async (notes = '') => {
+    console.log('🔍 Completing session...');
     if (isSaving) return false;
 
     try {
       setIsSaving(true);
       
-      // Stop background timer
-      await backgroundTimer.stopTimerNotification();
-      
-      // Stop background music playback
-      // await audioService.stopMusic();
-      
-      // NEW: Ensure alarm is stopped and cleaned up
-      console.log('🔔 Session completing - ensuring alarm is stopped');
-      try {
-        await alarmService.stopAlarm();
-      } catch (error) {
-        console.error('🔔 Error stopping alarm during completion:', error);
-      }
+      // TESTING: No background timer or alarm service
+      console.log('🔍 Would stop background services here');
 
-      // Verify storage integrity before saving
+      // Just verify storage and save
       const storageOk = await deepWorkStore.verifyStorageIntegrity();
       if (!storageOk) {
         throw new Error('Storage integrity check failed');
       }
 
-      // Save session data
       const result = await deepWorkStore.addSession({
         activity,
         duration: parseInt(duration),
@@ -354,10 +247,9 @@ const DeepWorkSession = ({ route, navigation }) => {
         throw new Error(result.error || 'Failed to save session');
       }
 
-      // Show success message
       Alert.alert(
         'Session Complete!',
-        'Great work! Your deep work session has been recorded.',
+        'Test session completed successfully.',
         [
           {
             text: 'View Progress',
@@ -373,66 +265,14 @@ const DeepWorkSession = ({ route, navigation }) => {
       return true;
     } catch (error) {
       console.error('Error completing session:', error);
-      saveRetryCountRef.current += 1;
-
-      if (saveRetryCountRef.current < MAX_SAVE_RETRIES) {
-        Alert.alert(
-          'Save Error',
-          'There was a problem saving your session. Would you like to try again?',
-          [
-            {
-              text: 'Retry',
-              onPress: async () => {
-                setIsSaving(false);
-                return await handleSessionComplete(notes);
-              },
-            },
-            {
-              text: 'Cancel',
-              style: 'cancel',
-              onPress: () => {
-                setIsSaving(false);
-                return false;
-              },
-            },
-          ]
-        );
-      } else {
-        Alert.alert(
-          'Error',
-          'Unable to save your session after multiple attempts. Would you like to try again later?',
-          [
-            {
-              text: 'Continue Session',
-              onPress: () => {
-                setIsSaving(false);
-                // Resume background music if continuing session
-                if (musicChoice !== 'none' && !isPaused) {
-                  audioService.resumeMusic();
-                }
-                return false;
-              },
-            },
-            {
-              text: 'End Without Saving',
-              style: 'destructive',
-              onPress: async () => {
-                await backgroundTimer.stopTimerNotification();
-                await audioService.stopMusic();
-                await alarmService.cleanup(); // NEW: Clean up alarm service
-                navigation.navigate('MainApp', { screen: 'Home' });
-              },
-            },
-          ]
-        );
-      }
-
+      Alert.alert('Error', 'Failed to save session');
       return false;
     }
   };
 
   // Handle back button press
   useEffect(() => {
+    console.log('🔍 Setting up back handler...');
     const backHandler = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
@@ -446,12 +286,10 @@ const DeepWorkSession = ({ route, navigation }) => {
 
   // Initialize timer and animation
   useEffect(() => {
-    // Start the timer
+    console.log('🔍 Initializing timer and animation...');
     startTimer();
 
-    // Setup the animation for the hourglass effect - now filling from top to bottom
     if (!animation.current) {
-      // Start with 0 (empty) and animate to 1 (full)
       animation.current = Animated.timing(animatedHeight, {
         toValue: 1,
         duration: totalDuration,
@@ -466,7 +304,6 @@ const DeepWorkSession = ({ route, navigation }) => {
         clearInterval(intervalRef.current);
       }
 
-      // Ensure the animation is cleaned up
       if (animation.current) {
         animation.current.stop();
       }
@@ -476,29 +313,21 @@ const DeepWorkSession = ({ route, navigation }) => {
   // Handle pausing and resuming
   useEffect(() => {
     if (isPaused) {
-      // Pause animation
       animatedHeight.stopAnimation();
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     } else {
-      // Resume animation from current position
-      // Calculate current progress (how much has been filled from top)
       const progress = 1 - (timeLeft / totalDuration);
-
-      // Set the current value
       animatedHeight.setValue(progress);
 
-      // Create a new animation for the remaining time
       animation.current = Animated.timing(animatedHeight, {
-        toValue: 1, // Animate to full (1)
+        toValue: 1,
         duration: timeLeft,
         useNativeDriver: false,
       });
 
       animation.current.start();
-
-      // Restart the timer
       startTimer();
     }
   }, [isPaused]);
@@ -510,16 +339,7 @@ const DeepWorkSession = ({ route, navigation }) => {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Format activity name for display
-  const formatActivityName = (name) => {
-    if (!name || typeof name !== 'string') {
-      return 'Unnamed Activity';
-    }
-
-    return name.split('-').map(word =>
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ');
-  };
+  console.log('🔍 DeepWorkSession rendering...');
 
   return (
     <Animated.View
@@ -532,18 +352,16 @@ const DeepWorkSession = ({ route, navigation }) => {
       {...panResponder.panHandlers}
     >
       <SafeAreaView style={styles.innerContainer}>
-        {/* Swipe indicator */}
         <View style={styles.swipeIndicator}>
           <ChevronLeft size={24} color="#6b7280" />
-          <Text style={styles.swipeText}>Swipe right to end session</Text>
+          <Text style={styles.swipeText}>Swipe right to end session (TESTING)</Text>
         </View>
 
         <View style={styles.content}>
-          {/* Session Timer */}
           <View style={styles.timerSection}>
             <Text style={styles.timeText}>{formatTime(timeLeft)}</Text>
             <Text style={styles.totalTimeText}>
-              of {duration}:00 minutes
+              of {duration}:00 minutes (TEST MODE)
             </Text>
             {isSaving && (
               <ActivityIndicator
@@ -554,7 +372,6 @@ const DeepWorkSession = ({ route, navigation }) => {
             )}
           </View>
 
-          {/* Progress Column/Timer Visual */}
           <View style={styles.timerVisualContainer}>
             <View style={styles.columnContainer}>
               <Animated.View
@@ -575,19 +392,11 @@ const DeepWorkSession = ({ route, navigation }) => {
             </View>
           </View>
 
-          {/* Session Activity/Info */}
           <View style={styles.activityInfoContainer}>
             <Text style={styles.activityText}>
-              {activityDetails ? activityDetails.name : 'Focus Session'}
+              {activityDetails ? activityDetails.name : 'Focus Session'} (TEST)
             </Text>
 
-            {musicChoice !== 'none' && (
-              <Text style={styles.musicText}>
-                {formatActivityName(musicChoice)}
-              </Text>
-            )}
-
-            {/* Pause/Resume Button */}
             <TouchableOpacity
               style={styles.pauseButton}
               onPress={togglePause}
@@ -664,9 +473,9 @@ const styles = StyleSheet.create({
     maxHeight: SCREEN_HEIGHT * 0.5,
   },
   columnContainer: {
-    width: isTablet ? 140 : 100, // Slightly wider on tablets
+    width: isTablet ? 140 : 100,
     height: '100%',
-    maxHeight: SCREEN_HEIGHT * (isTablet ? 0.35 : 0.45), // Adjusted for tablets
+    maxHeight: SCREEN_HEIGHT * (isTablet ? 0.35 : 0.45),
     backgroundColor: '#e5e7eb',
     borderRadius: 50,
     overflow: 'hidden',
@@ -689,11 +498,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1f2937',
     marginBottom: 8,
-  },
-  musicText: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 24,
   },
   pauseButton: {
     width: 56,

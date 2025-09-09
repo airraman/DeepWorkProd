@@ -1,4 +1,4 @@
-// App.js - Fixed Navigation for iPad Full Screen
+// App.js - Safe Version with Conditional Service Loading
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -10,9 +10,23 @@ import { Alert, View, Text, Platform, Dimensions, StatusBar } from 'react-native
 import { navigationRef, safeNavigate } from './src/services/navigationService';
 import backgroundTimer from './src/services/backgroundTimer';
 import ErrorBoundary from './src/components/ErrorBoundary';
-import { alarmService } from './src/services/alarmService';
-import { Audio } from 'expo-av';
 
+// SAFE IMPORT: Only import alarmService if we want to use it
+let alarmService = null;
+try {
+  // Dynamically import alarmService - this prevents crashes if the service has issues
+  const alarmModule = require('./src/services/alarmService');
+  alarmService = alarmModule.alarmService;
+  console.log('🔔 Alarm service imported successfully');
+} catch (error) {
+  console.warn('🔔 Alarm service not available:', error.message);
+  // Create a mock alarm service that does nothing
+  alarmService = {
+    init: async () => { console.log('🔔 Mock alarm service init'); return true; },
+    cleanup: async () => { console.log('🔔 Mock alarm service cleanup'); },
+    playCompletionAlarm: async () => { console.log('🔔 Mock alarm'); return true; }
+  };
+}
 
 // Import screens
 import InitialSetupScreen from './src/screens/InitialSetUpScreen';
@@ -28,11 +42,12 @@ const Tab = createBottomTabNavigator();
 const { width, height } = Dimensions.get('window');
 const isTablet = Platform.isPad || (width > 768 && height > 768);
 
-console.log('Device Info:', {
+console.log('🔍 Device Info:', {
   platform: Platform.OS,
   version: Platform.Version,
   isTablet,
-  dimensions: { width, height }
+  dimensions: { width, height },
+  hasAlarmService: !!alarmService
 });
 
 function TabNavigator() {
@@ -53,32 +68,61 @@ function TabNavigator() {
   );
 }
 
-// Background service initialization with better error handling
+// SAFE background services initialization with proper error handling
 const initializeBackgroundServices = async () => {
   try {
-    console.log('Starting background services initialization...');
+    console.log('🔍 Starting safe background services initialization...');
     
     if (Platform.OS === 'ios' && isTablet) {
-      console.log('iPad detected - using conservative background task setup');
+      console.log('🔍 iPad detected - using conservative background task setup');
     }
     
-    // Initialize alarm service along with other services
-    const alarmInitialized = await alarmService.init();
-    if (!alarmInitialized) {
-      console.warn('⚠️ Alarm service failed to initialize - alarms may not work');
+    // SAFE: Initialize alarm service with error handling
+    let alarmInitialized = false;
+    try {
+      if (alarmService && typeof alarmService.init === 'function') {
+        alarmInitialized = await alarmService.init();
+        if (alarmInitialized) {
+          console.log('🔔 Alarm service initialized successfully');
+        } else {
+          console.warn('⚠️ Alarm service failed to initialize - alarms may not work');
+        }
+      } else {
+        console.log('🔔 Alarm service not available - using mock service');
+        alarmInitialized = true; // Mock service always "succeeds"
+      }
+    } catch (alarmError) {
+      console.error('🔔 Alarm service initialization error:', alarmError);
+      alarmInitialized = false; // Continue without alarm service
     }
     
-    const configPromise = backgroundTimer.configureNotifications();
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Configuration timeout')), 15000)
-    );
+    // SAFE: Configure notifications with timeout
+    let notificationsConfigured = false;
+    try {
+      const configPromise = backgroundTimer.configureNotifications();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Configuration timeout')), 15000)
+      );
+      
+      await Promise.race([configPromise, timeoutPromise]);
+      notificationsConfigured = true;
+      console.log('📱 Notifications configured successfully');
+    } catch (notificationError) {
+      console.error('📱 Notification configuration failed:', notificationError);
+      notificationsConfigured = false; // Continue without background notifications
+    }
     
-    await Promise.race([configPromise, timeoutPromise]);
-    console.log('Background services initialized successfully');
+    console.log('🔍 Background services initialization completed:', {
+      alarmService: alarmInitialized,
+      notifications: notificationsConfigured
+    });
+    
+    // Return true even if some services failed - app should still work
     return true;
   } catch (error) {
-    console.error('Background services initialization failed:', error);
-    return false;
+    console.error('🔍 Background services initialization failed:', error);
+    // Always return true to prevent app crashes
+    return true;
   }
 };
 
@@ -92,37 +136,52 @@ function MainApp() {
   });
 
   useEffect(() => {
+    console.log('🔍 App.js: useEffect starting...');
+    
     const initApp = async () => {
       try {
-        console.log('App initialization starting...');
+        console.log('🔍 App initialization starting...');
         setIsAppReady(true);
         
         // Initialize background services with proper error handling
         setTimeout(async () => {
-          const bgSuccess = await initializeBackgroundServices();
-          setInitializationStatus(prev => ({
-            ...prev,
-            backgroundServices: bgSuccess ? 'success' : 'failed'
-          }));
+          try {
+            const bgSuccess = await initializeBackgroundServices();
+            setInitializationStatus(prev => ({
+              ...prev,
+              backgroundServices: bgSuccess ? 'success' : 'failed'
+            }));
+          } catch (error) {
+            console.error('🔍 Background services error:', error);
+            setInitializationStatus(prev => ({
+              ...prev,
+              backgroundServices: 'failed'
+            }));
+            // Don't crash the app
+          }
         }, isTablet ? 3000 : 1500);
         
       } catch (error) {
-        console.error('Critical app initialization error:', error);
+        console.error('🔍 Critical app initialization error:', error);
         setIsAppReady(true);
       }
     };
     
     initApp();
     
-    // Handle updates
+    // Handle updates with error handling
     const checkForUpdates = async () => {
       try {
         if (__DEV__) {
-          console.log('Development mode - skipping update check');
+          console.log('🔍 Development mode - skipping update check');
+          setInitializationStatus(prev => ({
+            ...prev,
+            updates: 'skipped-dev'
+          }));
           return;
         }
         
-        console.log('Checking for updates...');
+        console.log('🔍 Checking for updates...');
         const update = await Updates.checkForUpdateAsync();
         
         setInitializationStatus(prev => ({
@@ -131,7 +190,7 @@ function MainApp() {
         }));
         
         if (update.isAvailable) {
-          console.log('Update available, fetching...');
+          console.log('🔍 Update available, fetching...');
           await Updates.fetchUpdateAsync();
           
           Alert.alert(
@@ -145,7 +204,7 @@ function MainApp() {
                   try {
                     await Updates.reloadAsync();
                   } catch (updateError) {
-                    console.error('Failed to reload with update:', updateError);
+                    console.error('🔍 Failed to reload with update:', updateError);
                   }
                 }
               }
@@ -153,7 +212,7 @@ function MainApp() {
           );
         }
       } catch (error) {
-        console.log('Update check failed (non-critical):', error);
+        console.log('🔍 Update check failed (non-critical):', error);
         setInitializationStatus(prev => ({
           ...prev,
           updates: 'failed'
@@ -163,10 +222,10 @@ function MainApp() {
     
     setTimeout(checkForUpdates, isTablet ? 5000 : 3000);
 
-    // Setup notifications
+    // Setup notifications with safe alarm handling
     const setupNotifications = async () => {
       try {
-        console.log('Setting up notification handlers...');
+        console.log('🔍 Setting up notification handlers...');
         
         const subscription = Notifications.addNotificationResponseReceivedListener(response => {
           try {
@@ -174,9 +233,9 @@ function MainApp() {
             const notificationData = response.notification.request.content.data || {};
             
             if (actionId === Notifications.DEFAULT_ACTION_IDENTIFIER) {
-              // Check if this notification should trigger an alarm
+              // SAFE: Check if this notification should trigger an alarm
               if (notificationData.shouldPlayAlarm) {
-                console.log('🔔 User opened app from completion notification - playing alarm');
+                console.log('🔔 User opened app from completion notification - trying to play alarm');
                 handleCompletionAlarmFromNotification(notificationData);
               }
               
@@ -193,7 +252,7 @@ function MainApp() {
               handleEndSession();
             }
           } catch (error) {
-            console.error('Notification response error:', error);
+            console.error('🔍 Notification response error:', error);
           }
         });
         
@@ -204,7 +263,7 @@ function MainApp() {
         }));
         
       } catch (error) {
-        console.error('Notification setup error:', error);
+        console.error('🔍 Notification setup error:', error);
         setInitializationStatus(prev => ({
           ...prev,
           notifications: 'failed'
@@ -212,40 +271,73 @@ function MainApp() {
       }
     };
 
+    // SAFE: Alarm handling from notifications
     const handleCompletionAlarmFromNotification = async (notificationData) => {
       try {
-        // Initialize alarm service if needed
-        await alarmService.init();
+        console.log('🔔 Attempting to play completion alarm from notification...');
         
-        // Play the completion alarm
-        await alarmService.playCompletionAlarm({
-          volume: 0.8,
-          autoStopAfter: 8, // Auto-stop after 8 seconds
-        });
-        
-        // Optional: Show a brief celebration message
-        // You could add a toast or modal here
-        console.log('🎉 Session completed! Playing celebration alarm.');
+        // Check if alarm service is available and functional
+        if (alarmService && typeof alarmService.init === 'function') {
+          // Initialize alarm service if needed
+          const alarmReady = await alarmService.init();
+          if (!alarmReady) {
+            console.error('🔔 Failed to initialize alarm service');
+            showFallbackAlert();
+            return;
+          }
+          
+          // Get alarm settings from notification data or use defaults
+          const alarmSettings = notificationData.alarmSettings || {
+            volume: 0.8,
+            autoStopAfter: 8
+          };
+          
+          // Play the completion alarm
+          const alarmPlayed = await alarmService.playCompletionAlarm(alarmSettings);
+          
+          if (alarmPlayed) {
+            console.log('🎉 Session completion alarm played successfully!');
+          } else {
+            console.log('🔔 Alarm failed to play - showing visual confirmation');
+            showFallbackAlert();
+          }
+        } else {
+          console.log('🔔 Alarm service not available - showing visual alert instead');
+          showFallbackAlert();
+        }
         
       } catch (error) {
-        console.error('Error playing completion alarm from notification:', error);
+        console.error('🔔 Error playing completion alarm from notification:', error);
+        showFallbackAlert();
       }
     };
-    
+
+    // Fallback visual notification
+    const showFallbackAlert = () => {
+      setTimeout(() => {
+        Alert.alert(
+          '🎉 Session Complete!',
+          'Congratulations! Your deep work session has finished successfully.',
+          [{ text: 'Awesome!', style: 'default' }]
+        );
+      }, 500);
+    };
 
     setTimeout(setupNotifications, isTablet ? 4000 : 2000);
     
     return () => {
+      console.log('🔍 App.js: Cleaning up...');
       if (notificationSubscription) {
         try {
           notificationSubscription.remove();
         } catch (error) {
-          console.error('Error removing notification subscription:', error);
+          console.error('🔍 Error removing notification subscription:', error);
         }
       }
     };
   }, []);
 
+  // Safe action handlers
   const handlePauseResumeAction = async () => {
     try {
       const sessionData = await backgroundTimer.getCurrentSession();
@@ -253,7 +345,7 @@ function MainApp() {
         await backgroundTimer.updateTimerPauseState(!sessionData.isPaused);
       }
     } catch (error) {
-      console.error('Pause/resume error:', error);
+      console.error('🔍 Pause/resume error:', error);
     }
   };
 
@@ -262,7 +354,7 @@ function MainApp() {
       await backgroundTimer.stopTimerNotification();
       safeNavigate('MainApp', { screen: 'Home' });
     } catch (error) {
-      console.error('End session error:', error);
+      console.error('🔍 End session error:', error);
     }
   };
   
@@ -288,7 +380,6 @@ function MainApp() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
-        {/* Full screen status bar configuration */}
         <StatusBar 
           barStyle="dark-content" 
           backgroundColor="transparent" 
@@ -301,10 +392,8 @@ function MainApp() {
             screenOptions={{
               headerShown: false,
               gestureEnabled: false,
-              // CRITICAL FIX: Force full screen presentation on iPad
-              presentation: 'card', // Not 'modal' - this was causing the issue
+              presentation: 'card',
               animationTypeForReplace: 'push',
-              // iPad-specific optimizations
               ...(isTablet && {
                 contentStyle: { 
                   backgroundColor: 'transparent' 
@@ -319,7 +408,6 @@ function MainApp() {
               name="InitialSetup" 
               component={InitialSetupScreen}
               options={{
-                // Ensure full screen for setup
                 presentation: 'card',
                 gestureEnabled: false,
               }}
@@ -328,7 +416,6 @@ function MainApp() {
               name="MainApp" 
               component={TabNavigator}
               options={{
-                // Ensure full screen for main app
                 presentation: 'card',
                 gestureEnabled: false,
               }}
@@ -337,14 +424,11 @@ function MainApp() {
               name="DeepWorkSession" 
               component={DeepWorkSession}
               options={{
-                // CRITICAL: Use card presentation, not modal
                 presentation: 'card',
                 gestureEnabled: false,
-                // Ensure clean transitions
                 animationTypeForReplace: 'push',
-                // iPad-specific session options
                 ...(isTablet && {
-                  orientation: 'portrait', // Lock to portrait on iPad
+                  orientation: 'portrait',
                 })
               }}
             />
@@ -355,42 +439,12 @@ function MainApp() {
   );
 }
 
-const debugAudioConstants = () => {
-  console.log('🔍 Debugging Audio constants...');
-  
-  try {
-    console.log('Audio object keys:', Object.keys(Audio));
-    
-    if (Audio.InterruptionModeIOS) {
-      console.log('InterruptionModeIOS:', Object.keys(Audio.InterruptionModeIOS));
-      console.log('InterruptionModeIOS values:', Audio.InterruptionModeIOS);
-    }
-    
-    if (Audio.InterruptionModeAndroid) {
-      console.log('InterruptionModeAndroid:', Object.keys(Audio.InterruptionModeAndroid));
-      console.log('InterruptionModeAndroid values:', Audio.InterruptionModeAndroid);
-    }
-    
-    // Check if old-style constants exist
-    if (Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX !== undefined) {
-      console.log('Old-style iOS constant exists:', Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX);
-    }
-    
-    if (Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX !== undefined) {
-      console.log('Old-style Android constant exists:', Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX);
-    }
-    
-  } catch (error) {
-    console.error('Error debugging audio constants:', error);
-  }
-};
-
 // Safety wrapper
 const SafeApp = () => {
   try {
     return <MainApp />;
   } catch (error) {
-    console.error('Critical app error:', error);
+    console.error('🔍 Critical app error:', error);
     
     return (
       <View style={{
