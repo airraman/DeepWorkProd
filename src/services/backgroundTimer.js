@@ -645,3 +645,4 @@ export default {
   clearActiveSession,
   ensureTaskIsRegistered
 };
+
