@@ -1,10 +1,10 @@
-// src/services/backgroundTimer.js - Complete Version with Simple Alarm Integration
+// src/services/backgroundTimer.js - FIXED VERSION (iOS Categories Removed)
 import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deepWorkStore } from './deepWorkStore';
-import { alarmService } from './alarmService'; // Simple alarm service integration
+import { alarmService } from './alarmService';
 import { Platform } from 'react-native';
 
 // Constants
@@ -226,12 +226,12 @@ ${progressText}`;
   }
 };
 
-// Safe notification configuration
+// FIXED: Safe notification configuration (iOS categories removed)
 const configureNotifications = async () => {
   try {
     debugLog('Configuring notifications system');
     
-    // Create Android notification channels
+    // Create Android notification channels ONLY
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('session-completion', {
         name: 'Session Completion',
@@ -249,72 +249,14 @@ const configureNotifications = async () => {
         sound: false,
         description: 'Timer updates during active sessions',
       });
+      
+      debugLog('Android notification channels configured');
     }
     
-    // Set up notification categories for iOS
+    // FIXED: Skip iOS notification categories entirely to prevent JSI crash
     if (Platform.OS === 'ios') {
-      const categories = [
-        {
-          identifier: 'TIMER_ACTIONS',
-          actions: [
-            {
-              identifier: 'PAUSE_RESUME',
-              buttonTitle: isTablet ? 'Toggle' : 'Pause/Resume',
-              options: {
-                opensApp: false,
-                authenticationRequired: false,
-                destructive: false
-              }
-            },
-            {
-              identifier: 'END_SESSION',
-              buttonTitle: 'End Session',
-              options: {
-                opensApp: true,
-                authenticationRequired: false,
-                destructive: true
-              }
-            }
-          ],
-          intentIdentifiers: [],
-          options: {
-            categorySummaryFormat: 'Deep work session in progress'
-          }
-        },
-        {
-          identifier: 'COMPLETION_ACTIONS',
-          actions: [
-            {
-              identifier: 'VIEW_PROGRESS',
-              buttonTitle: 'View Progress',
-              options: {
-                opensApp: true,
-                authenticationRequired: false,
-                destructive: false
-              }
-            },
-            {
-              identifier: 'NEW_SESSION',
-              buttonTitle: 'New Session',
-              options: {
-                opensApp: true,
-                authenticationRequired: false,
-                destructive: false
-              }
-            }
-          ],
-          intentIdentifiers: [],
-          options: {
-            categorySummaryFormat: 'Session completed successfully'
-          }
-        }
-      ];
-      
-      await Promise.all(categories.map(category =>
-        Notifications.setNotificationCategoryAsync(category.identifier, category)
-      ));
-      
-      debugLog('iOS notification categories configured');
+      debugLog('iOS notification categories disabled for stability');
+      // Categories will be implemented in a future update with proper type validation
     }
 
     // Set notification handler with safe defaults
@@ -645,4 +587,3 @@ export default {
   clearActiveSession,
   ensureTaskIsRegistered
 };
-

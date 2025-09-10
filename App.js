@@ -1,4 +1,4 @@
-// App.js - Safe Version with Conditional Service Loading
+// App.js - Production Version with iOS Notification Fix
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -96,7 +96,7 @@ const initializeBackgroundServices = async () => {
       alarmInitialized = false; // Continue without alarm service
     }
     
-    // SAFE: Configure notifications with timeout
+    // SAFE: Configure notifications with timeout (FIXED - no iOS categories crash)
     let notificationsConfigured = false;
     try {
       const configPromise = backgroundTimer.configureNotifications();

@@ -1,4 +1,4 @@
-// src/screens/DeepWorkSession.js - MINIMAL VERSION FOR CRASH TESTING
+// src/screens/DeepWorkSession.js - SAFE VERSION
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -17,49 +17,258 @@ import {
 import { deepWorkStore } from '../services/deepWorkStore';
 import SessionNotesModal from '../components/modals/SessionNotesModal';
 import { Pause, Play, ChevronLeft } from 'lucide-react-native';
-// TESTING: Comment out all service imports that might cause crashes
-// import backgroundTimer from '../services/backgroundTimer';
-// import { alarmService } from '../services/alarmService';
 
 const { width, height } = Dimensions.get('window');
 const isTablet = width > 768 || height > 768;
-const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const DeepWorkSession = ({ route, navigation }) => {
-  console.log('🔍 DeepWorkSession starting...');
+  console.log('🔍 DeepWorkSession starting with safe initialization...');
   
-  // Get session parameters from navigation
   const { duration, activity, musicChoice } = route.params;
-
-  // Activity state
-  const [activityDetails, setActivityDetails] = useState(null);
-
-  // Convert duration from minutes to milliseconds for timer
   const totalDuration = parseInt(duration) * 60 * 1000;
 
-  // Session state management
+  // Core state - only what's essential
   const [timeLeft, setTimeLeft] = useState(totalDuration);
   const [isCompleted, setIsCompleted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
+  const [activityDetails, setActivityDetails] = useState(null);
 
-  // References for timing management
+  // Services loaded dynamically to prevent crashes
+  const [servicesReady, setServicesReady] = useState(false);
+  const servicesRef = useRef({
+    backgroundTimer: null,
+    alarmService: null
+  });
+
+  // Timer management
   const startTimeRef = useRef(Date.now());
   const intervalRef = useRef(null);
-  const saveRetryCountRef = useRef(0);
   const animatedHeight = useRef(new Animated.Value(0)).current;
-  const animation = useRef(null);
   const swipeAnim = useRef(new Animated.Value(0)).current;
 
-  const MAX_SAVE_RETRIES = 3;
+  // SAFE: Load activity details without crashing
+  useEffect(() => {
+    const loadActivityDetails = async () => {
+      try {
+        const settings = await deepWorkStore.getSettings();
+        const foundActivity = settings.activities.find(a => a.id === activity);
+        setActivityDetails(foundActivity || { name: 'Focus Session', color: '#2563eb' });
+      } catch (error) {
+        console.warn('Could not load activity details:', error);
+        setActivityDetails({ name: 'Focus Session', color: '#2563eb' });
+      }
+    };
+    
+    loadActivityDetails();
+  }, [activity]);
 
-  // Configure the pan responder for swipe gestures
+  // SAFE: Load services gradually to prevent memory crashes
+  useEffect(() => {
+    const loadServices = async () => {
+      console.log('🔍 Loading services safely...');
+      
+      // Small delay to let the UI render first
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Load background timer service
+      try {
+        const timerModule = await import('../services/backgroundTimer');
+        servicesRef.current.backgroundTimer = timerModule.default;
+        console.log('🔍 Background timer loaded');
+      } catch (error) {
+        console.warn('🔍 Background timer not available:', error.message);
+      }
+      
+      // Small delay between service loads
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Load alarm service
+      try {
+        const alarmModule = await import('../services/alarmService');
+        servicesRef.current.alarmService = alarmModule.alarmService;
+        console.log('🔔 Alarm service loaded');
+      } catch (error) {
+        console.warn('🔔 Alarm service not available:', error.message);
+      }
+      
+      setServicesReady(true);
+      console.log('🔍 Services loaded safely');
+    };
+    
+    // Load services after component is mounted and stable
+    const timeoutId = setTimeout(loadServices, isTablet ? 2000 : 1000);
+    
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  // Initialize session with services when ready
+  useEffect(() => {
+    if (servicesReady) {
+      initializeSession();
+    }
+  }, [servicesReady]);
+
+  // SAFE: Session initialization
+  const initializeSession = async () => {
+    console.log('🔍 Initializing session...');
+    
+    try {
+      // Start local timer first (always works)
+      startLocalTimer();
+      
+      // Try to start background services if available
+      if (servicesRef.current.backgroundTimer) {
+        try {
+          await servicesRef.current.backgroundTimer.startTimerNotification(
+            duration,
+            activity,
+            musicChoice
+          );
+          console.log('🔍 Background timer started');
+        } catch (error) {
+          console.warn('🔍 Background timer failed to start:', error);
+        }
+      }
+      
+      // Initialize alarm service if available
+      if (servicesRef.current.alarmService) {
+        try {
+          await servicesRef.current.alarmService.init();
+          console.log('🔔 Alarm service initialized');
+        } catch (error) {
+          console.warn('🔔 Alarm service failed to initialize:', error);
+        }
+      }
+      
+    } catch (error) {
+      console.warn('🔍 Session initialization had issues:', error);
+      // Continue anyway - the session can work without all services
+    }
+  };
+
+  // CORE: Local timer that always works (no external dependencies)
+  const startLocalTimer = () => {
+    startTimeRef.current = Date.now() - (totalDuration - timeLeft);
+
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    intervalRef.current = setInterval(() => {
+      if (!isPaused) {
+        const elapsed = Date.now() - startTimeRef.current;
+        const remaining = Math.max(0, totalDuration - elapsed);
+        setTimeLeft(remaining);
+
+        if (remaining <= 0) {
+          handleTimeout();
+        }
+      }
+    }, 1000);
+
+    // Start progress animation
+    Animated.timing(animatedHeight, {
+      toValue: 1,
+      duration: timeLeft,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  // SAFE: Handle session completion
+  const handleTimeout = async () => {
+    console.log('🎉 Session completed!');
+    
+    try {
+      // Stop local timer
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      
+      setIsPaused(true);
+      
+      // Try to play alarm if service is available
+      if (servicesRef.current.alarmService) {
+        try {
+          await servicesRef.current.alarmService.playCompletionAlarm({
+            volume: 0.8,
+            autoStopAfter: 8
+          });
+          console.log('🔔 Completion alarm played');
+        } catch (error) {
+          console.warn('🔔 Alarm failed to play:', error);
+          showFallbackCelebration();
+        }
+      } else {
+        showFallbackCelebration();
+      }
+      
+      // Show notes modal
+      setShowNotesModal(true);
+      
+    } catch (error) {
+      console.error('Error in timeout handler:', error);
+      setShowNotesModal(true);
+    }
+  };
+
+  // Fallback celebration when alarm service isn't available
+  const showFallbackCelebration = () => {
+    Alert.alert(
+      '🎉 Session Complete!',
+      'Congratulations! You completed your deep work session.',
+      [{ text: 'Awesome!', style: 'default' }]
+    );
+  };
+
+  // Handle pause/resume
+  const togglePause = async () => {
+    console.log('🔍 Toggle pause:', isPaused);
+    
+    if (isPaused) {
+      // Resume
+      startTimeRef.current = Date.now() - (totalDuration - timeLeft);
+      
+      Animated.timing(animatedHeight, {
+        toValue: 1,
+        duration: timeLeft,
+        useNativeDriver: false,
+      }).start();
+      
+      // Update background service if available
+      if (servicesRef.current.backgroundTimer) {
+        try {
+          await servicesRef.current.backgroundTimer.updateTimerPauseState(false);
+        } catch (error) {
+          console.warn('Background pause update failed:', error);
+        }
+      }
+    } else {
+      // Pause
+      animatedHeight.stopAnimation();
+      
+      // Update background service if available
+      if (servicesRef.current.backgroundTimer) {
+        try {
+          await servicesRef.current.backgroundTimer.updateTimerPauseState(true);
+        } catch (error) {
+          console.warn('Background pause update failed:', error);
+        }
+      }
+    }
+
+    setIsPaused(!isPaused);
+  };
+
+  // Pan responder for swipe to end
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (evt, gestureState) => {
-        return Math.abs(gestureState.dx) > 20 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        return Math.abs(gestureState.dx) > 20;
       },
       onPanResponderMove: (evt, gestureState) => {
         if (gestureState.dx > 0) {
@@ -67,7 +276,7 @@ const DeepWorkSession = ({ route, navigation }) => {
         }
       },
       onPanResponderRelease: (evt, gestureState) => {
-        if (gestureState.dx > SCREEN_WIDTH / 3) {
+        if (gestureState.dx > Dimensions.get('window').width / 3) {
           confirmEndSession();
         } else {
           Animated.spring(swipeAnim, {
@@ -79,44 +288,8 @@ const DeepWorkSession = ({ route, navigation }) => {
     })
   ).current;
 
-  // Load activity details
-  useEffect(() => {
-    console.log('🔍 Loading activity details...');
-    const loadActivityDetails = async () => {
-      try {
-        const settings = await deepWorkStore.getSettings();
-        const foundActivity = settings.activities.find(a => a.id === activity);
-        
-        if (foundActivity) {
-          console.log('Found activity details:', foundActivity);
-          setActivityDetails(foundActivity);
-        } else {
-          console.log('Activity not found:', activity);
-          setActivityDetails({ name: 'Focus Session', color: '#2563eb' });
-        }
-      } catch (error) {
-        console.error('Error loading activity details:', error);
-        setActivityDetails({ name: 'Focus Session', color: '#2563eb' });
-      }
-    };
-
-    loadActivityDetails();
-  }, [activity]);
-
-  // TESTING: Comment out ALL service initialization
-  // useEffect(() => {
-  //   console.log('🔍 Would initialize alarm service...');
-  //   // Alarm service initialization commented out for testing
-  // }, []);
-
-  // useEffect(() => {
-  //   console.log('🔍 Would initialize background timer...');
-  //   // Background timer initialization commented out for testing
-  // }, [duration, activity, musicChoice]);
-
-  // Function to confirm ending the session
+  // Confirm early session end
   const confirmEndSession = () => {
-    console.log('🔍 Confirm end session...');
     Alert.alert(
       'End Session?',
       'Are you sure you want to end your deep work session early? This session will not be saved.',
@@ -134,8 +307,7 @@ const DeepWorkSession = ({ route, navigation }) => {
         {
           text: 'End Session',
           onPress: async () => {
-            console.log('🔍 Ending session...');
-            // No service cleanup for testing
+            await cleanup();
             navigation.navigate('MainApp', { screen: 'Home' });
           },
           style: 'destructive',
@@ -144,98 +316,73 @@ const DeepWorkSession = ({ route, navigation }) => {
     );
   };
 
-  // Handle pause/resume
-  const togglePause = () => {
-    console.log('🔍 Toggle pause...');
-    if (isPaused) {
-      startTimeRef.current = Date.now() - (totalDuration - timeLeft);
-
-      Animated.timing(animatedHeight, {
-        toValue: 1,
-        duration: timeLeft,
-        useNativeDriver: false,
-      }).start();
+  // Safe cleanup function
+  const cleanup = async () => {
+    console.log('🔍 Cleaning up session...');
+    
+    try {
+      // Clear local timer
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
       
-      // No background timer update for testing
-    } else {
-      animatedHeight.stopAnimation();
-      // No background timer update for testing
-    }
-
-    setIsPaused(!isPaused);
-  };
-
-  // Start or resume the timer
-  const startTimer = () => {
-    console.log('🔍 Starting timer...');
-    startTimeRef.current = Date.now() - (totalDuration - timeLeft);
-
-    intervalRef.current = setInterval(() => {
-      if (!isPaused) {
-        const elapsed = Date.now() - startTimeRef.current;
-        const remaining = Math.max(0, totalDuration - elapsed);
-        setTimeLeft(remaining);
-
-        if (remaining <= 0) {
-          handleTimeout();
+      // Stop background services if available
+      if (servicesRef.current.backgroundTimer) {
+        try {
+          await servicesRef.current.backgroundTimer.stopTimerNotification();
+        } catch (error) {
+          console.warn('Background cleanup error:', error);
         }
       }
-    }, 1000);
-  };
-
-  // TESTING: Simplified timeout handler with NO alarm service
-  const handleTimeout = async () => {
-    console.log('🔍 Session timeout - simplified version');
-    try {
-      clearInterval(intervalRef.current);
-      setIsPaused(true);
       
-      // TESTING: No alarm service calls
-      console.log('🎉 Session completed - would play alarm here');
+      if (servicesRef.current.alarmService) {
+        try {
+          await servicesRef.current.alarmService.cleanup();
+        } catch (error) {
+          console.warn('Alarm cleanup error:', error);
+        }
+      }
       
-      // Just show the notes modal
-      setShowNotesModal(true);
     } catch (error) {
-      console.error('Error handling timeout:', error);
-      setShowNotesModal(true);
+      console.warn('Cleanup error:', error);
     }
   };
 
-  // Handle notes submission
+  // Handle session completion with notes
   const handleNotesSubmit = async (notes) => {
-    console.log('🔍 Notes submitted...');
     setShowNotesModal(false);
     
-    // TESTING: No alarm service calls
-    console.log('🔍 Would stop alarm here');
+    try {
+      // Stop alarm if playing
+      if (servicesRef.current.alarmService) {
+        await servicesRef.current.alarmService.stopAlarm();
+      }
+    } catch (error) {
+      console.warn('Error stopping alarm:', error);
+    }
     
     const success = await handleSessionComplete(notes);
-
+    
     if (success) {
       setIsCompleted(true);
     } else {
-      startTimer();
+      // If save failed, allow user to continue session
       setIsPaused(false);
+      startLocalTimer();
     }
   };
 
-  // TESTING: Simplified session completion
+  // Save completed session
   const handleSessionComplete = async (notes = '') => {
-    console.log('🔍 Completing session...');
     if (isSaving) return false;
 
     try {
       setIsSaving(true);
       
-      // TESTING: No background timer or alarm service
-      console.log('🔍 Would stop background services here');
+      // Clean up services
+      await cleanup();
 
-      // Just verify storage and save
-      const storageOk = await deepWorkStore.verifyStorageIntegrity();
-      if (!storageOk) {
-        throw new Error('Storage integrity check failed');
-      }
-
+      // Save session to storage
       const result = await deepWorkStore.addSession({
         activity,
         duration: parseInt(duration),
@@ -249,7 +396,7 @@ const DeepWorkSession = ({ route, navigation }) => {
 
       Alert.alert(
         'Session Complete!',
-        'Test session completed successfully.',
+        'Congratulations! Your deep work session has been saved.',
         [
           {
             text: 'View Progress',
@@ -267,12 +414,13 @@ const DeepWorkSession = ({ route, navigation }) => {
       console.error('Error completing session:', error);
       Alert.alert('Error', 'Failed to save session');
       return false;
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  // Handle back button press
+  // Handle back button
   useEffect(() => {
-    console.log('🔍 Setting up back handler...');
     const backHandler = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
@@ -284,62 +432,19 @@ const DeepWorkSession = ({ route, navigation }) => {
     return () => backHandler.remove();
   }, []);
 
-  // Initialize timer and animation
+  // Cleanup on unmount
   useEffect(() => {
-    console.log('🔍 Initializing timer and animation...');
-    startTimer();
-
-    if (!animation.current) {
-      animation.current = Animated.timing(animatedHeight, {
-        toValue: 1,
-        duration: totalDuration,
-        useNativeDriver: false,
-      });
-
-      animation.current.start();
-    }
-
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-
-      if (animation.current) {
-        animation.current.stop();
-      }
+      cleanup();
     };
   }, []);
 
-  // Handle pausing and resuming
-  useEffect(() => {
-    if (isPaused) {
-      animatedHeight.stopAnimation();
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    } else {
-      const progress = 1 - (timeLeft / totalDuration);
-      animatedHeight.setValue(progress);
-
-      animation.current = Animated.timing(animatedHeight, {
-        toValue: 1,
-        duration: timeLeft,
-        useNativeDriver: false,
-      });
-
-      animation.current.start();
-      startTimer();
-    }
-  }, [isPaused]);
-
-  // Format remaining time as MM:SS
+  // Format time display
   const formatTime = (ms) => {
     const minutes = Math.floor(ms / 60000);
     const seconds = Math.floor((ms % 60000) / 1000);
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
-
-  console.log('🔍 DeepWorkSession rendering...');
 
   return (
     <Animated.View
@@ -354,15 +459,21 @@ const DeepWorkSession = ({ route, navigation }) => {
       <SafeAreaView style={styles.innerContainer}>
         <View style={styles.swipeIndicator}>
           <ChevronLeft size={24} color="#6b7280" />
-          <Text style={styles.swipeText}>Swipe right to end session (TESTING)</Text>
+          <Text style={styles.swipeText}>Swipe right to end session</Text>
         </View>
 
         <View style={styles.content}>
           <View style={styles.timerSection}>
             <Text style={styles.timeText}>{formatTime(timeLeft)}</Text>
             <Text style={styles.totalTimeText}>
-              of {duration}:00 minutes (TEST MODE)
+              of {duration}:00 minutes
             </Text>
+            
+            {/* Show services status for debugging */}
+            <Text style={styles.statusText}>
+              Services: {servicesReady ? 'Ready' : 'Loading...'}
+            </Text>
+            
             {isSaving && (
               <ActivityIndicator
                 size="small"
@@ -394,7 +505,7 @@ const DeepWorkSession = ({ route, navigation }) => {
 
           <View style={styles.activityInfoContainer}>
             <Text style={styles.activityText}>
-              {activityDetails ? activityDetails.name : 'Focus Session'} (TEST)
+              {activityDetails ? activityDetails.name : 'Focus Session'}
             </Text>
 
             <TouchableOpacity
@@ -446,9 +557,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
   },
-  savingIndicator: {
-    marginTop: 8,
-  },
   timerSection: {
     alignItems: 'center',
     paddingTop: 20,
@@ -463,7 +571,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
     marginTop: 4,
-    marginBottom: 5
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 4,
+  },
+  savingIndicator: {
+    marginTop: 8,
   },
   timerVisualContainer: {
     flex: 1,
