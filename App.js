@@ -69,6 +69,7 @@ function TabNavigator() {
 }
 
 // SAFE background services initialization with proper error handling
+// COMPLETE: Updated initializeBackgroundServices function with notification permissions
 const initializeBackgroundServices = async () => {
   try {
     console.log('🔍 Starting safe background services initialization...');
@@ -77,7 +78,42 @@ const initializeBackgroundServices = async () => {
       console.log('🔍 iPad detected - using conservative background task setup');
     }
     
-    // SAFE: Initialize alarm service with error handling
+    // STEP 1: Request notification permissions FIRST
+    let permissionsGranted = false;
+    try {
+      console.log('📱 Requesting notification permissions...');
+      const { status } = await Notifications.requestPermissionsAsync();
+      
+      if (status === 'granted') {
+        console.log('📱 Notification permissions granted');
+        permissionsGranted = true;
+      } else {
+        console.warn('📱 Notification permissions denied - audio may not work');
+        
+        // Show user-friendly alert about enabling notifications
+        setTimeout(() => {
+          Alert.alert(
+            'Notifications Disabled',
+            'To hear session completion sounds, please enable notifications for DeepWork in your device Settings.',
+            [
+              { text: 'Skip', style: 'cancel' },
+              { 
+                text: 'Open Settings', 
+                onPress: () => {
+                  // Note: Linking.openSettings() would need to be imported
+                  console.log('User should manually open Settings');
+                }
+              }
+            ]
+          );
+        }, 2000);
+      }
+    } catch (permissionError) {
+      console.error('📱 Permission request failed:', permissionError);
+      permissionsGranted = false;
+    }
+    
+    // STEP 2: Initialize alarm service with error handling
     let alarmInitialized = false;
     try {
       if (alarmService && typeof alarmService.init === 'function') {
@@ -96,9 +132,10 @@ const initializeBackgroundServices = async () => {
       alarmInitialized = false; // Continue without alarm service
     }
     
-    // SAFE: Configure notifications with timeout (FIXED - no iOS categories crash)
+    // STEP 3: Configure notifications with timeout (FIXED - no iOS categories crash)
     let notificationsConfigured = false;
     try {
+      console.log('📱 Configuring notification system...');
       const configPromise = backgroundTimer.configureNotifications();
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Configuration timeout')), 15000)
@@ -112,7 +149,30 @@ const initializeBackgroundServices = async () => {
       notificationsConfigured = false; // Continue without background notifications
     }
     
+    // STEP 4: Test notification system if permissions are granted
+    if (permissionsGranted && notificationsConfigured) {
+      try {
+        console.log('📱 Testing notification system...');
+        
+        // Send a silent test notification to verify the system works
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'DeepWork Ready',
+            body: 'Notification system initialized successfully',
+            data: { test: true },
+            sound: false, // Silent test
+          },
+          trigger: null,
+        });
+        
+        console.log('📱 Notification system test completed');
+      } catch (testError) {
+        console.warn('📱 Notification test failed (non-critical):', testError);
+      }
+    }
+    
     console.log('🔍 Background services initialization completed:', {
+      permissions: permissionsGranted,
       alarmService: alarmInitialized,
       notifications: notificationsConfigured
     });

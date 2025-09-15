@@ -85,7 +85,7 @@ const calculateRemainingTime = (sessionData) => {
 // Enhanced completion notification with alarm trigger
 const sendCompletionNotification = async () => {
   try {
-    debugLog('🔔 Session completed - sending notification with alarm trigger');
+    debugLog('Session completed - sending notification with SOUND');
     
     // Get session data for personalized notification
     let sessionInfo = { activity: 'Focus Session', duration: 'Unknown' };
@@ -105,15 +105,14 @@ const sendCompletionNotification = async () => {
       debugLog('Error getting session info for notification:', error);
     }
     
-    // Schedule completion notification with alarm trigger
+    // Schedule completion notification with ENHANCED AUDIO settings
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: '🎉 Deep Work Session Complete!',
-        body: `Congratulations! Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has finished. Tap to celebrate your achievement!`,
+        title: 'Deep Work Session Complete!',
+        body: `Congratulations! Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has finished.`,
         data: { 
           screen: 'MainApp', 
           params: { screen: 'Metrics' },
-          // CRITICAL: Flag to trigger alarm when app opens
           shouldPlayAlarm: true,
           completedAt: new Date().toISOString(),
           sessionInfo: sessionInfo,
@@ -122,36 +121,39 @@ const sendCompletionNotification = async () => {
             autoStopAfter: 10
           }
         },
-        sound: true,
-        priority: Notifications.AndroidNotificationPriority.HIGH,
-        color: sessionInfo.color,
-        vibrationPattern: [0, 250, 250, 250],
         
-        // iOS-specific enhancements
+        // ENHANCED SOUND SETTINGS for testing
+        sound: true,
+        priority: Notifications.AndroidNotificationPriority.MAX,
+        
+        // iOS-specific sound enhancements
         ...(Platform.OS === 'ios' && {
-          subtitle: `${sessionInfo.activity} • ${sessionInfo.duration} minutes completed!`,
+          subtitle: `${sessionInfo.activity} completed!`,
           badge: 1,
-          sound: 'default',
+          sound: 'default', // Uses system notification sound
+          interruptionLevel: 'active', // Ensures sound plays
+          relevanceScore: 1.0, // High priority
         }),
         
-        // Android-specific enhancements
+        // Android-specific sound enhancements
         ...(Platform.OS === 'android' && {
           channelId: 'session-completion',
           sticky: false,
           autoCancel: true,
           lights: true,
           lightColor: sessionInfo.color,
+          vibrationPattern: [0, 500, 200, 500], // Stronger vibration pattern
+          importance: Notifications.AndroidImportance.HIGH,
         })
       },
       trigger: null,
     });
     
-    debugLog('Enhanced completion notification sent successfully');
+    debugLog('Enhanced completion notification with sound sent successfully');
   } catch (error) {
     debugLog('Failed to send completion notification:', error);
   }
 };
-
 // Update timer notification with iPad optimizations
 const updateTimerNotification = async (timeRemaining, sessionData) => {
   try {

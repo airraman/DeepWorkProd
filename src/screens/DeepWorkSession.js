@@ -17,6 +17,8 @@ import {
 import { deepWorkStore } from '../services/deepWorkStore';
 import SessionNotesModal from '../components/modals/SessionNotesModal';
 import { Pause, Play, ChevronLeft } from 'lucide-react-native';
+import backgroundTimer from '../services/backgroundTimer';
+
 
 const { width, height } = Dimensions.get('window');
 const isTablet = width > 768 || height > 768;
@@ -178,7 +180,6 @@ const DeepWorkSession = ({ route, navigation }) => {
     }).start();
   };
 
-  // SAFE: Handle session completion
   const handleTimeout = async () => {
     console.log('🎉 Session completed!');
     
@@ -190,7 +191,15 @@ const DeepWorkSession = ({ route, navigation }) => {
       
       setIsPaused(true);
       
-      // Try to play alarm if service is available
+      // ADDED: Send completion notification with sound
+      try {
+        await backgroundTimer.sendCompletionNotification();
+        console.log('📱 Completion notification with sound sent');
+      } catch (notificationError) {
+        console.warn('📱 Notification failed:', notificationError);
+      }
+      
+      // Try to play alarm if service is available (visual feedback)
       if (servicesRef.current.alarmService) {
         try {
           await servicesRef.current.alarmService.playCompletionAlarm({

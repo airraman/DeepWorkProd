@@ -26,6 +26,7 @@
     "expo-task-manager": "~13.1.5",
     "expo-updates": "~0.28.13",
     "lucide-react-native": "^0.510.0",
+    "minipass": "^7.1.2",
     "parse-png": "^2.1.0",
     "pngjs": "^7.0.0",
     "react": "19.0.0",
