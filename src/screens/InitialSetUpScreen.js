@@ -1,4 +1,4 @@
-// src/screens/InitialSetupScreen.js - FIXED
+// src/screens/InitialSetupScreen.js - FIXED WITH PROGRESS BAR
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
@@ -39,6 +39,14 @@ const InitialSetupScreen = ({navigation}) => {
     
     // Track transitions to prevent multiple alerts
     const isTransitioning = useRef(false);
+
+    // Define step labels for the progress bar
+    const stepLabels = [
+        'Create Activities',    // Step 1
+        'Choose Durations',     // Step 2  
+        'Set Goals',           // Step 3
+        'Welcome!'             // Step 4
+    ];
 
     useEffect(() => {
         const initializeApp = async () => {
@@ -243,22 +251,42 @@ const InitialSetupScreen = ({navigation}) => {
                 onClose={handleModalClose}
                 onSave={handleActivitySave}
                 preventClose={true}
+                // Progress bar props
+                showProgress={true}
+                currentStep={1}
+                totalSteps={4}
+                stepLabels={stepLabels}
             />
             <DurationSetupModal
                 visible={showDurationModal}
                 onClose={handleModalClose}
                 onSave={handleDurationSave}
                 preventClose={true}
+                // Progress bar props
+                showProgress={true}
+                currentStep={2}
+                totalSteps={4}
+                stepLabels={stepLabels}
             />
             <GoalSetupModal
                 visible={showGoalModal}
                 onClose={handleModalClose}
                 onSave={handleGoalSave}
                 preventClose={true}
+                // Progress bar props
+                showProgress={true}
+                currentStep={3}
+                totalSteps={4}
+                stepLabels={stepLabels}
             />
             <WelcomeStatsModal
                 visible={showWelcomeStats}
                 onClose={handleWelcomeStatsClose}
+                // Welcome modal can also show progress (step 4)
+                showProgress={true}
+                currentStep={4}
+                totalSteps={4}
+                stepLabels={stepLabels}
             />
             
             {/* Fallback loading view if no modals are displayed */}

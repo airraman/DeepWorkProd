@@ -1,4 +1,4 @@
-// src/components/modals/BaseModal.js - FIXED
+// src/components/modals/BaseModal.js - FIXED WITH PROGRESS BAR
 import React from 'react';
 import {
     Modal,
@@ -11,11 +11,22 @@ import {
     Dimensions
 } from 'react-native';
 import { X } from 'lucide-react-native';
+import ProgressBar from '../ProgressBar';
 
 const { width, height } = Dimensions.get('window');
 const isTablet = width > 768 || height > 768;
 
-const BaseModal = ({ visible, onClose, children, preventClose = false }) => {
+const BaseModal = ({ 
+    visible, 
+    onClose, 
+    children, 
+    preventClose = false,
+    // New progress bar props
+    showProgress = false,
+    currentStep = 1,
+    totalSteps = 4,
+    stepLabels = []
+}) => {
     // Function to handle close attempts
     const handleCloseAttempt = (e) => {
         // If we should prevent closing, call onClose which will show the warning
@@ -46,9 +57,22 @@ const BaseModal = ({ visible, onClose, children, preventClose = false }) => {
                         onStartShouldSetResponder={() => true}
                         onTouchEnd={(e) => e.stopPropagation()}
                     >
+                        {/* Progress Bar - shown at the very top when enabled */}
+                        {showProgress && (
+                            <ProgressBar 
+                                currentStep={currentStep}
+                                totalSteps={totalSteps}
+                                stepLabels={stepLabels}
+                            />
+                        )}
+                        
                         {!preventClose && (
                             <TouchableOpacity 
-                                style={styles.closeButton}
+                                style={[
+                                    styles.closeButton,
+                                    // Adjust close button position if progress bar is shown
+                                    showProgress && styles.closeButtonWithProgress
+                                ]}
                                 onPress={onClose}
                                 accessible={true}
                                 accessibilityLabel="Close modal"
@@ -56,7 +80,12 @@ const BaseModal = ({ visible, onClose, children, preventClose = false }) => {
                                 <X size={24} color="#6b7280" />
                             </TouchableOpacity>
                         )}
-                        <View style={styles.childrenContainer}>
+                        
+                        <View style={[
+                            styles.childrenContainer,
+                            // Adjust padding if progress bar is shown
+                            showProgress && styles.childrenContainerWithProgress
+                        ]}>
                             {children}
                         </View>
                     </View>
@@ -92,10 +121,15 @@ const styles = StyleSheet.create({
         shadowRadius: 3.84,
         elevation: 5,
         position: 'relative',
+        overflow: 'hidden', // Important for progress bar styling
     },
     childrenContainer: {
         padding: 20,
         paddingTop: 40, // Make room for the close button
+    },
+    // New style for when progress bar is shown
+    childrenContainerWithProgress: {
+        paddingTop: 20, // Less top padding since progress bar takes space
     },
     closeButton: {
         position: 'absolute',
@@ -108,6 +142,11 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: 'rgba(229, 231, 235, 0.5)',
+    },
+    // New style for close button when progress bar is shown
+    closeButtonWithProgress: {
+        top: 70, // Position below the progress bar
+        backgroundColor: 'rgba(229, 231, 235, 0.8)', // Slightly more opaque
     }
 });
 

@@ -14,7 +14,15 @@ import { deepWorkStore } from '../../services/deepWorkStore';
 const { width, height } = Dimensions.get('window');
 const isTablet = width > 768 || height > 768;
 
-const WelcomeStatsModal = ({ visible, onClose }) => {
+const WelcomeStatsModal = ({ 
+    visible, 
+    onClose,
+    // Progress bar props (passed through to BaseModal)
+    showProgress = false,
+    currentStep = 4,
+    totalSteps = 4,
+    stepLabels = []
+}) => {
     const [totalHours, setTotalHours] = useState(0);
 
     useEffect(() => {
@@ -39,7 +47,14 @@ const WelcomeStatsModal = ({ visible, onClose }) => {
     };
 
     return (
-        <BaseModal visible={visible} onClose={onClose}>
+        <BaseModal 
+            visible={visible} 
+            onClose={onClose}
+            showProgress={showProgress}
+            currentStep={currentStep}
+            totalSteps={totalSteps}
+            stepLabels={stepLabels}
+        >
             <View style={styles.container}>
                 <Text style={styles.welcomeText}>WELCOME!</Text>
                 

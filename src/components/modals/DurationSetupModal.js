@@ -8,7 +8,16 @@ import {
 } from 'react-native';
 import BaseModal from './BaseModal';
 
-const DurationSetupModal = ({ visible, onClose, onSave }) => {
+const DurationSetupModal = ({ 
+    visible, 
+    onClose, 
+    onSave,
+    // Progress bar props
+    showProgress = false,
+    currentStep = 2,
+    totalSteps = 4,
+    stepLabels = []
+}) => {
     // State to track selected durations (limit to 3 as per your settings)
     const [selectedDurations, setSelectedDurations] = useState([]);
     
@@ -31,7 +40,15 @@ const DurationSetupModal = ({ visible, onClose, onSave }) => {
     };
 
     return (
-        <BaseModal visible={visible} onClose={onClose} preventClose={true}>
+        <BaseModal 
+            visible={visible} 
+            onClose={onClose} 
+            preventClose={true}
+            showProgress={showProgress}
+            currentStep={currentStep}
+            totalSteps={totalSteps}
+            stepLabels={stepLabels}
+        >
             <View style={styles.container}>
                 <Text style={styles.title}>Select Session Durations</Text>
                 <Text style={styles.instructionText}>

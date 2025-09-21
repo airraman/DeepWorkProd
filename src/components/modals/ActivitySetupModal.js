@@ -14,7 +14,16 @@ import BaseModal from './BaseModal';
 const { width } = Dimensions.get('window');
 const isTablet = width > 768;
 
-const ActivitySetupModal = ({ visible, onClose, onSave }) => {
+const ActivitySetupModal = ({ 
+    visible, 
+    onClose, 
+    onSave,
+    // Progress bar props
+    showProgress = false,
+    currentStep = 1,
+    totalSteps = 4,
+    stepLabels = []
+}) => {
     // State for managing activities
     const [activities, setActivities] = useState([
         { id: '1', name: '', color: '#E4D0FF' },
@@ -52,7 +61,15 @@ const ActivitySetupModal = ({ visible, onClose, onSave }) => {
     };
 
     return (
-        <BaseModal visible={visible} onClose={onClose} preventClose={true}>
+        <BaseModal 
+            visible={visible} 
+            onClose={onClose} 
+            preventClose={true}
+            showProgress={showProgress}
+            currentStep={currentStep}
+            totalSteps={totalSteps}
+            stepLabels={stepLabels}
+        >
             <View style={styles.container}>
                 <Text style={styles.title}>Activities</Text>
                 

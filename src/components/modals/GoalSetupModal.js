@@ -11,7 +11,17 @@ import {
 } from 'react-native';
 import BaseModal from './BaseModal';
 
-const GoalSetupModal = ({ visible, onClose, onSave, preventClose = false }) => {
+const GoalSetupModal = ({ 
+    visible, 
+    onClose, 
+    onSave, 
+    preventClose = false,
+    // Progress bar props
+    showProgress = false,
+    currentStep = 3,
+    totalSteps = 4,
+    stepLabels = []
+}) => {
     // State for goals list and current goal being created
     const [goals, setGoals] = useState([]);
     const [currentGoal, setCurrentGoal] = useState({
@@ -74,6 +84,10 @@ const GoalSetupModal = ({ visible, onClose, onSave, preventClose = false }) => {
             visible={visible} 
             onClose={onClose} 
             preventClose={preventClose}
+            showProgress={showProgress}
+            currentStep={currentStep}
+            totalSteps={totalSteps}
+            stepLabels={stepLabels}
         >
             <View style={styles.container}>
                 <Text style={styles.title}>Set Your Goals</Text>
