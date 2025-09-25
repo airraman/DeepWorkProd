@@ -1,4 +1,4 @@
-// src/screens/InitialSetupScreen.js - FIXED WITH PROGRESS BAR
+// src/screens/InitialSetUpScreen.js - UPDATED WITH REMINDER FREQUENCY
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
@@ -11,10 +11,10 @@ import {
 } from 'react-native';
 import { deepWorkStore } from '../services/deepWorkStore';
 
-// Import modals
+// Import modals - UPDATED: Replace GoalSetupModal with ReminderFrequencyModal
 import ActivitySetupModal from '../components/modals/ActivitySetupModal.js';
 import DurationSetupModal from '../components/modals/DurationSetupModal.js';
-import GoalSetupModal from '../components/modals/GoalSetupModal.js';
+import ReminderFrequencyModal from '../components/modals/ReminderFrequencyModal.js'; // NEW IMPORT
 import WelcomeStatsModal from '../components/modals/WelcomeStatsModal.js';
 
 // Add tablet detection
@@ -22,10 +22,10 @@ const { width, height } = Dimensions.get('window');
 const isTablet = width > 768 || height > 768;
 
 const InitialSetupScreen = ({navigation}) => {
-    // Modal visibility states
+    // Modal visibility states - UPDATED: Replace goal modal with reminder modal
     const [showActivityModal, setShowActivityModal] = useState(false);
     const [showDurationModal, setShowDurationModal] = useState(false);
-    const [showGoalModal, setShowGoalModal] = useState(false);
+    const [showReminderModal, setShowReminderModal] = useState(false); // CHANGED FROM showGoalModal
     const [showWelcomeStats, setShowWelcomeStats] = useState(false);
     
     // Loading state
@@ -40,11 +40,11 @@ const InitialSetupScreen = ({navigation}) => {
     // Track transitions to prevent multiple alerts
     const isTransitioning = useRef(false);
 
-    // Define step labels for the progress bar
+    // UPDATED: Define step labels for the progress bar with new reminder step
     const stepLabels = [
         'Create Activities',    // Step 1
         'Choose Durations',     // Step 2  
-        'Set Goals',           // Step 3
+        'Set Reminders',        // Step 3 - CHANGED FROM 'Set Goals'
         'Welcome!'             // Step 4
     ];
 
@@ -153,7 +153,7 @@ const InitialSetupScreen = ({navigation}) => {
             
             // Short delay before showing next modal to prevent UI glitches
             setTimeout(() => {
-                setShowGoalModal(true);
+                setShowReminderModal(true); // CHANGED FROM setShowGoalModal
                 isTransitioning.current = false;
             }, 300);
         } catch (error) {
@@ -166,20 +166,28 @@ const InitialSetupScreen = ({navigation}) => {
         }
     };
 
-    const handleGoalSave = async (goals) => {
+    // NEW FUNCTION: Handle reminder frequency save (replaces handleGoalSave)
+    const handleReminderSave = async (reminderData) => {
         try {
             // Mark as transitioning to prevent alerts
             isTransitioning.current = true;
             
-            // Hide the goal modal
-            setShowGoalModal(false);
+            // Hide the reminder modal
+            setShowReminderModal(false);
             
-            // Save goals to settings
-            const success = await deepWorkStore.updateGoals(goals);
+            // IMPORTANT CONCEPT: Data transformation
+            // The modal gives us { frequency: 'daily', option: {...} }
+            // We extract what we need for storage
+            const reminderFrequency = reminderData.frequency;
+            
+            // Save reminder frequency to settings
+            const success = await deepWorkStore.updateReminderFrequency(reminderFrequency);
             
             if (!success) {
-                throw new Error('Failed to save goals');
+                throw new Error('Failed to save reminder frequency');
             }
+            
+            console.log('Reminder frequency saved:', reminderFrequency);
             
             // Setup is complete
             setSetupComplete(true);
@@ -191,11 +199,11 @@ const InitialSetupScreen = ({navigation}) => {
                 isTransitioning.current = false;
             }, 300);
         } catch (error) {
-            console.error('Error saving goals:', error);
-            Alert.alert('Error', 'Failed to save goals. Please try again.');
+            console.error('Error saving reminder frequency:', error);
+            Alert.alert('Error', 'Failed to save reminder settings. Please try again.');
             
-            // Go back to goal setup
-            setShowGoalModal(true);
+            // Go back to reminder setup
+            setShowReminderModal(true);
             isTransitioning.current = false;
         }
     };
@@ -268,10 +276,11 @@ const InitialSetupScreen = ({navigation}) => {
                 totalSteps={4}
                 stepLabels={stepLabels}
             />
-            <GoalSetupModal
-                visible={showGoalModal}
+            {/* UPDATED: Replace GoalSetupModal with ReminderFrequencyModal */}
+            <ReminderFrequencyModal
+                visible={showReminderModal}
                 onClose={handleModalClose}
-                onSave={handleGoalSave}
+                onSave={handleReminderSave}
                 preventClose={true}
                 // Progress bar props
                 showProgress={true}
@@ -290,7 +299,7 @@ const InitialSetupScreen = ({navigation}) => {
             />
             
             {/* Fallback loading view if no modals are displayed */}
-            {!showActivityModal && !showDurationModal && !showGoalModal && !showWelcomeStats && !isTransitioning.current && (
+            {!showActivityModal && !showDurationModal && !showReminderModal && !showWelcomeStats && !isTransitioning.current && (
                 <View style={styles.centered}>
                     <ActivityIndicator size="large" color="#2563EB" />
                     <Text style={styles.loadingText}>Preparing setup...</Text>

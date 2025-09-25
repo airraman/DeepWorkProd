@@ -313,7 +313,7 @@ const SettingsScreen = () => {
         contentContainerStyle={{ paddingTop: HEADER_HEIGHT, paddingHorizontal: 12 }}
       >
         <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Configure Your App</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Set Your Preferences</Text>
         </View>
         
         <View style={[styles.divider, { backgroundColor: colors.divider }]} />

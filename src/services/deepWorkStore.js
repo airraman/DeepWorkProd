@@ -1,4 +1,4 @@
-// src/services/deepWorkStore.js
+// src/services/deepWorkStore.js - UPDATED FOR REMINDER FREQUENCY
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SessionNotesModal from '../components/modals/SessionNotesModal';
@@ -10,12 +10,13 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // milliseconds
 const DEBUG = true;
 
-// Default settings that will be used when initializing the app
-// or if settings become corrupted
+// UPDATED: Default settings with reminder frequency instead of goals
+// IMPORTANT CONCEPT: Default state design in React Native
+// We always provide sensible defaults to prevent null/undefined errors
 const DEFAULT_SETTINGS = {
   activities: [], 
   durations: [],
-  goals: [],    // Add this line
+  reminderFrequency: 'daily',  // CHANGED FROM goals: [] to reminderFrequency with default
   lastUpdated: new Date().toISOString()
 };
 
@@ -53,7 +54,8 @@ const isValidStorage = (sessions) => {
   });
 };
 
-// Validation function for settings structure
+// UPDATED: Validation function for settings structure with reminder frequency
+// IMPORTANT: This shows how to validate transformed data structures in React Native
 const isValidSettings = (settings) => {
   return (
     settings &&
@@ -68,14 +70,10 @@ const isValidSettings = (settings) => {
       typeof duration === 'number' && 
       duration > 0
     ) &&
-    // Add goals validation
-    Array.isArray(settings.goals) &&
-    settings.goals.every(goal => 
-      goal.id &&
-      goal.name &&
-      goal.frequency &&
-      goal.hours
-    )
+    // UPDATED: Validate reminder frequency instead of goals
+    // We accept string values that match our expected options
+    typeof settings.reminderFrequency === 'string' &&
+    ['multiple_daily', 'daily', 'weekly'].includes(settings.reminderFrequency)
   );
 };
 
@@ -95,10 +93,10 @@ export const deepWorkStore = {
             await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify({
                 activities: [],
                 durations: [],
-                goals: [],
+                reminderFrequency: 'daily',  // UPDATED: Default reminder frequency
                 lastUpdated: new Date().toISOString()
             }));
-            log('Storage initialized empty');
+            log('Storage initialized with reminder frequency');
         }
         
         return true;
@@ -106,7 +104,7 @@ export const deepWorkStore = {
         console.error('Initialization failed:', error);
         return false;
     }
-},
+  },
 
   /**
    * Get the current settings
@@ -123,6 +121,24 @@ export const deepWorkStore = {
       }
 
       const parsed = JSON.parse(settings);
+      
+      // MIGRATION LOGIC: Handle existing users who might have old 'goals' structure
+      // This is an important pattern for real-world apps
+      if (parsed.goals !== undefined && parsed.reminderFrequency === undefined) {
+        log('Migrating from goals to reminderFrequency structure');
+        const migratedSettings = {
+          ...parsed,
+          reminderFrequency: 'daily', // Set default for existing users
+          // Remove old goals field
+          goals: undefined
+        };
+        delete migratedSettings.goals;
+        
+        // Save migrated settings
+        await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(migratedSettings));
+        return migratedSettings;
+      }
+      
       if (!isValidSettings(parsed)) {
         log('Invalid settings detected, restoring defaults');
         await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(DEFAULT_SETTINGS));
@@ -223,21 +239,59 @@ getSessions: async () => {
   },
 
   /**
- * Update just the goals list
- * @param {Array} goals - New goals array
- */
-updateGoals: async (goals) => {
-  try {
-    const currentSettings = await deepWorkStore.getSettings();
-    return await deepWorkStore.updateSettings({
-      ...currentSettings,
-      goals
-    });
-  } catch (error) {
-    log('Error updating goals:', error);
-    return false;
-  }
-},
+   * NEW FUNCTION: Update reminder frequency
+   * @param {string} frequency - The reminder frequency ('multiple_daily', 'daily', 'weekly')
+   * 
+   * IMPORTANT CONCEPT: Single responsibility functions
+   * This function only handles reminder frequency updates, making it:
+   * - Easier to test
+   * - More reusable  
+   * - Less prone to bugs
+   * - Following React Native best practices for data layer separation
+   */
+  updateReminderFrequency: async (frequency) => {
+    try {
+      // Validate input
+      const validFrequencies = ['multiple_daily', 'daily', 'weekly'];
+      if (!validFrequencies.includes(frequency)) {
+        throw new Error(`Invalid reminder frequency: ${frequency}`);
+      }
+
+      const currentSettings = await deepWorkStore.getSettings();
+      const success = await deepWorkStore.updateSettings({
+        ...currentSettings,
+        reminderFrequency: frequency
+      });
+
+      if (success) {
+        log('Reminder frequency updated:', frequency);
+      }
+      
+      return success;
+    } catch (error) {
+      log('Error updating reminder frequency:', error);
+      return false;
+    }
+  },
+
+  /**
+   * NEW FUNCTION: Get current reminder frequency
+   * @returns {Promise<string>} The current reminder frequency setting
+   * 
+   * INTERVIEW TIP: Getter functions like this demonstrate understanding of:
+   * - Data encapsulation
+   * - Error handling in async operations
+   * - Default value patterns in mobile apps
+   */
+  getReminderFrequency: async () => {
+    try {
+      const settings = await deepWorkStore.getSettings();
+      return settings.reminderFrequency || 'daily';
+    } catch (error) {
+      log('Error getting reminder frequency:', error);
+      return 'daily'; // Safe default
+    }
+  },
 
   /**
    * Add a new completed session to storage
@@ -412,7 +466,7 @@ updateGoals: async (goals) => {
   },
 
   /**
-   * Attempt to repair corrupted storage
+   * UPDATED: Attempt to repair corrupted storage with reminder frequency support
    */
   repairStorage: async () => {
     try {
@@ -438,12 +492,23 @@ updateGoals: async (goals) => {
         }
       }
 
-      // Repair settings storage
+      // Repair settings storage with reminder frequency migration
       const settings = await AsyncStorage.getItem(SETTINGS_KEY);
       if (settings) {
         try {
           const parsed = JSON.parse(settings);
-          if (!isValidSettings(parsed)) {
+          
+          // Migration: Convert goals to reminderFrequency if needed
+          if (parsed.goals !== undefined && parsed.reminderFrequency === undefined) {
+            const migratedSettings = {
+              activities: Array.isArray(parsed.activities) ? parsed.activities : [],
+              durations: Array.isArray(parsed.durations) ? parsed.durations : [],
+              reminderFrequency: 'daily', // Default for migrated users
+              lastUpdated: new Date().toISOString()
+            };
+            await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(migratedSettings));
+            log('Migrated settings during repair');
+          } else if (!isValidSettings(parsed)) {
             await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(DEFAULT_SETTINGS));
           }
         } catch (error) {
@@ -472,7 +537,4 @@ updateGoals: async (goals) => {
       return false;
     }
   }
-
-
 };
-
