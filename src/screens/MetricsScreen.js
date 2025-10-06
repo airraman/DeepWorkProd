@@ -1,4 +1,4 @@
-// src/screens/MetricsScreen.js - Enhanced with Weekly Chart
+// MetricsScreen.js - Updated with bottom-aligned cards and repositioned legend
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -30,38 +30,46 @@ const MONTHS = [
 ];
 
 /**
- * ADVANCED CONCEPT: Data transformation for weekly chart
- * 
- * This function demonstrates several important programming concepts:
- * 1. Date manipulation and formatting (critical for time-based data)
- * 2. Data aggregation and grouping (common in data processing)
- * 3. Array methods (map, reduce, filter) - frequently asked in interviews
- * 4. Object destructuring and spreading
- * 
- * Interview tip: Be prepared to explain time complexity - O(n*m) where 
- * n is number of dates, m is average sessions per date
- * 
- * How this differs from regular React:
- * - Same logic, but React Native uses different date formatting
- * - Mobile considerations: less data processing on device
+ * STATIC CARD CONTAINER
+ */
+const CardContainer = ({ children, style }) => {
+  const { colors } = useTheme();
+
+  const containerStyle = [
+    styles.cardContainer,
+    {
+      backgroundColor: colors.cardBackground,
+      borderColor: colors.cardBorder,
+      shadowColor: colors.shadowColor,
+    },
+    style
+  ];
+
+  return (
+    <View style={containerStyle}>
+      {children}
+    </View>
+  );
+};
+
+/**
+ * DATA TRANSFORMATION FOR WEEKLY CHART
  */
 const generateWeeklyChartData = (sessions) => {
   const today = new Date();
   const weekData = [];
   
-  // Generate last 7 days of data
   for (let i = 6; i >= 0; i--) {
     const date = new Date(today);
     date.setDate(today.getDate() - i);
     const dateString = date.toISOString().split('T')[0];
     
-    // Calculate total minutes for this day - common data aggregation pattern
     const daySessions = sessions[dateString] || [];
     const totalMinutes = daySessions.reduce((sum, session) => sum + session.duration, 0);
     const totalHours = parseFloat((totalMinutes / 60).toFixed(1));
     
     weekData.push({
-      day: date.toLocaleDateString('en-US', { weekday: 'short' }), // Mon, Tue, etc.
+      day: date.toLocaleDateString('en-US', { weekday: 'short' }),
       fullDate: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       hours: totalHours,
       date: dateString,
@@ -73,67 +81,67 @@ const generateWeeklyChartData = (sessions) => {
 };
 
 /**
- * REACT NATIVE SPECIFIC: Custom Chart Component
- * 
- * Key differences from regular React web development:
- * 1. No HTML elements - everything is View, Text, TouchableOpacity
- * 2. Styling uses StyleSheet.create for performance optimization
- * 3. Flexbox is the default and often only layout system
- * 4. Touch handling uses TouchableOpacity/Pressable instead of onClick
- * 5. No CSS classes - all styling is done via style prop
- * 
- * Interview relevance: 
- * - Understanding React Native's bridge architecture
- * - Performance considerations (why StyleSheet.create vs inline styles)
- * - Mobile-first design principles
+ * WEEKLY FOCUS CHART COMPONENT
  */
 const WeeklyFocusChart = ({ sessions }) => {
-  const weekData = generateWeeklyChartData(sessions);
-  const maxHours = Math.max(...weekData.map(d => d.hours), 1); // Prevent division by zero
   const { colors } = useTheme();
+  const [selectedBar, setSelectedBar] = useState(null);
+  
+  const weekData = generateWeeklyChartData(sessions);
+  const maxHours = Math.max(...weekData.map(d => d.hours), 1);
+  
+  const handleBarPress = (day, index) => {
+    setSelectedBar(index === selectedBar ? null : index);
+    console.log(`${day.fullDate}: ${day.hours}h (${day.sessionsCount} sessions)`);
+  };
   
   return (
     <View style={styles.chartContainer}>
-      <Text style={[styles.chartTitle, { color: colors.text }]}>This Week's Focus</Text>
+      <Text style={[styles.chartTitle, { color: colors.text }]}>This Week</Text>
       <View style={styles.chartContent}>
-        {/* 
-          Simple bar chart implementation - we avoid external charting libraries
-          in React Native for better performance and smaller bundle size.
-          
-          In a web React app, you'd likely use recharts or d3.js directly.
-        */}
         <View style={styles.barsContainer}>
           {weekData.map((day, index) => (
             <TouchableOpacity 
               key={index} 
               style={styles.barWrapper}
-              onPress={() => console.log(`Tapped ${day.fullDate}: ${day.hours}h`)}
+              onPress={() => handleBarPress(day, index)}
+              activeOpacity={0.7}
             >
               <View style={styles.barContainer}>
                 <View 
                   style={[
-                    styles.bar, 
-                    { 
+                    styles.bar,
+                    {
                       height: `${(day.hours / maxHours) * 100}%`,
-                      backgroundColor: day.hours > 0 ? '#4ADE80' : colors.border
+                      backgroundColor: selectedBar === index 
+                        ? colors.primary 
+                        : day.hours > 0 
+                          ? '#4ADE80' 
+                          : colors.border,
+                      opacity: selectedBar === null || selectedBar === index ? 1 : 0.6,
                     }
                   ]} 
                 />
               </View>
-              <Text style={[styles.barLabel, { color: colors.textSecondary }]}>
+              <Text style={[styles.barLabel, { 
+                color: selectedBar === index ? colors.text : colors.textSecondary,
+                fontWeight: selectedBar === index ? '600' : '400'
+              }]}>
                 {day.day}
               </Text>
-              <Text style={[styles.barValue, { color: colors.text }]}>
+              <Text style={[styles.barValue, { 
+                color: selectedBar === index ? colors.text : colors.textSecondary,
+                fontWeight: selectedBar === index ? '700' : '500'
+              }]}>
                 {day.hours}h
               </Text>
             </TouchableOpacity>
           ))}
         </View>
         
-        {/* Additional info section */}
         <View style={styles.chartFooter}>
           <Text style={[styles.chartFooterText, { color: colors.textSecondary }]}>
-            {weekData.reduce((sum, day) => sum + day.hours, 0).toFixed(1)}h total this week
+            {weekData.reduce((sum, day) => sum + day.hours, 0).toFixed(1)}h total
           </Text>
         </View>
       </View>
@@ -142,59 +150,61 @@ const WeeklyFocusChart = ({ sessions }) => {
 };
 
 /**
- * PERFORMANCE OPTIMIZATION: Moved to separate component
- * 
- * This demonstrates:
- * 1. Component composition - breaking UI into smaller, focused pieces
- * 2. Props passing and validation
- * 3. Conditional rendering and styling
- * 4. React Native styling patterns
- * 
- * Why separate components matter:
- * - React's reconciliation algorithm can optimize re-renders
- * - Easier testing and maintenance
- * - Better code organization
- * - Potential for memoization with React.memo
+ * TOTAL TIME CARD COMPONENT
  */
 const TotalTimeCard = ({ totalHours }) => {
   const { colors } = useTheme();
   
   const getBackgroundColorForTime = (hours) => {
-    // Color coding based on productivity levels
-    if (hours <= 5) return '#D1FADF';   // Light green - getting started
-    if (hours <= 20) return '#A6F4C5';  // Medium green - good progress  
-    if (hours <= 50) return '#4ADE80';  // Dark green - excellent
-    return '#22C55E';                   // Very dark green - exceptional
+    if (hours <= 5) return '#D1FADF';   
+    if (hours <= 20) return '#A6F4C5';  
+    if (hours <= 50) return '#4ADE80';  
+    return '#22C55E';                   
   };
+
+  const getTextColorForTime = (hours) => {
+    if (hours <= 20) return '#1E3A29';
+    return '#FFFFFF';
+  };
+
+  const backgroundColor = getBackgroundColorForTime(totalHours);
+  const textColor = getTextColorForTime(totalHours);
 
   return (
     <View style={[
-      styles.totalTimeContainer, 
-      { backgroundColor: getBackgroundColorForTime(totalHours) }
+      styles.totalTimeContainer,
+      { backgroundColor }
     ]}>
-      <Text style={styles.totalTimeLabel}>Total Focus Time</Text>
-      <Text style={styles.totalTimeValue}>{totalHours}h</Text>
-      <Text style={styles.totalTimeSubtext}>All-time</Text>
+      <Text style={[styles.totalTimeLabel, { color: textColor }]}>
+        Focus Time
+      </Text>
+      <Text style={[styles.totalTimeValue, { color: textColor }]}>
+        {totalHours}h
+      </Text>
+      <Text style={[styles.totalTimeSubtext, { color: textColor }]}>
+        All-time
+      </Text>
+      {totalHours > 50 && (
+        <View style={styles.achievementContainer}>
+          <Text style={styles.achievementIcon}>🏆</Text>
+        </View>
+      )}
     </View>
   );
 };
 
 /**
- * COMPACT ACTIVITY GRID - GitHub-style heat map (matches original design)
- * 
- * This recreates the original Activity grid design in a compact form
+ * COMPACT ACTIVITY GRID COMPONENT - GitHub-style heat map
  */
 const CompactActivityGrid = ({ sessions }) => {
   const { colors } = useTheme();
   
-  // Generate GitHub-style grid data
   const generateActivityGridData = () => {
     const today = new Date();
-    const weeks = 20; // ~5 months of data
+    const weeks = 20; 
     const gridData = [];
     let maxActivity = 1;
     
-    // Generate data by weeks (GitHub style)
     for (let week = 0; week < weeks; week++) {
       const weekData = [];
       for (let day = 0; day < 7; day++) {
@@ -226,15 +236,14 @@ const CompactActivityGrid = ({ sessions }) => {
   
   const { gridData, maxActivity } = generateActivityGridData();
   
-  // Get month labels for the top
-  const getMonthLabels = () => {
+  const getMonthLabelsWithPositions = () => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const labels = [];
     let lastMonth = -1;
     
     gridData.forEach((week, weekIndex) => {
       const firstDay = week[0];
-      if (firstDay.month !== lastMonth && weekIndex % 4 === 0) { // Show every 4th week
+      if (firstDay.month !== lastMonth) {
         labels.push({
           month: months[firstDay.month],
           position: weekIndex
@@ -243,7 +252,7 @@ const CompactActivityGrid = ({ sessions }) => {
       }
     });
     
-    return labels.slice(0, 4); // Max 4 labels to fit
+    return labels;
   };
   
   const getIntensityLevel = (minutes) => {
@@ -257,64 +266,46 @@ const CompactActivityGrid = ({ sessions }) => {
   
   const getColorForIntensity = (level) => {
     const colorMap = {
-      0: '#484848',    // Visible gray for empty blocks (no activity)
-      1: '#0e4429',    // GitHub light green
-      2: '#006d32',    // GitHub medium green  
-      3: '#26a641',    // GitHub darker green
-      4: '#39d353'     // GitHub bright green
+      0: '#484848',    
+      1: '#0e4429',    
+      2: '#006d32',    
+      3: '#26a641',    
+      4: '#39d353'     
     };
     return colorMap[level] || colorMap[0];
   };
   
-  const monthLabels = getMonthLabels();
+  const monthLabels = getMonthLabelsWithPositions();
   
   return (
     <View style={styles.compactActivityContainer}>
-      <Text style={[styles.compactActivityTitle, { color: colors.text }]}>Activity</Text>
+      <Text style={[styles.compactActivityTitle, { color: colors.textSecondary }]}>Activity</Text>
       
-      {/* Main grid area - fills entire space */}
       <View style={styles.gridArea}>
-        {/* Day labels with M, W, F enlarged */}
         <View style={styles.dayLabels}>
-          <Text style={[styles.dayLabel, styles.dayLabelLarge, { color: colors.textSecondary }]}>M</Text>
-          <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>T</Text>
-          <Text style={[styles.dayLabel, styles.dayLabelLarge, { color: colors.textSecondary }]}>W</Text>
-          <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>T</Text>
-          <Text style={[styles.dayLabel, styles.dayLabelLarge, { color: colors.textSecondary }]}>F</Text>
-          <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>S</Text>
-          <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>S</Text>
+          <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>M</Text>
+          <View style={styles.dayLabelSpacer} />
+          <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>W</Text>
+          <View style={styles.dayLabelSpacer} />
+          <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>F</Text>
+          <View style={styles.dayLabelSpacer} />
+          <View style={styles.dayLabelSpacer} />
         </View>
         
-        {/* Activity grid container with month labels floating over */}
-        <View style={styles.gridContainer}>
-          {/* Month labels floating over the top row of blocks */}
-          <View style={styles.monthLabelsOverlay}>
-            {monthLabels.map((label, index) => (
-              <Text
-                key={index}
-                style={[
-                  styles.monthLabelOverlay,
-                  { 
-                    color: colors.text,
-                    left: label.position * 2.3, // Adjusted positioning for new layout
-                    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-                    textShadowOffset: { width: 0, height: 0 },
-                    textShadowRadius: 2,
-                  }
-                ]}
-              >
-                {label.month}
-              </Text>
-            ))}
-          </View>
-          
-          {/* Activity grid - fills all space with minimal gaps */}
-          <View style={styles.activityGrid}>
-            {gridData.map((week, weekIndex) => (
-              <View key={weekIndex} style={styles.weekColumn}>
-                {week.map((day, dayIndex) => (
+        <View style={styles.activityGrid}>
+          {gridData.map((week, weekIndex) => (
+            <View key={weekIndex} style={styles.weekColumn}>
+              {week.map((day, dayIndex) => (
+                <TouchableOpacity
+                  key={`${weekIndex}-${dayIndex}`}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    if (day.minutes > 0) {
+                      console.log(`${day.date}: ${Math.round(day.minutes/60 * 10)/10}h`);
+                    }
+                  }}
+                >
                   <View
-                    key={`${weekIndex}-${dayIndex}`}
                     style={[
                       styles.daySquare,
                       {
@@ -322,57 +313,43 @@ const CompactActivityGrid = ({ sessions }) => {
                       }
                     ]}
                   />
-                ))}
-              </View>
-            ))}
-          </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ))}
         </View>
       </View>
       
-      {/* Legend stays in current position */}
-      <View style={styles.compactLegend}>
-        <Text style={[styles.compactLegendText, { color: colors.textSecondary }]}>Less</Text>
-        {[0, 1, 2, 3, 4].map(level => (
-          <View
-            key={level}
+      <View style={styles.monthLabelsContainer}>
+        {monthLabels.map((label, index) => (
+          <Text 
+            key={index}
             style={[
-              styles.compactLegendBox,
-              { backgroundColor: getColorForIntensity(level) }
+              styles.monthLabel, 
+              { 
+                color: colors.textSecondary,
+                left: `${(label.position / gridData.length) * 100}%`
+              }
             ]}
-          />
+          >
+            {label.month}
+          </Text>
         ))}
-        <Text style={[styles.compactLegendText, { color: colors.textSecondary }]}>More</Text>
       </View>
     </View>
   );
 };
 
 /**
- * MAIN COMPONENT: Enhanced Metrics Screen
- * 
- * Key architectural decisions explained:
- * 1. State management with hooks (useState, useEffect, useRef)
- * 2. Component composition with custom components
- * 3. Responsive design considerations for mobile
- * 4. Error boundary patterns (loading/error states)
- * 5. Theme integration for dark/light mode support
- * 
- * Interview topics this covers:
- * - React lifecycle and hooks
- * - State management patterns
- * - Performance optimization techniques
- * - Mobile UI/UX considerations
- * - Data flow and prop drilling alternatives
+ * MAIN METRICS SCREEN COMPONENT
  */
 const MetricsScreen = () => {
   const { colors, theme } = useTheme();
   
-  // Date-related state for navigation
   const today = new Date();
   const currentRealMonth = today.getMonth();
   const currentRealYear = today.getFullYear();
 
-  // UI state management
   const [currentMonth, setCurrentMonth] = useState(currentRealMonth);
   const [currentYear, setCurrentYear] = useState(currentRealYear);
   const [isLoading, setIsLoading] = useState(true);
@@ -380,15 +357,12 @@ const MetricsScreen = () => {
   const [selectedSession, setSelectedSession] = useState(null);
   const [showSessionDetails, setShowSessionDetails] = useState(false);
   
-  // Data state
   const [sessions, setSessions] = useState({});
   const [activities, setActivities] = useState([]);
   const [totalHours, setTotalHours] = useState(0);
   
-  // Performance optimization: useRef for gesture animations
   const panX = useRef(new Animated.Value(0)).current;
 
-  // Load data when component mounts or comes into focus
   useEffect(() => {
     loadInitialData();
   }, []);
@@ -399,24 +373,11 @@ const MetricsScreen = () => {
     }, [])
   );
 
-  /**
-   * DATA LOADING FUNCTION
-   * 
-   * This demonstrates:
-   * - Async/await patterns
-   * - Error handling strategies  
-   * - Parallel data loading with Promise.all
-   * - State updates and loading states
-   * 
-   * Interview tip: Explain error handling strategies and why
-   * we use try/catch with async operations
-   */
   const loadInitialData = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      // Load sessions and settings in parallel for better performance
       const [sessionsData, settings] = await Promise.all([
         deepWorkStore.getSessions(),
         deepWorkStore.getSettings()
@@ -424,8 +385,6 @@ const MetricsScreen = () => {
 
       setSessions(sessionsData);
       setActivities(settings.activities);
-      
-      // Calculate derived state
       calculateTotalDeepWorkTime(sessionsData);
     } catch (error) {
       console.error('Failed to load metrics data:', error);
@@ -435,43 +394,21 @@ const MetricsScreen = () => {
     }
   };
   
-  /**
-   * DATA PROCESSING FUNCTION
-   * 
-   * Time Complexity Analysis (important for interviews):
-   * - O(n*m) where n is number of dates, m is average sessions per date
-   * - Could be optimized to O(k) where k is total sessions if we restructure data
-   * 
-   * Space Complexity: O(1) - we only store running totals
-   */
   const calculateTotalDeepWorkTime = (sessionsData) => {
     let totalMinutes = 0;
-    
-    // Iterate through all dates and their sessions
     Object.values(sessionsData).forEach(dateSessions => {
       dateSessions.forEach(session => {
         totalMinutes += session.duration;
       });
     });
-    
-    // Convert to hours with 1 decimal place
     const hours = (totalMinutes / 60).toFixed(1);
     setTotalHours(parseFloat(hours));
   };
 
-  /**
-   * GESTURE HANDLING - Advanced React Native concept
-   * 
-   * PanResponder demonstrates:
-   * - Touch event handling in React Native
-   * - Animation integration
-   * - Gesture recognition patterns
-   * - Performance considerations with native driver
-   */
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 20; // Minimum movement threshold
+        return Math.abs(gestureState.dx) > 20;
       },
       onPanResponderMove: (_, gestureState) => {
         panX.setValue(gestureState.dx);
@@ -479,21 +416,19 @@ const MetricsScreen = () => {
       onPanResponderRelease: (_, gestureState) => {
         if (Math.abs(gestureState.dx) > SCREEN_WIDTH / 3) {
           if (gestureState.dx > 0) {
-            navigateMonth(-1); // Swipe right = previous month
+            navigateMonth(-1);
           } else {
-            navigateMonth(1);  // Swipe left = next month
+            navigateMonth(1);
           }
         }
-        // Always animate back to center
         Animated.spring(panX, {
           toValue: 0,
-          useNativeDriver: true, // Performance optimization
+          useNativeDriver: true,
         }).start();
       },
     })
   ).current;
 
-  // Month navigation logic
   const navigateMonth = (direction) => {
     let newMonth = currentMonth + direction;
     let newYear = currentYear;
@@ -506,7 +441,6 @@ const MetricsScreen = () => {
       newYear -= 1;
     }
 
-    // Prevent navigation to future dates
     if (newYear > currentRealYear || 
         (newYear === currentRealYear && newMonth > currentRealMonth)) {
       return;
@@ -516,13 +450,15 @@ const MetricsScreen = () => {
     setCurrentYear(newYear);
   };
 
-  // Session handling functions
   const handleSessionPress = (session) => {
     setSelectedSession(session);
     setShowSessionDetails(true);
   };
 
-  // Get days in current month for rendering
+  const handleGenerateInsights = () => {
+    console.log('Generate Insights pressed');
+  };
+
   const getDaysInMonth = () => {
     const dates = [];
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
@@ -534,7 +470,6 @@ const MetricsScreen = () => {
     return dates;
   };
 
-  // Helper functions for rendering
   const getActivityColor = (activityId) => {
     const activity = activities.find(a => a.id === activityId);
     return activity?.color || '#gray';
@@ -544,7 +479,18 @@ const MetricsScreen = () => {
     return `${date.getDate()}`;
   };
 
-  // LOADING STATE HANDLING
+  // Helper function for legend colors
+  const getColorForIntensity = (level) => {
+    const colorMap = {
+      0: '#484848',    
+      1: '#0e4429',    
+      2: '#006d32',    
+      3: '#26a641',    
+      4: '#39d353'     
+    };
+    return colorMap[level] || colorMap[0];
+  };
+
   if (isLoading) {
     return (
       <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
@@ -554,7 +500,6 @@ const MetricsScreen = () => {
     );
   }
 
-  // ERROR STATE HANDLING
   if (error) {
     return (
       <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
@@ -571,33 +516,53 @@ const MetricsScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* HEADER - Simplified (no total time here anymore) */}
       <View style={[styles.headerContainer, { borderBottomColor: colors.border }]}>
         <View style={styles.headerTitleContainer}>
           <Text style={[styles.brandName, { color: colors.text }]}>DeepWork.io</Text>
           <Text style={[styles.title, { color: colors.text }]}>Summary & Insights</Text>
         </View>
+        
+        <TouchableOpacity 
+          style={[styles.generateInsightsButton, { 
+            backgroundColor: colors.primary,
+            shadowColor: colors.primary 
+          }]}
+          onPress={handleGenerateInsights}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.generateInsightsText}>Generate Insights</Text>
+          <Text style={styles.sparkleEmoji}>✨</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* FIXED: ALL THREE CHARTS IN ONE HORIZONTAL ROW */}
       <View style={[styles.chartsRow, { borderBottomColor: colors.border }]}>
-        {/* Chart 1: Condensed Activity Grid (6 months) */}
         <View style={styles.compactActivitySection}>
           <CompactActivityGrid sessions={sessions} />
         </View>
         
-        {/* Chart 2: Weekly Focus Chart (your box "1") */}
-        <View style={styles.weeklyChartSection}>
+        <CardContainer style={styles.weeklyChartSection}>
           <WeeklyFocusChart sessions={sessions} />
-        </View>
+        </CardContainer>
         
-        {/* Chart 3: Total Time Card (your box "2") */}
-        <View style={styles.totalTimeSection}>
+        <CardContainer style={styles.totalTimeSection}>
           <TotalTimeCard totalHours={totalHours} />
+        </CardContainer>
+        
+        <View style={styles.heatMapLegendContainer}>
+          <Text style={[styles.legendLabel, { color: colors.textSecondary }]}>Less</Text>
+          {[0, 1, 2, 3, 4].map(level => (
+            <View
+              key={level}
+              style={[
+                styles.legendBox,
+                { backgroundColor: getColorForIntensity(level) }
+              ]}
+            />
+          ))}
+          <Text style={[styles.legendLabel, { color: colors.textSecondary }]}>More</Text>
         </View>
       </View>
 
-      {/* EXISTING: Month Navigation Tabs */}
       <ScrollView 
         horizontal 
         showsHorizontalScrollIndicator={false}
@@ -631,7 +596,6 @@ const MetricsScreen = () => {
         })}
       </ScrollView>
       
-      {/* EXISTING: Daily Sessions ScrollView */}
       <ScrollView 
         style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContentContainer}
@@ -661,7 +625,6 @@ const MetricsScreen = () => {
                       />
                     </TouchableOpacity>
                   ))}
-                  {/* Fill empty slots */}
                   {[...Array(Math.max(0, MAX_BOXES_PER_ROW - daySessions.length))].map((_, emptyIndex) => (
                     <View
                       key={`empty-${dateString}-${emptyIndex}`}
@@ -675,7 +638,6 @@ const MetricsScreen = () => {
         })}
       </ScrollView>
 
-      {/* EXISTING: Activities Legend */}
       <View style={[styles.legend, { borderTopColor: colors.border }]}>
         <Text style={[styles.legendTitle, { color: colors.text }]}>Activities:</Text>
         <View style={styles.legendItems}>
@@ -692,7 +654,6 @@ const MetricsScreen = () => {
         </View>
       </View>
       
-      {/* EXISTING: Session Details Modal */}
       <SessionDetailsModal
         visible={showSessionDetails}
         session={selectedSession}
@@ -705,22 +666,7 @@ const MetricsScreen = () => {
   );
 };
 
-/**
- * STYLING SECTION - React Native specific patterns
- * 
- * Key differences from CSS that are important to understand:
- * 1. camelCase properties (backgroundColor vs background-color)
- * 2. No units needed for most values (16 instead of 16px)
- * 3. Flexbox is default display mode - no need to declare
- * 4. No CSS cascading - all styles must be explicitly applied
- * 5. StyleSheet.create provides performance optimizations
- * 6. Platform-specific styles can be applied conditionally
- * 
- * Interview tip: Be ready to explain why React Native uses this approach
- * (performance, consistency across platforms, type safety)
- */
 const styles = StyleSheet.create({
-  // Base container styles
   container: {
     flex: 1,
   },
@@ -729,7 +675,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   
-  // Loading and error states
   loadingText: {
     marginTop: 12,
     fontSize: 16,
@@ -750,14 +695,16 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Header section
   headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderBottomWidth: 1,
   },
   headerTitleContainer: {
-    alignItems: 'left',
+    flex: 1,
   },
   brandName: {
     fontSize: 14,
@@ -768,197 +715,218 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  generateInsightsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+    gap: 4,
+  },
+  generateInsightsText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  sparkleEmoji: {
+    fontSize: 12,
+  },
   
-  // FIXED STYLES FOR COMPACT HORIZONTAL LAYOUT - Half height, better proportions
+  cardContainer: {
+    borderRadius: 12,
+    borderWidth: 0.5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  
   chartsRow: {
-    flexDirection: 'row',           // All children side by side
+    flexDirection: 'row',           
     paddingHorizontal: 16,
-    paddingVertical: 8,             // Reduced from 12 to 8 for less height
+    paddingVertical: 6,           
     borderBottomWidth: 1,
-    gap: 8,                         // Equal spacing between all three sections
-    alignItems: 'stretch',          // All sections same height
+    gap: 8,                        
+    alignItems: 'flex-end',
+    position: 'relative',
   },
   compactActivitySection: {
-    flex: 2.5,                      // Activity grid gets more space (50%) - fills better
+    flex: 2.5,
   },
   weeklyChartSection: {
-    flex: 2,                        // Weekly chart gets medium space (40%)
+    flex: 2,
   },
   totalTimeSection: {
-    flex: 1,                        // Total time narrower (20%) - as requested
+    flex: 1,
   },
   
-  // COMPACT ACTIVITY GRID STYLES - No borders, fills entire space
   compactActivityContainer: {
-    backgroundColor: '#1f1f1f',
-    borderRadius: 8,
-    padding: 0,                     // Removed padding - no empty space
-    height: 60,
-    overflow: 'hidden',             // Ensure content stays within bounds
+    padding: 8,
+    height: 70,
+    justifyContent: 'space-between',
+    backgroundColor: 'transparent',
   },
   compactActivityTitle: {
     fontSize: 9,
     fontWeight: '600',
-    marginBottom: 0,
-    textAlign: 'center',
-    paddingHorizontal: 4,           // Only title has padding
-    backgroundColor: '#1f1f1f',     // Ensure title background
+    textAlign: 'left',
+    marginBottom: 4,
+    opacity: 0.7,
   },
   gridArea: {
     flexDirection: 'row',
-    flex: 1,                        // Fill remaining space
+    flex: 1,
   },
   dayLabels: {
-    width: 12,                      // Slightly wider for all 7 days
-    justifyContent: 'space-around', // Even distribution of all 7 days
-    paddingVertical: 2,
+    width: 12,
+    justifyContent: 'space-around',
+    marginRight: 3,
   },
   dayLabel: {
-    fontSize: 4,                    // Small font for T, T, S, S
+    fontSize: 7,
     textAlign: 'center',
     fontWeight: '500',
+    opacity: 0.6,
   },
-  dayLabelLarge: {
-    fontSize: 8,                    // Twice as large for M, W, F
-    fontWeight: '600',
-  },
-  gridContainer: {
-    flex: 1,
-    position: 'relative',           // For absolute positioned month labels
-  },
-  monthLabelsOverlay: {
-    position: 'absolute',
-    top: -2,                        // Float over top row of blocks
-    left: 0,
-    right: 0,
-    height: 8,
-    zIndex: 10,                     // Above the blocks
-  },
-  monthLabelOverlay: {
-    position: 'absolute',
-    fontSize: 5,
-    fontWeight: '600',
-    top: 0,
+  dayLabelSpacer: {
+    height: 7,
   },
   activityGrid: {
     flexDirection: 'row',
     flex: 1,
-    paddingTop: 3,                  // Small space for month labels
+    gap: 1,
   },
   weekColumn: {
-    flex: 1,                        // Equal width columns
-    justifyContent: 'space-around', // Even distribution of 7 squares
+    flex: 1,
+    justifyContent: 'space-around',
+    gap: 1,
   },
   daySquare: {
-    aspectRatio: 1,                 // Keep squares square
-    width: '100%',                  // Fill column width
-    maxHeight: 6,                   // Limit height for proper fit
-    borderRadius: 0,                // Sharp corners for tight fit
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 1,
   },
-  compactLegend: {
+  monthLabelsContainer: {
+    position: 'relative',
+    height: 12,
+    marginTop: 2,
+    marginLeft: 15,
+  },
+  monthLabel: {
+    position: 'absolute',
+    fontSize: 7,
+    fontWeight: '500',
+    opacity: 0.6,
+  },
+  
+  heatMapLegendContainer: {
+    position: 'absolute',
+    top: 8,
+    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 1,
-    paddingVertical: 2,             // Small padding for legend only
-    paddingHorizontal: 4,
-    backgroundColor: '#1f1f1f',     // Ensure legend background
+    gap: 3,
+    zIndex: 10,
   },
-  compactLegendBox: {
-    width: 4,
-    height: 4,
-    borderRadius: 0.5,
+  legendBox: {
+    width: 6,
+    height: 6,
+    borderRadius: 1,
   },
-  compactLegendText: {
-    fontSize: 5,
+  legendLabel: {
+    fontSize: 7,
+    opacity: 0.6,
   },
-  // WEEKLY CHART STYLES - Reduced height for compact layout
+
   chartContainer: {
-    backgroundColor: '#1f1f1f',     // Dark theme card background
-    borderRadius: 8,
-    padding: 2,                     // Reduced padding from 6 to 4
-    height: 60,                     // Reduced height from 100 to 60
+    padding: 4,
+    height: 50,
     justifyContent: 'space-between',
   },
   chartTitle: {
-    fontSize: 8,                    // Smaller title font
+    fontSize: 9,
     fontWeight: '600',
-    marginBottom: 1,                // Minimal margin
+    marginBottom: 2,
     textAlign: 'center',
   },
   chartContent: {
     flex: 1,
   },
   chartFooter: {
-    marginTop: 1,                   // Minimal margin for compact view
+    marginTop: 2,
     alignItems: 'center',
   },
   chartFooterText: {
-    fontSize: 5,                    // Very small font for tight space
+    fontSize: 5,
   },
   barsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',        // Align bars to bottom
+    alignItems: 'flex-end',
     flex: 1,
-    paddingTop: 1,                  // Minimal padding
+    paddingTop: 2,
   },
   barWrapper: {
     alignItems: 'center',
     flex: 1,
   },
   barContainer: {
-    height: 25,                     // Reduced height for compact view (was 35)
-    width: 5,                       // Narrower bars
-    justifyContent: 'flex-end',     // Bar grows upward
-    marginBottom: 1,                // Minimal margin
+    height: 15,
+    width: 6,
+    justifyContent: 'flex-end',
+    marginBottom: 2,
   },
   bar: {
     width: '100%',
     borderRadius: 1,
-    minHeight: 1,                  // Smaller minimum height
+    minHeight: 1,
   },
   barLabel: {
-    fontSize: 5,                    // Very small font for tight space
-    marginTop: 0.5,                 // Minimal margin
+    fontSize: 5,
+    marginTop: 1,
   },
   barValue: {
-    fontSize: 5,                    // Very small font for tight space
+    fontSize: 6,
     fontWeight: '500',
   },
   
-  // TOTAL TIME CARD STYLES - Reduced height and narrower width
   totalTimeContainer: {
-    backgroundColor: '#4ADE80',     // Green background that changes based on hours
-    borderRadius: 8,
-    padding: 4,                     // Reduced padding from 6 to 4
+    padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 60,                     // Reduced height from 100 to 60
+    height: 50,
+    position: 'relative',
   },
   totalTimeLabel: {
-    fontSize: 7,                    // Smaller font for compact space
-    color: '#1e3a29',              
+    fontSize: 7,
     fontWeight: '600',
     textTransform: 'uppercase',
-    marginBottom: 1,                // Minimal margin
+    marginBottom: 1,
     textAlign: 'center',
   },
   totalTimeValue: {
-    fontSize: 16,                   // Reduced font size for compact view
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#1e3a29',
   },
   totalTimeSubtext: {
-    fontSize: 5,                    // Very small subtext
-    color: '#1e3a29',
+    fontSize: 5,
     marginTop: 0.5,
   },
+  achievementContainer: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+  },
+  achievementIcon: {
+    fontSize: 10,
+  },
   
-  // REMOVED: Unused activity breakdown chart styles
-  // These were for the third chart that's no longer in this layout
-  
-  // MONTH TABS - Horizontal scrolling navigation
   monthTabsContainer: {
     maxHeight: 40,
     borderBottomWidth: 1,
@@ -979,7 +947,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   
-  // SESSIONS LIST - Daily activity display
   scrollContainer: {
     flex: 1,
     paddingHorizontal: 16,
@@ -1016,7 +983,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   
-  // LEGEND - Activity color mapping
   legend: {
     padding: 12,
     borderTopWidth: 1,
@@ -1034,11 +1000,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  legendBox: {
-    width: BOX_SIZE,
-    height: BOX_SIZE,
-    borderRadius: 4,
   },
   legendText: {
     fontSize: 12,
