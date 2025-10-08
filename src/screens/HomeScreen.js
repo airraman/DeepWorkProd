@@ -34,9 +34,12 @@ const HomeScreen = () => {
   const [musicChoice, setMusicChoice] = useState('');
   
   // State for managing settings loaded from deepWorkStore
-  const [availableDurations, setAvailableDurations] = useState([]);
+  // CHANGED: availableDurations is now a constant array, not loaded from settings
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // CHANGED: All durations are now available - no need to load from settings
+  const availableDurations = [5, 10, 15, 20, 30, 45];
 
   // Music options remain constant as they're not configurable in settings
   const musicOptions = [
@@ -52,7 +55,8 @@ const HomeScreen = () => {
 
   const checkFirstTimeUser = async () => {
     const settings = await deepWorkStore.getSettings();
-    if (!settings.activities.length || !settings.durations.length) {
+    // CHANGED: Only check for activities, not durations
+    if (!settings.activities.length) {
       navigation.replace('InitialSetup');
     } else {
       loadSettings();
@@ -73,15 +77,10 @@ const HomeScreen = () => {
       setIsLoading(true);
       const settings = await deepWorkStore.getSettings();
       
-      // Update local state with settings
-      setAvailableDurations(settings.durations);
+      // CHANGED: Only load activities, not durations
       setActivities(settings.activities);
       
-      // Validate existing selections against new settings
-      // If a selected duration or activity is no longer available, reset it
-      if (duration && !settings.durations.includes(parseInt(duration))) {
-        setDuration('');
-      }
+      // CHANGED: Only validate activity selection
       if (activity && !settings.activities.some(a => a.id === activity)) {
         setActivity('');
       }
@@ -107,8 +106,8 @@ const HomeScreen = () => {
       style={[
         styles.activityItem,
         { 
-          backgroundColor: isDark ? colors.card : colors.background, // This is the key fix
-          borderColor: activity === item.id ? colors.primary : colors.border // Use theme colors
+          backgroundColor: isDark ? colors.card : colors.background,
+          borderColor: activity === item.id ? colors.primary : colors.border
         },
         activity === item.id && styles.activityItemSelected
       ]}
@@ -116,6 +115,28 @@ const HomeScreen = () => {
     >
       <View style={[styles.colorDot, { backgroundColor: item.color }]} />
       <Text style={[styles.activityName, { color: colors.text }]}>{item.name}</Text>
+    </TouchableOpacity>
+  );
+
+  // NEW: Render individual duration item in the horizontal list
+  const renderDuration = ({ item }) => (
+    <TouchableOpacity
+      style={[
+        styles.durationItem,
+        { backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6' },
+        duration === item.toString() && { backgroundColor: colors.primary }
+      ]}
+      onPress={() => setDuration(item.toString())}
+    >
+      <Text
+        style={[
+          styles.durationItemText,
+          { color: isDark ? colors.textSecondary : '#6b7280' },
+          duration === item.toString() && { color: 'white' }
+        ]}
+      >
+        {item}m
+      </Text>
     </TouchableOpacity>
   );
 
@@ -152,7 +173,7 @@ const HomeScreen = () => {
         <View style={[
           styles.section, 
           { 
-            backgroundColor: isDark ? '#1f1f1f' : colors.card, // Use theme colors
+            backgroundColor: isDark ? '#1f1f1f' : colors.card,
             borderColor: activity ? colors.primary : colors.border 
           },
           activity && styles.sectionCompleted
@@ -171,11 +192,11 @@ const HomeScreen = () => {
           />
         </View>
         
-        {/* Duration Selection - Section */}
+        {/* Duration Selection - Section - CHANGED: Now uses FlatList */}
         <View style={[
           styles.section, 
           { 
-            backgroundColor: isDark ? '#1f1f1f' : colors.card, // Use theme colors
+            backgroundColor: isDark ? '#1f1f1f' : colors.card,
             borderColor: duration ? colors.primary : colors.border 
           },
           duration && styles.sectionCompleted
@@ -184,36 +205,22 @@ const HomeScreen = () => {
             <Clock stroke={colors.textSecondary} size={20} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Session Duration</Text>
           </View>
-          <View style={styles.durationButtons}>
-            {availableDurations.map((time) => (
-              <TouchableOpacity
-                key={time}
-                style={[
-                  styles.durationButton,
-                  { backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6' }, // Use light/dark specific colors
-                  duration === time.toString() && { backgroundColor: colors.primary }
-                ]}
-                onPress={() => setDuration(time.toString())}
-              >
-                <Text
-                  style={[
-                    styles.durationButtonText,
-                    { color: isDark ? colors.textSecondary : '#6b7280' }, // Use theme appropriate text color
-                    duration === time.toString() && { color: 'white' }
-                  ]}
-                >
-                  {time}m
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <FlatList
+            data={availableDurations}
+            renderItem={renderDuration}
+            keyExtractor={item => item.toString()}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.durationsList}
+            contentContainerStyle={styles.durationsListContent}
+          />
         </View>
 
         {/* Music Selection - Section */}
         <View style={[
           styles.section, 
           { 
-            backgroundColor: isDark ? '#1f1f1f' : colors.card, // Use theme colors
+            backgroundColor: isDark ? '#1f1f1f' : colors.card,
             borderColor: musicChoice ? colors.primary : colors.border 
           },
           musicChoice && styles.sectionCompleted
@@ -228,7 +235,7 @@ const HomeScreen = () => {
                 key={option.value}
                 style={[
                   styles.musicButton,
-                  { backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6' }, // Use light/dark specific colors
+                  { backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6' },
                   musicChoice === option.value && { backgroundColor: colors.primary }
                 ]}
                 onPress={() => setMusicChoice(option.value)}
@@ -236,7 +243,7 @@ const HomeScreen = () => {
                 <Text
                   style={[
                     styles.musicButtonText,
-                    { color: isDark ? colors.textSecondary : '#6b7280' }, // Use theme appropriate text color
+                    { color: isDark ? colors.textSecondary : '#6b7280' },
                     musicChoice === option.value && { color: 'white' }
                   ]}
                 >
@@ -252,7 +259,7 @@ const HomeScreen = () => {
       </ScrollView>
 
       <View style={[styles.footer, { 
-        backgroundColor: isDark ? '#1f1f1f' : colors.card, // Use theme colors
+        backgroundColor: isDark ? '#1f1f1f' : colors.card,
         borderTopColor: colors.border 
       }]}>
         <TouchableOpacity
@@ -321,21 +328,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  durationButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  
+  // NEW: Duration List Styles (matching activity list pattern)
+  durationsList: {
+    flexGrow: 0,
+    paddingVertical: 8,
+  },
+  durationsListContent: {
     gap: 8,
   },
-  durationButton: {
-    flex: 1,
-    padding: 12,
+  durationItem: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 70,
   },
-  durationButtonText: {
+  durationItemText: {
     fontSize: 14,
     fontWeight: '500',
   },
+  
   // Activity Styles
   activitiesList: {
     flexGrow: 0,
@@ -348,7 +362,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginRight: 8,
     borderWidth: 1,
-    width: SCREEN_WIDTH * 0.42, // Adjusted for better fit
+    width: SCREEN_WIDTH * 0.42,
   },
   activityItemSelected: {
     borderWidth: 2,
@@ -363,6 +377,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  
   // Music Styles
   musicButtons: {
     flexDirection: 'row',
@@ -380,6 +395,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
   },
+  
   // Footer Styles
   footer: {
     position: 'absolute',
@@ -401,6 +417,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
+  
   // Loading state
   centered: {
     justifyContent: 'center',

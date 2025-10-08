@@ -407,7 +407,7 @@ const SettingsScreen = () => {
         </View>
 
         {/* Duration Selection */}
-        <View style={[
+        {/* <View style={[
           styles.section, 
           { 
             backgroundColor: colors.card,
@@ -456,7 +456,7 @@ const SettingsScreen = () => {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
+        </View> */}
 
         {/* NEW: Alarm Settings Section */}
         <View style={[

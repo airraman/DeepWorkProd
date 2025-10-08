@@ -320,7 +320,7 @@ const CompactActivityGrid = ({ sessions }) => {
         </View>
       </View>
       
-      <View style={styles.monthLabelsContainer}>
+      {/* <View style={styles.monthLabelsContainer}>
         {monthLabels.map((label, index) => (
           <Text 
             key={index}
@@ -335,7 +335,7 @@ const CompactActivityGrid = ({ sessions }) => {
             {label.month}
           </Text>
         ))}
-      </View>
+      </View> */}
     </View>
   );
 };
@@ -738,20 +738,20 @@ const styles = StyleSheet.create({
   },
   
   cardContainer: {
-    borderRadius: 12,
-    borderWidth: 0.5,
+    borderRadius: 1,        // Changed from 12 to match heat map
+    borderWidth: 1,         // Changed from 0.5 for better visibility
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    overflow: 'hidden',     // Added: ensures child content respects border radius
   },
-  
   chartsRow: {
     flexDirection: 'row',           
     paddingHorizontal: 16,
     paddingVertical: 6,           
     borderBottomWidth: 1,
-    gap: 8,                        
+    gap: 6,                        // Changed to 6 for balanced spacing
     alignItems: 'flex-end',
     position: 'relative',
   },
@@ -766,11 +766,12 @@ const styles = StyleSheet.create({
   },
   
   compactActivityContainer: {
-    padding: 8,
+    padding: 4,                    // Changed from 8 to 4 to reduce visual gap
     height: 70,
     justifyContent: 'space-between',
     backgroundColor: 'transparent',
   },
+
   compactActivityTitle: {
     fontSize: 9,
     fontWeight: '600',
@@ -781,6 +782,7 @@ const styles = StyleSheet.create({
   gridArea: {
     flexDirection: 'row',
     flex: 1,
+    zIndex: 1,                     // Added: Ensures grid stays below labels
   },
   dayLabels: {
     width: 12,
@@ -816,6 +818,7 @@ const styles = StyleSheet.create({
     height: 12,
     marginTop: 2,
     marginLeft: 15,
+    zIndex: 10,                    // Added: Ensures labels appear on top
   },
   monthLabel: {
     position: 'absolute',
@@ -844,10 +847,11 @@ const styles = StyleSheet.create({
   },
 
   chartContainer: {
-    padding: 4,
-    height: 50,
+    padding: 6,                    // Changed from 4 to 6 for more breathing room
+    height: 55,                    // Changed from 50 to 70 to match heat map
     justifyContent: 'space-between',
   },
+
   chartTitle: {
     fontSize: 9,
     fontWeight: '600',
@@ -876,7 +880,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   barContainer: {
-    height: 15,
+    height: 28,                    // Changed from 15 to 28 for more visible bars
     width: 6,
     justifyContent: 'flex-end',
     marginBottom: 2,
@@ -899,9 +903,11 @@ const styles = StyleSheet.create({
     padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 50,
+    height: 55,
     position: 'relative',
+    borderRadius: 1,        // Added: makes background respect parent's border radius
   },
+
   totalTimeLabel: {
     fontSize: 7,
     fontWeight: '600',
