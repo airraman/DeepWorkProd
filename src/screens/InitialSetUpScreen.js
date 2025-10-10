@@ -1,4 +1,4 @@
-// src/screens/InitialSetUpScreen.js - UPDATED WITH REMINDER FREQUENCY
+// src/screens/InitialSetUpScreen.js - UPDATED WITHOUT DURATION MODAL
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
@@ -11,10 +11,9 @@ import {
 } from 'react-native';
 import { deepWorkStore } from '../services/deepWorkStore';
 
-// Import modals - UPDATED: Replace GoalSetupModal with ReminderFrequencyModal
+// Import modals - REMOVED DurationSetupModal import
 import ActivitySetupModal from '../components/modals/ActivitySetupModal.js';
-import DurationSetupModal from '../components/modals/DurationSetupModal.js';
-import ReminderFrequencyModal from '../components/modals/ReminderFrequencyModal.js'; // NEW IMPORT
+import ReminderFrequencyModal from '../components/modals/ReminderFrequencyModal.js';
 import WelcomeStatsModal from '../components/modals/WelcomeStatsModal.js';
 
 // Add tablet detection
@@ -22,30 +21,25 @@ const { width, height } = Dimensions.get('window');
 const isTablet = width > 768 || height > 768;
 
 const InitialSetupScreen = ({navigation}) => {
-    // Modal visibility states - UPDATED: Replace goal modal with reminder modal
+    // Modal visibility states - REMOVED showDurationModal
     const [showActivityModal, setShowActivityModal] = useState(false);
-    const [showDurationModal, setShowDurationModal] = useState(false);
-    const [showReminderModal, setShowReminderModal] = useState(false); // CHANGED FROM showGoalModal
+    const [showReminderModal, setShowReminderModal] = useState(false);
     const [showWelcomeStats, setShowWelcomeStats] = useState(false);
     
     // Loading state
     const [isLoading, setIsLoading] = useState(true);
-    // Add state to track if setup is complete
     const [setupComplete, setSetupComplete] = useState(false);
-    // Add state to track setup step
     const [setupStep, setSetupStep] = useState(0);
-    // Add state for error handling
     const [error, setError] = useState(null);
     
     // Track transitions to prevent multiple alerts
     const isTransitioning = useRef(false);
 
-    // UPDATED: Define step labels for the progress bar with new reminder step
+    // UPDATED: Define step labels with only 3 steps now
     const stepLabels = [
         'Create Activities',    // Step 1
-        'Choose Durations',     // Step 2  
-        'Set Reminders',        // Step 3 - CHANGED FROM 'Set Goals'
-        'Welcome!'             // Step 4
+        'Set Reminders',        // Step 2 (was Step 3)
+        'Welcome!'              // Step 3 (was Step 4)
     ];
 
     useEffect(() => {
@@ -76,17 +70,15 @@ const InitialSetupScreen = ({navigation}) => {
             // Get current settings
             const settings = await deepWorkStore.getSettings();
             
-            // Check if basic settings are already set up
-            if (settings.activities && settings.activities.length > 0 && 
-                settings.durations && settings.durations.length > 0) {
+            // UPDATED: Only check for activities since durations are now hardcoded
+            // If activities exist, user has completed onboarding
+            if (settings.activities && settings.activities.length > 0) {
                 console.log('Settings already exist, skipping setup');
-                
-                // If settings already exist, redirect to main app
                 navigation.replace('MainApp');
                 return;
             }
             
-            // First-time user or incomplete setup, start the setup process
+            // First-time user, start the setup process
             startSetupProcess();
         } catch (error) {
             console.error('Error checking first time user:', error);
@@ -115,12 +107,12 @@ const InitialSetupScreen = ({navigation}) => {
                 throw new Error('Failed to save activities');
             }
             
-            // Move to next step
+            // UPDATED: Skip to step 2 (reminders) instead of step 2 (durations)
             setSetupStep(2);
             
             // Short delay before showing next modal to prevent UI glitches
             setTimeout(() => {
-                setShowDurationModal(true);
+                setShowReminderModal(true);
                 isTransitioning.current = false;
             }, 300);
         } catch (error) {
@@ -133,73 +125,33 @@ const InitialSetupScreen = ({navigation}) => {
         }
     };
 
-    const handleDurationSave = async (durations) => {
-        try {
-            // Mark as transitioning to prevent alerts
-            isTransitioning.current = true;
-            
-            // Hide the duration modal
-            setShowDurationModal(false);
-            
-            // Save durations to settings
-            const success = await deepWorkStore.updateDurations(durations);
-            
-            if (!success) {
-                throw new Error('Failed to save durations');
-            }
-            
-            // Move to next step 
-            setSetupStep(3);
-            
-            // Short delay before showing next modal to prevent UI glitches
-            setTimeout(() => {
-                setShowReminderModal(true); // CHANGED FROM setShowGoalModal
-                isTransitioning.current = false;
-            }, 300);
-        } catch (error) {
-            console.error('Error saving durations:', error);
-            Alert.alert('Error', 'Failed to save durations. Please try again.');
-            
-            // Go back to duration setup
-            setShowDurationModal(true);
-            isTransitioning.current = false;
-        }
-    };
+    // REMOVED: handleDurationSave function entirely
 
-    // NEW FUNCTION: Handle reminder frequency save (replaces handleGoalSave)
-    const handleReminderSave = async (reminderData) => {
+    const handleReminderSave = async (reminderSettings) => {
         try {
-            // Mark as transitioning to prevent alerts
+            // Mark as transitioning
             isTransitioning.current = true;
             
-            // Hide the reminder modal
+            // Hide reminder modal
             setShowReminderModal(false);
             
-            // IMPORTANT CONCEPT: Data transformation
-            // The modal gives us { frequency: 'daily', option: {...} }
-            // We extract what we need for storage
-            const reminderFrequency = reminderData.frequency;
-            
-            // Save reminder frequency to settings
-            const success = await deepWorkStore.updateReminderFrequency(reminderFrequency);
+            // Save reminder settings
+            const success = await deepWorkStore.updateReminderFrequency(reminderSettings.frequency);
             
             if (!success) {
-                throw new Error('Failed to save reminder frequency');
+                throw new Error('Failed to save reminder settings');
             }
             
-            console.log('Reminder frequency saved:', reminderFrequency);
+            // UPDATED: Move to step 3 (was step 4)
+            setSetupStep(3);
             
-            // Setup is complete
-            setSetupComplete(true);
-            setSetupStep(4);
-            
-            // Short delay before showing welcome stats to prevent UI glitches
+            // Show welcome stats
             setTimeout(() => {
                 setShowWelcomeStats(true);
                 isTransitioning.current = false;
             }, 300);
         } catch (error) {
-            console.error('Error saving reminder frequency:', error);
+            console.error('Error saving reminder settings:', error);
             Alert.alert('Error', 'Failed to save reminder settings. Please try again.');
             
             // Go back to reminder setup
@@ -259,47 +211,38 @@ const InitialSetupScreen = ({navigation}) => {
                 onClose={handleModalClose}
                 onSave={handleActivitySave}
                 preventClose={true}
-                // Progress bar props
+                // Progress bar props - UPDATED to show step 1 of 3
                 showProgress={true}
                 currentStep={1}
-                totalSteps={4}
+                totalSteps={3}
                 stepLabels={stepLabels}
             />
-            <DurationSetupModal
-                visible={showDurationModal}
-                onClose={handleModalClose}
-                onSave={handleDurationSave}
-                preventClose={true}
-                // Progress bar props
-                showProgress={true}
-                currentStep={2}
-                totalSteps={4}
-                stepLabels={stepLabels}
-            />
-            {/* UPDATED: Replace GoalSetupModal with ReminderFrequencyModal */}
+            
+            {/* REMOVED: DurationSetupModal completely */}
+            
             <ReminderFrequencyModal
                 visible={showReminderModal}
                 onClose={handleModalClose}
                 onSave={handleReminderSave}
                 preventClose={true}
-                // Progress bar props
+                // Progress bar props - UPDATED to step 2 of 3
                 showProgress={true}
-                currentStep={3}
-                totalSteps={4}
+                currentStep={2}
+                totalSteps={3}
                 stepLabels={stepLabels}
             />
             <WelcomeStatsModal
                 visible={showWelcomeStats}
                 onClose={handleWelcomeStatsClose}
-                // Welcome modal can also show progress (step 4)
+                // Welcome modal - UPDATED to step 3 of 3
                 showProgress={true}
-                currentStep={4}
-                totalSteps={4}
+                currentStep={3}
+                totalSteps={3}
                 stepLabels={stepLabels}
             />
             
-            {/* Fallback loading view if no modals are displayed */}
-            {!showActivityModal && !showDurationModal && !showReminderModal && !showWelcomeStats && !isTransitioning.current && (
+            {/* Fallback loading view - REMOVED showDurationModal check */}
+            {!showActivityModal && !showReminderModal && !showWelcomeStats && !isTransitioning.current && (
                 <View style={styles.centered}>
                     <ActivityIndicator size="large" color="#2563EB" />
                     <Text style={styles.loadingText}>Preparing setup...</Text>

@@ -720,7 +720,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 7,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -738,7 +738,7 @@ const styles = StyleSheet.create({
   },
   
   cardContainer: {
-    borderRadius: 1,        // Changed from 12 to match heat map
+    borderRadius: 7,        // Changed from 12 to match heat map
     borderWidth: 1,         // Changed from 0.5 for better visibility
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,

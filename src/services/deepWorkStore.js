@@ -1,7 +1,6 @@
 // src/services/deepWorkStore.js - UPDATED FOR REMINDER FREQUENCY
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import SessionNotesModal from '../components/modals/SessionNotesModal';
 
 // Storage configuration
 const STORAGE_KEY = '@deep_work_sessions';
@@ -56,6 +55,7 @@ const isValidStorage = (sessions) => {
 
 // UPDATED: Validation function for settings structure with reminder frequency
 // IMPORTANT: This shows how to validate transformed data structures in React Native
+// CHANGED: Updated to accept 'none' instead of 'multiple_daily'
 const isValidSettings = (settings) => {
   return (
     settings &&
@@ -70,10 +70,10 @@ const isValidSettings = (settings) => {
       typeof duration === 'number' && 
       duration > 0
     ) &&
-    // UPDATED: Validate reminder frequency instead of goals
+    // UPDATED: Validate reminder frequency with 'none' option
     // We accept string values that match our expected options
     typeof settings.reminderFrequency === 'string' &&
-    ['multiple_daily', 'daily', 'weekly'].includes(settings.reminderFrequency)
+    ['none', 'daily', 'weekly'].includes(settings.reminderFrequency)
   );
 };
 
@@ -154,31 +154,31 @@ export const deepWorkStore = {
   },
 
   /**
- * Get all stored sessions
- * @returns {Promise<Object>} Object with dates as keys and arrays of sessions as values
- */
-getSessions: async () => {
-  try {
-    const sessions = await AsyncStorage.getItem(STORAGE_KEY);
-    
-    if (!sessions) {
-      log('No sessions found, returning empty object');
-      return {};
-    }
+   * Get all stored sessions
+   * @returns {Promise<Object>} Object with dates as keys and arrays of sessions as values
+   */
+  getSessions: async () => {
+    try {
+      const sessions = await AsyncStorage.getItem(STORAGE_KEY);
+      
+      if (!sessions) {
+        log('No sessions found, returning empty object');
+        return {};
+      }
 
-    const parsed = JSON.parse(sessions);
-    
-    if (!isValidStorage(parsed)) {
-      throw new Error('Invalid sessions data structure');
-    }
+      const parsed = JSON.parse(sessions);
+      
+      if (!isValidStorage(parsed)) {
+        throw new Error('Invalid sessions data structure');
+      }
 
-    log('Retrieved sessions successfully');
-    return parsed;
-  } catch (error) {
-    log('Error getting sessions:', error);
-    throw error;
-  }
-},
+      log('Retrieved sessions successfully');
+      return parsed;
+    } catch (error) {
+      log('Error getting sessions:', error);
+      throw error;
+    }
+  },
 
   /**
    * Update the entire settings object
@@ -239,8 +239,8 @@ getSessions: async () => {
   },
 
   /**
-   * NEW FUNCTION: Update reminder frequency
-   * @param {string} frequency - The reminder frequency ('multiple_daily', 'daily', 'weekly')
+   * UPDATED: Update reminder frequency
+   * @param {string} frequency - The reminder frequency ('none', 'daily', 'weekly')
    * 
    * IMPORTANT CONCEPT: Single responsibility functions
    * This function only handles reminder frequency updates, making it:
@@ -248,11 +248,13 @@ getSessions: async () => {
    * - More reusable  
    * - Less prone to bugs
    * - Following React Native best practices for data layer separation
+   * 
+   * CHANGED: Updated to accept 'none' instead of 'multiple_daily'
    */
   updateReminderFrequency: async (frequency) => {
     try {
-      // Validate input
-      const validFrequencies = ['multiple_daily', 'daily', 'weekly'];
+      // UPDATED: Validate input with 'none' option
+      const validFrequencies = ['none', 'daily', 'weekly'];
       if (!validFrequencies.includes(frequency)) {
         throw new Error(`Invalid reminder frequency: ${frequency}`);
       }
@@ -275,7 +277,7 @@ getSessions: async () => {
   },
 
   /**
-   * NEW FUNCTION: Get current reminder frequency
+   * Get current reminder frequency
    * @returns {Promise<string>} The current reminder frequency setting
    * 
    * INTERVIEW TIP: Getter functions like this demonstrate understanding of:
