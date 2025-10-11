@@ -23,6 +23,7 @@
     "expo-dev-client": "~5.2.4",
     "expo-file-system": "~18.1.10",
     "expo-notifications": "~0.31.2",
+    "expo-sqlite": "~15.2.14",
     "expo-status-bar": "~2.2.3",
     "expo-task-manager": "~13.1.5",
     "expo-updates": "~0.28.13",

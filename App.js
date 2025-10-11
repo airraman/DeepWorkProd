@@ -1,4 +1,4 @@
-// App.js - Production Version with iOS Notification Fix
+// App.js - Production Version with iOS Notification Fix + Database
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -10,6 +10,10 @@ import { Alert, View, Text, Platform, Dimensions, StatusBar } from 'react-native
 import { navigationRef, safeNavigate } from './src/services/navigationService';
 import backgroundTimer from './src/services/backgroundTimer';
 import ErrorBoundary from './src/components/ErrorBoundary';
+
+// DATABASE IMPORTS
+import DatabaseService from './src/services/database/DatabaseService';
+import { testDatabase } from './src/services/database/testDataBase';
 
 // SAFE IMPORT: Only import alarmService if we want to use it
 let alarmService = null;
@@ -42,7 +46,7 @@ const Tab = createBottomTabNavigator();
 const { width, height } = Dimensions.get('window');
 const isTablet = Platform.isPad || (width > 768 && height > 768);
 
-console.log('🔍 Device Info:', {
+console.log('📱 Device Info:', {
   platform: Platform.OS,
   version: Platform.Version,
   isTablet,
@@ -72,10 +76,10 @@ function TabNavigator() {
 // COMPLETE: Updated initializeBackgroundServices function with notification permissions
 const initializeBackgroundServices = async () => {
   try {
-    console.log('🔍 Starting safe background services initialization...');
+    console.log('🚀 Starting safe background services initialization...');
     
     if (Platform.OS === 'ios' && isTablet) {
-      console.log('🔍 iPad detected - using conservative background task setup');
+      console.log('📱 iPad detected - using conservative background task setup');
     }
     
     // STEP 1: Request notification permissions FIRST
@@ -171,7 +175,7 @@ const initializeBackgroundServices = async () => {
       }
     }
     
-    console.log('🔍 Background services initialization completed:', {
+    console.log('🚀 Background services initialization completed:', {
       permissions: permissionsGranted,
       alarmService: alarmInitialized,
       notifications: notificationsConfigured
@@ -180,7 +184,7 @@ const initializeBackgroundServices = async () => {
     // Return true even if some services failed - app should still work
     return true;
   } catch (error) {
-    console.error('🔍 Background services initialization failed:', error);
+    console.error('🚀 Background services initialization failed:', error);
     // Always return true to prevent app crashes
     return true;
   }
@@ -190,20 +194,58 @@ function MainApp() {
   const [notificationSubscription, setNotificationSubscription] = useState(null);
   const [isAppReady, setIsAppReady] = useState(false);
   const [initializationStatus, setInitializationStatus] = useState({
+    database: 'pending',
     backgroundServices: 'pending',
     notifications: 'pending',
     updates: 'pending'
   });
 
   useEffect(() => {
-    console.log('🔍 App.js: useEffect starting...');
+    console.log('🚀 App.js: useEffect starting...');
     
     const initApp = async () => {
       try {
-        console.log('🔍 App initialization starting...');
+        console.log('🚀 App initialization starting...');
+        
+        // STEP 1: Initialize database FIRST (before anything else)
+        try {
+          console.log('💾 Initializing database...');
+          await DatabaseService.init();
+          console.log('✅ Database initialized successfully');
+          
+          // TEMPORARY: Run database test in development
+          if (__DEV__) {
+            setTimeout(async () => {
+              try {
+                await testDatabase();
+              } catch (testError) {
+                console.error('Test error:', testError);
+              }
+            }, 2000);
+          }
+          
+          setInitializationStatus(prev => ({
+            ...prev,
+            database: 'success'
+          }));
+        } catch (dbError) {
+          console.error('❌ Database initialization failed:', dbError);
+          setInitializationStatus(prev => ({
+            ...prev,
+            database: 'failed'
+          }));
+          // Show user-friendly error
+          Alert.alert(
+            'Database Error',
+            'Failed to initialize local storage. Some features may not work properly.',
+            [{ text: 'OK' }]
+          );
+        }
+        
+        // STEP 2: Mark app as ready (UI can render)
         setIsAppReady(true);
         
-        // Initialize background services with proper error handling
+        // STEP 3: Initialize background services with delay (non-blocking)
         setTimeout(async () => {
           try {
             const bgSuccess = await initializeBackgroundServices();
@@ -212,7 +254,7 @@ function MainApp() {
               backgroundServices: bgSuccess ? 'success' : 'failed'
             }));
           } catch (error) {
-            console.error('🔍 Background services error:', error);
+            console.error('🚀 Background services error:', error);
             setInitializationStatus(prev => ({
               ...prev,
               backgroundServices: 'failed'
@@ -222,7 +264,7 @@ function MainApp() {
         }, isTablet ? 3000 : 1500);
         
       } catch (error) {
-        console.error('🔍 Critical app initialization error:', error);
+        console.error('🚀 Critical app initialization error:', error);
         setIsAppReady(true);
       }
     };
@@ -233,7 +275,7 @@ function MainApp() {
     const checkForUpdates = async () => {
       try {
         if (__DEV__) {
-          console.log('🔍 Development mode - skipping update check');
+          console.log('🚀 Development mode - skipping update check');
           setInitializationStatus(prev => ({
             ...prev,
             updates: 'skipped-dev'
@@ -241,7 +283,7 @@ function MainApp() {
           return;
         }
         
-        console.log('🔍 Checking for updates...');
+        console.log('🚀 Checking for updates...');
         const update = await Updates.checkForUpdateAsync();
         
         setInitializationStatus(prev => ({
@@ -250,7 +292,7 @@ function MainApp() {
         }));
         
         if (update.isAvailable) {
-          console.log('🔍 Update available, fetching...');
+          console.log('🚀 Update available, fetching...');
           await Updates.fetchUpdateAsync();
           
           Alert.alert(
@@ -264,7 +306,7 @@ function MainApp() {
                   try {
                     await Updates.reloadAsync();
                   } catch (updateError) {
-                    console.error('🔍 Failed to reload with update:', updateError);
+                    console.error('🚀 Failed to reload with update:', updateError);
                   }
                 }
               }
@@ -272,7 +314,7 @@ function MainApp() {
           );
         }
       } catch (error) {
-        console.log('🔍 Update check failed (non-critical):', error);
+        console.log('🚀 Update check failed (non-critical):', error);
         setInitializationStatus(prev => ({
           ...prev,
           updates: 'failed'
@@ -285,7 +327,7 @@ function MainApp() {
     // Setup notifications with safe alarm handling
     const setupNotifications = async () => {
       try {
-        console.log('🔍 Setting up notification handlers...');
+        console.log('🚀 Setting up notification handlers...');
         
         const subscription = Notifications.addNotificationResponseReceivedListener(response => {
           try {
@@ -312,7 +354,7 @@ function MainApp() {
               handleEndSession();
             }
           } catch (error) {
-            console.error('🔍 Notification response error:', error);
+            console.error('🚀 Notification response error:', error);
           }
         });
         
@@ -323,7 +365,7 @@ function MainApp() {
         }));
         
       } catch (error) {
-        console.error('🔍 Notification setup error:', error);
+        console.error('🚀 Notification setup error:', error);
         setInitializationStatus(prev => ({
           ...prev,
           notifications: 'failed'
@@ -386,12 +428,12 @@ function MainApp() {
     setTimeout(setupNotifications, isTablet ? 4000 : 2000);
     
     return () => {
-      console.log('🔍 App.js: Cleaning up...');
+      console.log('🚀 App.js: Cleaning up...');
       if (notificationSubscription) {
         try {
           notificationSubscription.remove();
         } catch (error) {
-          console.error('🔍 Error removing notification subscription:', error);
+          console.error('🚀 Error removing notification subscription:', error);
         }
       }
     };
@@ -405,7 +447,7 @@ function MainApp() {
         await backgroundTimer.updateTimerPauseState(!sessionData.isPaused);
       }
     } catch (error) {
-      console.error('🔍 Pause/resume error:', error);
+      console.error('🚀 Pause/resume error:', error);
     }
   };
 
@@ -414,7 +456,7 @@ function MainApp() {
       await backgroundTimer.stopTimerNotification();
       safeNavigate('MainApp', { screen: 'Home' });
     } catch (error) {
-      console.error('🔍 End session error:', error);
+      console.error('🚀 End session error:', error);
     }
   };
   
@@ -432,6 +474,11 @@ function MainApp() {
         </Text>
         <Text style={{ fontSize: 14, color: '#666', textAlign: 'center' }}>
           {isTablet ? 'Optimizing for iPad...' : 'Preparing your workspace...'}
+        </Text>
+        <Text style={{ fontSize: 12, color: '#999', marginTop: 10 }}>
+          {initializationStatus.database === 'pending' && 'Initializing database...'}
+          {initializationStatus.database === 'success' && '✅ Database ready'}
+          {initializationStatus.database === 'failed' && '⚠️ Database error'}
         </Text>
       </View>
     );
@@ -504,7 +551,7 @@ const SafeApp = () => {
   try {
     return <MainApp />;
   } catch (error) {
-    console.error('🔍 Critical app error:', error);
+    console.error('🚀 Critical app error:', error);
     
     return (
       <View style={{

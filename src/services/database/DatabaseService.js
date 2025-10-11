@@ -1,65 +1,57 @@
-// DatabaseService.js
-import * as SQLite from 'expo-sqlite'; // or your sqlite import
-import {
-  CREATE_SESSIONS_TABLE,
-  CREATE_INSIGHTS_CACHE_TABLE,
-  CREATE_SESSIONS_INDEXES,
-  CREATE_INSIGHTS_INDEXES,
-  SCHEMA_VERSION
-} from './schema';
+// DatabaseService.js - AsyncStorage Version (Temporary)
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 class DatabaseService {
   constructor() {
-    this.db = null;
+    this.initialized = false;
   }
 
-  // Open database and run migrations
   async init() {
     try {
-      // Open or create database
-      this.db = await SQLite.openDatabaseAsync('focus_sessions.db');
+      console.log('💾 Using AsyncStorage (temporary SQLite replacement)...');
       
-      console.log('📦 Database opened successfully');
+      // Initialize storage keys if they don't exist
+      const sessions = await AsyncStorage.getItem('sessions');
+      if (!sessions) {
+        await AsyncStorage.setItem('sessions', JSON.stringify([]));
+        console.log('📦 Initialized sessions storage');
+      }
       
-      // Run migrations
-      await this.runMigrations();
+      const insights = await AsyncStorage.getItem('insights_cache');
+      if (!insights) {
+        await AsyncStorage.setItem('insights_cache', JSON.stringify([]));
+        console.log('📦 Initialized insights cache storage');
+      }
       
-      console.log('✅ Database initialized');
+      this.initialized = true;
+      console.log('📦 Storage initialized successfully');
+      console.log('✅ Database initialized (AsyncStorage mode)');
+      
       return true;
     } catch (error) {
-      console.error('❌ Database init failed:', error);
+      console.error('❌ Storage init failed:', error);
       throw error;
     }
   }
 
-  async runMigrations() {
-    // Create tables
-    await this.db.execAsync(CREATE_SESSIONS_TABLE);
-    await this.db.execAsync(CREATE_INSIGHTS_CACHE_TABLE);
-    
-    // Create indexes
-    await this.db.execAsync(CREATE_SESSIONS_INDEXES);
-    await this.db.execAsync(CREATE_INSIGHTS_INDEXES);
-    
-    console.log('📊 Tables and indexes created');
-  }
-
-  // Get database instance
   getDB() {
-    if (!this.db) {
+    if (!this.initialized) {
       throw new Error('Database not initialized. Call init() first.');
     }
-    return this.db;
+    // Return self for compatibility
+    return this;
   }
 
-  // Utility: Close database (for testing/cleanup)
   async close() {
-    if (this.db) {
-      await this.db.closeAsync();
-      this.db = null;
-    }
+    this.initialized = false;
+    console.log('💾 Storage closed');
+  }
+
+  // Utility: Clear all data (for testing)
+  async clearAll() {
+    await AsyncStorage.multiRemove(['sessions', 'insights_cache']);
+    console.log('🗑️ All storage cleared');
   }
 }
 
-// Export singleton instance
 export default new DatabaseService();

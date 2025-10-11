@@ -1,53 +1,82 @@
-// InsightCacheRepository.js
+// InsightCacheRepository.js - AsyncStorage Version (Temporary)
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import DatabaseService from './DatabaseService';
 
 class InsightCacheRepository {
   
-  // Save or update a cached insight
+  // Save or update a cached insight (upsert)
   async upsert(insightData) {
-    const db = DatabaseService.getDB();
+    DatabaseService.getDB();
     
-    // SQLite doesn't have UPSERT in older versions, so we use INSERT OR REPLACE
-    const result = await db.runAsync(
-      `INSERT OR REPLACE INTO insights_cache 
-       (insight_type, generated_at, data_hash, insight_text, time_period_start, time_period_end)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        insightData.insight_type,
-        Date.now(),
-        insightData.data_hash,
-        insightData.insight_text,
-        insightData.time_period_start,
-        insightData.time_period_end
-      ]
+    const cacheJson = await AsyncStorage.getItem('insights_cache');
+    const cache = JSON.parse(cacheJson || '[]');
+    
+    // Find existing insight with same type and time period
+    const existingIndex = cache.findIndex(c => 
+      c.insight_type === insightData.insight_type &&
+      c.time_period_start === insightData.time_period_start &&
+      c.time_period_end === insightData.time_period_end
     );
     
-    return result.lastInsertRowId;
+    const insight = {
+      id: existingIndex >= 0 ? cache[existingIndex].id : (cache.length > 0 ? Math.max(...cache.map(c => c.id)) + 1 : 1),
+      insight_type: insightData.insight_type,
+      generated_at: Date.now(),
+      data_hash: insightData.data_hash,
+      insight_text: insightData.insight_text,
+      time_period_start: insightData.time_period_start,
+      time_period_end: insightData.time_period_end
+    };
+    
+    // Update existing or add new
+    if (existingIndex >= 0) {
+      cache[existingIndex] = insight;
+    } else {
+      cache.push(insight);
+    }
+    
+    await AsyncStorage.setItem('insights_cache', JSON.stringify(cache));
+    return insight.id;
   }
 
   // Get cached insight by type and time period
   async get(insightType, timePeriodStart, timePeriodEnd) {
-    const db = DatabaseService.getDB();
+    DatabaseService.getDB();
     
-    const insight = await db.getFirstAsync(
-      `SELECT * FROM insights_cache 
-       WHERE insight_type = ? 
-       AND time_period_start = ? 
-       AND time_period_end = ?`,
-      [insightType, timePeriodStart, timePeriodEnd]
+    const cacheJson = await AsyncStorage.getItem('insights_cache');
+    const cache = JSON.parse(cacheJson || '[]');
+    
+    const insight = cache.find(c => 
+      c.insight_type === insightType &&
+      c.time_period_start === timePeriodStart &&
+      c.time_period_end === timePeriodEnd
     );
     
     return insight || null;
   }
 
-  // Delete old insights (optional cleanup)
+  // Delete old insights (cleanup)
   async deleteOlderThan(timestamp) {
-    const db = DatabaseService.getDB();
+    DatabaseService.getDB();
     
-    await db.runAsync(
-      `DELETE FROM insights_cache WHERE generated_at < ?`,
-      [timestamp]
-    );
+    const cacheJson = await AsyncStorage.getItem('insights_cache');
+    const cache = JSON.parse(cacheJson || '[]');
+    
+    const filtered = cache.filter(c => c.generated_at >= timestamp);
+    await AsyncStorage.setItem('insights_cache', JSON.stringify(filtered));
+    
+    return cache.length - filtered.length; // Return number deleted
+  }
+
+  // Utility: Get all cached insights (for debugging)
+  async getAll() {
+    const cacheJson = await AsyncStorage.getItem('insights_cache');
+    return JSON.parse(cacheJson || '[]');
+  }
+
+  // Utility: Clear all cache (for testing)
+  async deleteAll() {
+    await AsyncStorage.setItem('insights_cache', JSON.stringify([]));
   }
 }
 

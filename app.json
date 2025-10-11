@@ -26,15 +26,16 @@
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "15.1", 
+            "deploymentTarget": "15.1",
             "newArchEnabled": false
           }
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "assets": [
       "./assets/alarm.mp3",
-      "./assets/lofi.mp3", 
+      "./assets/lofi.mp3",
       "./assets/whitenoise.mp3"
     ],
     "assetBundlePatterns": [
