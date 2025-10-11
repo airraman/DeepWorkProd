@@ -13,7 +13,7 @@ import ErrorBoundary from './src/components/ErrorBoundary';
 
 // DATABASE IMPORTS
 import DatabaseService from './src/services/database/DatabaseService';
-import { testDatabase } from './src/services/database/testDataBase';
+// import { testDatabase } from './src/services/database/testDatabase';
 
 // SAFE IMPORT: Only import alarmService if we want to use it
 let alarmService = null;
@@ -213,16 +213,16 @@ function MainApp() {
           await DatabaseService.init();
           console.log('✅ Database initialized successfully');
           
-          // TEMPORARY: Run database test in development
-          if (__DEV__) {
-            setTimeout(async () => {
-              try {
-                await testDatabase();
-              } catch (testError) {
-                console.error('Test error:', testError);
-              }
-            }, 2000);
-          }
+          // // TEMPORARY: Run database test in development
+          // if (__DEV__) {
+          //   setTimeout(async () => {
+          //     try {
+          //       await testDatabase();
+          //     } catch (testError) {
+          //       console.error('Test error:', testError);
+          //     }
+          //   }, 2000);
+          // }
           
           setInitializationStatus(prev => ({
             ...prev,

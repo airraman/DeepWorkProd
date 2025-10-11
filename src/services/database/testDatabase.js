@@ -68,12 +68,13 @@ export async function testDatabase() {
     
     // Test 7: Cache an insight
     console.log('Test 7: Caching an insight...');
+    const now = Date.now(); // FIXED: Store timestamp to reuse
     await InsightCacheRepository.upsert({
       insight_type: 'weekly',
       data_hash: 'test_hash_abc123',
       insight_text: 'You had a productive week! 3 sessions totaling 3.5 hours of focused work.',
       time_period_start: oneWeekAgo,
-      time_period_end: Date.now()
+      time_period_end: now // FIXED: Use stored value
     });
     console.log('✅ Test 7 passed: Insight cached\n');
     
@@ -82,8 +83,13 @@ export async function testDatabase() {
     const cachedInsight = await InsightCacheRepository.get(
       'weekly',
       oneWeekAgo,
-      Date.now()
+      now // FIXED: Use same stored value
     );
+    
+    if (!cachedInsight) {
+      throw new Error('Cached insight not found - cache retrieval failed');
+    }
+    
     console.log('✅ Test 8 passed: Retrieved insight:');
     console.log(`  Type: ${cachedInsight.insight_type}`);
     console.log(`  Text: ${cachedInsight.insight_text}`);
@@ -96,13 +102,18 @@ export async function testDatabase() {
       data_hash: 'test_hash_xyz789', // Different hash
       insight_text: 'Updated insight: Great progress this week!',
       time_period_start: oneWeekAgo,
-      time_period_end: Date.now()
+      time_period_end: now // FIXED: Use same stored value
     });
     const updatedInsight = await InsightCacheRepository.get(
       'weekly',
       oneWeekAgo,
-      Date.now()
+      now // FIXED: Use same stored value
     );
+    
+    if (!updatedInsight) {
+      throw new Error('Updated insight not found - cache update failed');
+    }
+    
     console.log('✅ Test 9 passed: Insight updated');
     console.log(`  New hash: ${updatedInsight.data_hash}`);
     console.log(`  New text: ${updatedInsight.insight_text}\n`);
