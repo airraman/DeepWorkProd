@@ -1,4 +1,4 @@
-// metro.config.js - FIXED: Removed problematic minifier reference
+// metro.config.js
 const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
@@ -12,11 +12,10 @@ config.server = {
   port: 8081,
 };
 
-// FIXED: Use default Metro transformer (removed minifierPath)
+// UPDATED: Enable require.context for OpenAI SDK
 config.transformer = {
   ...config.transformer,
-  // Disable experimental features for stability
-  unstable_allowRequireContext: false,
+  unstable_allowRequireContext: true,  // ✅ Changed to TRUE
   experimentalImportSupport: false,
 };
 
