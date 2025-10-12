@@ -62,6 +62,7 @@ const DevToolsScreen = ({ navigation }) => {
       setLoading(false);
     }
   };
+
   const handleClearData = async () => {
     Alert.alert(
       'Clear All Data?',
@@ -94,7 +95,6 @@ const DevToolsScreen = ({ navigation }) => {
     );
   };
 
-  // NEW: Debug data function
   const handleDebugData = async () => {
     try {
       setLoading(true);
@@ -110,7 +110,6 @@ const DevToolsScreen = ({ navigation }) => {
       if (dates.length > 0) {
         console.log('Date range:', dates[0], 'to', dates[dates.length - 1]);
         
-        // Show sample session from middle of data
         const middleIndex = Math.floor(dates.length / 2);
         const sampleDate = dates[middleIndex];
         const sampleSessions = sessions[sampleDate];
@@ -120,7 +119,6 @@ const DevToolsScreen = ({ navigation }) => {
         console.log('Sample session structure:');
         console.log(JSON.stringify(sampleSessions[0], null, 2));
         
-        // Count total sessions
         let totalSessions = 0;
         let totalMinutes = 0;
         Object.values(sessions).forEach(daySessions => {
@@ -134,7 +132,6 @@ const DevToolsScreen = ({ navigation }) => {
         console.log(`Total time: ${(totalMinutes / 60).toFixed(1)} hours`);
         console.log(`Average per day: ${(totalMinutes / dates.length / 60).toFixed(1)} hours`);
         
-        // Check for required fields
         const hasTimestamp = sampleSessions[0].timestamp !== undefined;
         const hasActivity = sampleSessions[0].activity !== undefined;
         const hasDuration = sampleSessions[0].duration !== undefined;
@@ -208,6 +205,70 @@ const DevToolsScreen = ({ navigation }) => {
     }
   };
 
+  const handleDebugRendering = async () => {
+    try {
+      setLoading(true);
+      const { deepWorkStore } = require('../services/deepWorkStore');
+      const sessions = await deepWorkStore.getSessions();
+      const settings = await deepWorkStore.getSettings();
+      
+      console.log('\n🔍 ===== RENDERING DEBUG =====');
+      
+      // Get October dates
+      const octoberDates = Object.keys(sessions)
+        .filter(date => date.startsWith('2025-10'))
+        .sort();
+      
+      console.log('October dates with sessions:', octoberDates);
+      
+      if (octoberDates.length > 0) {
+        const sampleDate = octoberDates[0];
+        const sampleSessions = sessions[sampleDate];
+        
+        console.log(`\n📅 Sample date: ${sampleDate}`);
+        console.log(`Sessions: ${sampleSessions.length}`);
+        console.log('Session activities:', sampleSessions.map(s => s.activity));
+        
+        console.log('\n🎨 Available activities in settings:');
+        settings.activities.forEach(a => {
+          console.log(`  - ${a.id}: ${a.name} (${a.color})`);
+        });
+        
+        console.log('\n🔍 Activity matching check:');
+        sampleSessions.forEach((session, i) => {
+          const match = settings.activities.find(a => a.id === session.activity);
+          console.log(`  Session ${i}: "${session.activity}" → ${match ? `✅ ${match.color}` : '❌ NO MATCH'}`);
+        });
+      } else {
+        console.log('⚠️ No October sessions found!');
+        
+        // Check all dates
+        const allDates = Object.keys(sessions).sort();
+        console.log('\nAll dates with data:', allDates);
+        
+        if (allDates.length > 0) {
+          const sampleDate = allDates[0];
+          const sampleSessions = sessions[sampleDate];
+          
+          console.log(`\n📅 Sample from ${sampleDate}:`);
+          console.log('Session activities:', sampleSessions.map(s => s.activity));
+        }
+      }
+      
+      console.log('=====================================\n');
+      
+      Alert.alert(
+        'Rendering Debug',
+        `October dates: ${octoberDates.length}\n\nCheck console for details`
+      );
+    } catch (error) {
+      console.error('Debug error:', error);
+      Alert.alert('Error', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -241,12 +302,20 @@ const DevToolsScreen = ({ navigation }) => {
           </TouchableOpacity>
 
           <TouchableOpacity
-  style={[styles.button, { backgroundColor: '#f59e0b' }]}
-  onPress={handleInspectStructure}
-  disabled={loading}
->
-  <Text style={styles.buttonText}>🔬 Inspect Structure</Text>
-</TouchableOpacity>
+            style={[styles.button, { backgroundColor: '#f59e0b' }]}
+            onPress={handleInspectStructure}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>🔬 Inspect Structure</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#ec4899' }]}
+            onPress={handleDebugRendering}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>🎨 Debug Rendering</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.button, { backgroundColor: '#ef4444' }]}

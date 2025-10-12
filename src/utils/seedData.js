@@ -2,7 +2,15 @@
 
 import { deepWorkStore } from '../services/deepWorkStore';
 
-const ACTIVITIES = ['Deep Work', 'Reading', 'Learning', 'Writing', 'Planning'];
+const ACTIVITY_MAP = {
+  'Deep Work': 'deep-work',
+  'Reading': 'reading',
+  'Learning': 'learning',
+  'Writing': 'writing',
+  'Planning': 'planning'
+};
+
+const ACTIVITIES = Object.keys(ACTIVITY_MAP);
 const MUSIC_CHOICES = ['lofi', 'classical', 'ambient', 'none'];
 const SAMPLE_NOTES = [
   'Worked on React Native project',
@@ -82,21 +90,29 @@ export async function seedData() {
   console.log('🌱 Starting data seed...\n');
   
   try {
-    const settings = await deepWorkStore.getSettings();
-    if (!settings.activities || settings.activities.length === 0) {
-      console.log('📝 Creating default activities...');
-      await deepWorkStore.updateActivities([
-        { id: 'deep-work', name: 'Deep Work', color: '#2563eb', icon: '💻' },
-        { id: 'reading', name: 'Reading', color: '#10b981', icon: '📚' },
-        { id: 'learning', name: 'Learning', color: '#8b5cf6', icon: '🎓' },
-        { id: 'writing', name: 'Writing', color: '#f59e0b', icon: '✍️' },
-        { id: 'planning', name: 'Planning', color: '#06b6d4', icon: '📋' },
-      ]);
-    }
+    // Import AsyncStorage for direct write
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    
+    // STEP 1: Force recreate activities
+    console.log('📝 Creating/updating activities...');
+    await deepWorkStore.updateActivities([
+      { id: 'deep-work', name: 'Deep Work', color: '#2563eb', icon: '💻' },
+      { id: 'reading', name: 'Reading', color: '#10b981', icon: '📚' },
+      { id: 'learning', name: 'Learning', color: '#8b5cf6', icon: '🎓' },
+      { id: 'writing', name: 'Writing', color: '#f59e0b', icon: '✍️' },
+      { id: 'planning', name: 'Planning', color: '#06b6d4', icon: '📋' },
+    ]);
+    
+    // STEP 2: Clear existing sessions
+    console.log('🗑️ Clearing old sessions...');
+    await deepWorkStore.clearSessions();
     
     let totalSessionsCreated = 0;
     let totalMinutes = 0;
     let daysWithSessions = 0;
+    
+    // STEP 3: Build all sessions in memory first
+    const allSessions = {}; // Will be organized by date
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -119,34 +135,61 @@ export async function seedData() {
       daysWithSessions++;
       const dateString = date.toISOString().split('T')[0];
       
-      console.log(`Adding ${numSessions} session(s) for ${dateString}`);
+      // Initialize array for this date if it doesn't exist
+      if (!allSessions[dateString]) {
+        allSessions[dateString] = [];
+      }
       
       // Create sessions for this day
       for (let i = 0; i < numSessions; i++) {
         const session = generateSession(dayOfWeek);
         
-        // Create timestamp for this specific session
+        // Create timestamp with the correct DATE
         const hourOffset = 9 + (i * 3);
         const sessionDate = new Date(date);
         sessionDate.setHours(hourOffset, 0, 0, 0);
         const timestamp = sessionDate.getTime();
         
-        // Simple session data - just what addSession needs
+        // Build session object matching deepWorkStore structure
         const sessionData = {
-          activity: session.activity,
-          duration: session.duration,
+          id: `${dateString}-${timestamp}`,
+          date: dateString, // Explicit date field
+          activity: ACTIVITY_MAP[session.activity],
+          duration: parseInt(session.duration),
           musicChoice: session.musicChoice,
           notes: session.notes || '',
-          timestamp: timestamp, // This is what addSession uses for the date
+          timestamp: timestamp,
+          completedAt: new Date(timestamp).toISOString(),
+          syncStatus: 'synced',
+          metadata: {
+            appVersion: '1.0.0',
+            created: timestamp,
+            modified: timestamp
+          }
         };
         
-        // Use the standard addSession method
-        await deepWorkStore.addSession(sessionData);
+        allSessions[dateString].push(sessionData);
         
         totalSessionsCreated++;
         totalMinutes += session.duration;
       }
+      
+      // Log progress every 10 days
+      if (daysWithSessions % 10 === 0) {
+        console.log(`✓ ${daysWithSessions} days generated...`);
+      }
     }
+    
+    // STEP 4: Write all sessions to storage at once
+    console.log('\n💾 Writing sessions to storage...');
+    await AsyncStorage.setItem('@deep_work_sessions', JSON.stringify(allSessions));
+    
+    // STEP 5: Verify the write
+    const verification = await AsyncStorage.getItem('@deep_work_sessions');
+    const verifiedSessions = JSON.parse(verification);
+    const verifiedDateCount = Object.keys(verifiedSessions).length;
+    
+    console.log(`✅ Verified: ${verifiedDateCount} dates written to storage`);
     
     console.log('\n✅ Seed complete!');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -179,23 +222,27 @@ export async function clearSeedData() {
   console.log('🗑️  Clearing all session data...');
   
   try {
-    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const { deepWorkStore } = require('../services/deepWorkStore');
+    const success = await deepWorkStore.clearSessions();
     
-    // Method 1: Set to empty object
-    await AsyncStorage.setItem('sessions', JSON.stringify({}));
-    
-    // Method 2: Also try removing the key entirely
-    await AsyncStorage.removeItem('sessions');
-    
-    // Method 3: Re-initialize with empty
-    await AsyncStorage.setItem('sessions', JSON.stringify({}));
-    
-    console.log('✅ Storage cleared using multiple methods');
-    console.log('⚠️  YOU MUST RESTART THE APP for changes to take effect');
-    
-    return { success: true };
+    if (success) {
+      console.log('✅ All session data cleared using deepWorkStore');
+      console.log('⚠️  RESTART APP to see changes');
+      return { success: true };
+    } else {
+      throw new Error('Clear operation returned false');
+    }
   } catch (error) {
     console.error('❌ Clear failed:', error);
-    throw error;
+    
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      await AsyncStorage.setItem('@deep_work_sessions', JSON.stringify({}));
+      console.log('✅ Cleared using fallback method');
+      return { success: true };
+    } catch (fallbackError) {
+      console.error('❌ Fallback also failed:', fallbackError);
+      throw fallbackError;
+    }
   }
 }
