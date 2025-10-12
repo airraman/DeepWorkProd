@@ -62,11 +62,10 @@ const DevToolsScreen = ({ navigation }) => {
       setLoading(false);
     }
   };
-
   const handleClearData = async () => {
     Alert.alert(
       'Clear All Data?',
-      'This will delete all session data. This cannot be undone.',
+      'This will delete all session data. You MUST restart the app after.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -78,7 +77,12 @@ const DevToolsScreen = ({ navigation }) => {
               await clearSeedData();
               setResult(null);
               setInsight(null);
-              Alert.alert('Cleared', 'All data has been removed');
+              
+              Alert.alert(
+                '✅ Data Cleared!', 
+                'Please RESTART the app now:\n\n1. Press Ctrl+C in terminal\n2. Run: npx expo start\n3. Reopen app',
+                [{ text: 'OK' }]
+              );
             } catch (error) {
               Alert.alert('Error', error.message);
             } finally {
@@ -162,6 +166,48 @@ const DevToolsScreen = ({ navigation }) => {
     }
   };
 
+  const handleInspectStructure = async () => {
+    try {
+      setLoading(true);
+      
+      const { deepWorkStore } = require('../services/deepWorkStore');
+      
+      console.log('\n🔬 ===== STRUCTURE INSPECTION =====');
+      console.log('Available methods:', Object.keys(deepWorkStore));
+      
+      const sessions = await deepWorkStore.getSessions();
+      const dateKeys = Object.keys(sessions);
+      
+      console.log('\nTotal date keys:', dateKeys.length);
+      console.log('First 10 dates:', dateKeys.sort().slice(0, 10));
+      
+      if (dateKeys.length > 0) {
+        const firstDate = dateKeys.sort()[0];
+        const lastDate = dateKeys.sort()[dateKeys.length - 1];
+        
+        console.log('\nDate range:', firstDate, 'to', lastDate);
+        console.log(`Sessions on ${firstDate}:`, sessions[firstDate].length);
+        console.log('\nFirst session structure:');
+        console.log(JSON.stringify(sessions[firstDate][0], null, 2));
+      }
+      
+      console.log('=====================================\n');
+      
+      Alert.alert(
+        'Structure Inspected',
+        `Date keys: ${dateKeys.length}\n` +
+        `Methods: ${Object.keys(deepWorkStore).length}\n\n` +
+        'Check console for details'
+      );
+      
+    } catch (error) {
+      console.error('❌ Inspection error:', error);
+      Alert.alert('Error', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -193,6 +239,14 @@ const DevToolsScreen = ({ navigation }) => {
           >
             <Text style={styles.buttonText}>🔍 Debug Data</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+  style={[styles.button, { backgroundColor: '#f59e0b' }]}
+  onPress={handleInspectStructure}
+  disabled={loading}
+>
+  <Text style={styles.buttonText}>🔬 Inspect Structure</Text>
+</TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.button, { backgroundColor: '#ef4444' }]}

@@ -107,7 +107,7 @@ export async function seedData() {
     for (let daysAgo = 89; daysAgo >= 0; daysAgo--) {
       const date = new Date(today);
       date.setDate(today.getDate() - daysAgo);
-      date.setHours(0, 0, 0, 0); // ✅ CRITICAL: Reset to start of day
+      date.setHours(0, 0, 0, 0);
       
       const dayOfWeek = date.getDay();
       const numSessions = getSessionsForDay(dayOfWeek);
@@ -125,50 +125,26 @@ export async function seedData() {
       for (let i = 0; i < numSessions; i++) {
         const session = generateSession(dayOfWeek);
         
-        // Create timestamp - hours spread throughout the day
+        // Create timestamp for this specific session
         const hourOffset = 9 + (i * 3);
         const sessionDate = new Date(date);
         sessionDate.setHours(hourOffset, 0, 0, 0);
         const timestamp = sessionDate.getTime();
         
-        // ✅ KEY FIX: Include BOTH date string AND timestamp
+        // Simple session data - just what addSession needs
         const sessionData = {
-          id: `${dateString}-${timestamp}`, // ✅ Unique ID
-          date: dateString, // ✅ CRITICAL: Explicit date field
           activity: session.activity,
           duration: session.duration,
           musicChoice: session.musicChoice,
           notes: session.notes || '',
-          timestamp: timestamp, // ✅ For sorting within a day
-          completedAt: new Date(timestamp).toISOString(), // ✅ ISO format
-          syncStatus: 'synced',
-          metadata: {
-            appVersion: '1.1.0',
-            created: timestamp,
-            modified: timestamp,
-          },
+          timestamp: timestamp, // This is what addSession uses for the date
         };
         
-        // Use the raw AsyncStorage method directly for better control
-        try {
-          const existingSessions = await deepWorkStore.getSessions();
-          
-          // Ensure date key exists
-          if (!existingSessions[dateString]) {
-            existingSessions[dateString] = [];
-          }
-          
-          // Add session to correct date
-          existingSessions[dateString].push(sessionData);
-          
-          // Save back to storage
-          await deepWorkStore.updateSessions(existingSessions);
-          
-          totalSessionsCreated++;
-          totalMinutes += session.duration;
-        } catch (addError) {
-          console.error(`Failed to add session for ${dateString}:`, addError);
-        }
+        // Use the standard addSession method
+        await deepWorkStore.addSession(sessionData);
+        
+        totalSessionsCreated++;
+        totalMinutes += session.duration;
       }
     }
     
@@ -203,9 +179,19 @@ export async function clearSeedData() {
   console.log('🗑️  Clearing all session data...');
   
   try {
-    // Clear all sessions
-    await deepWorkStore.updateSessions({});
-    console.log('✅ All session data cleared');
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    
+    // Method 1: Set to empty object
+    await AsyncStorage.setItem('sessions', JSON.stringify({}));
+    
+    // Method 2: Also try removing the key entirely
+    await AsyncStorage.removeItem('sessions');
+    
+    // Method 3: Re-initialize with empty
+    await AsyncStorage.setItem('sessions', JSON.stringify({}));
+    
+    console.log('✅ Storage cleared using multiple methods');
+    console.log('⚠️  YOU MUST RESTART THE APP for changes to take effect');
     
     return { success: true };
   } catch (error) {

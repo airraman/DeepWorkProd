@@ -1,87 +1,91 @@
-// SessionRepository.js - AsyncStorage Version (Temporary)
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import DatabaseService from './DatabaseService';
+// src/services/database/SessionRepository.js
+
+import { deepWorkStore } from '../deepWorkStore';
 
 class SessionRepository {
   
-  // Insert a new session
-  async create(sessionData) {
-    // Ensure DB is initialized
-    DatabaseService.getDB();
-    
-    // Get existing sessions
-    const sessionsJson = await AsyncStorage.getItem('sessions');
-    const sessions = JSON.parse(sessionsJson || '[]');
-    
-    // Create new session with auto-increment ID
-    const newSession = {
-      id: sessions.length > 0 ? Math.max(...sessions.map(s => s.id)) + 1 : 1,
-      activity_type: sessionData.activity_type,
-      duration: sessionData.duration,
-      start_time: sessionData.start_time,
-      end_time: sessionData.end_time,
-      description: sessionData.description || null,
-      created_at: Date.now()
-    };
-    
-    // Add to array
-    sessions.push(newSession);
-    
-    // Save back to storage
-    await AsyncStorage.setItem('sessions', JSON.stringify(sessions));
-    
-    return newSession.id;
-  }
-
-  // Get sessions within a time range
+  /**
+   * Get sessions by date range
+   * Converts date-keyed object to flat array
+   * 
+   * @param {number} startTime - Start timestamp
+   * @param {number} endTime - End timestamp
+   * @returns {Promise<Array>} - Flat array of sessions
+   */
   async getSessionsByDateRange(startTime, endTime) {
-    DatabaseService.getDB();
-    
-    const sessionsJson = await AsyncStorage.getItem('sessions');
-    const sessions = JSON.parse(sessionsJson || '[]');
-    
-    return sessions
-      .filter(s => s.created_at >= startTime && s.created_at <= endTime)
-      .sort((a, b) => b.created_at - a.created_at); // DESC order
+    try {
+      // Get all sessions from deepWorkStore (returns date-keyed object)
+      const allSessions = await deepWorkStore.getSessions();
+      
+      const flatSessions = [];
+      
+      // Convert object to array and filter by date range
+      Object.entries(allSessions).forEach(([dateString, sessions]) => {
+        // Parse the date string to timestamp
+        const dateTimestamp = new Date(dateString).getTime();
+        
+        // Check if this date is in range
+        if (dateTimestamp >= startTime && dateTimestamp <= endTime) {
+          // Add all sessions from this date
+          sessions.forEach(session => {
+            flatSessions.push({
+              id: session.id,
+              activity_type: session.activity, // Convert to snake_case for consistency
+              duration: session.duration,
+              start_time: session.timestamp,
+              end_time: session.timestamp + (session.duration * 60 * 1000),
+              description: session.notes || null,
+              created_at: session.timestamp,
+            });
+          });
+        }
+      });
+      
+      console.log(`[SessionRepository] Found ${flatSessions.length} sessions in range`);
+      
+      return flatSessions;
+      
+    } catch (error) {
+      console.error('[SessionRepository] Error getting sessions:', error);
+      return [];
+    }
   }
-
-  // Get sessions by activity type and date range
+  
+  /**
+   * Get sessions by activity and date range
+   */
   async getSessionsByActivityAndDateRange(activityType, startTime, endTime) {
-    DatabaseService.getDB();
-    
-    const sessionsJson = await AsyncStorage.getItem('sessions');
-    const sessions = JSON.parse(sessionsJson || '[]');
-    
-    return sessions
-      .filter(s => 
-        s.activity_type === activityType &&
-        s.created_at >= startTime && 
-        s.created_at <= endTime
-      )
-      .sort((a, b) => b.created_at - a.created_at);
+    const allSessions = await this.getSessionsByDateRange(startTime, endTime);
+    return allSessions.filter(s => s.activity_type === activityType);
   }
-
-  // Get all unique activity types
+  
+  /**
+   * Create a new session
+   */
+  async create(sessionData) {
+    try {
+      await deepWorkStore.addSession({
+        activity: sessionData.activity_type,
+        duration: sessionData.duration / 60, // Convert seconds to minutes
+        timestamp: sessionData.start_time,
+        notes: sessionData.description || '',
+        musicChoice: 'none',
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('[SessionRepository] Error creating session:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get all unique activity types
+   */
   async getActivityTypes() {
-    DatabaseService.getDB();
-    
-    const sessionsJson = await AsyncStorage.getItem('sessions');
-    const sessions = JSON.parse(sessionsJson || '[]');
-    
-    // Get unique activity types
-    const types = [...new Set(sessions.map(s => s.activity_type))];
-    return types.sort();
-  }
-
-  // Utility: Get all sessions (for debugging)
-  async getAll() {
-    const sessionsJson = await AsyncStorage.getItem('sessions');
-    return JSON.parse(sessionsJson || '[]');
-  }
-
-  // Utility: Delete all sessions (for testing)
-  async deleteAll() {
-    await AsyncStorage.setItem('sessions', JSON.stringify([]));
+    const allSessions = await this.getSessionsByDateRange(0, Date.now());
+    const types = new Set(allSessions.map(s => s.activity_type));
+    return Array.from(types);
   }
 }
 
