@@ -40,6 +40,17 @@ export function getStartOfDay(timestamp = Date.now()) {
     date.setHours(0, 0, 0, 0);
     return date.getTime();
   }
+
+  /**
+ * Get a date X days ago from now
+ * @param {number} daysAgo - Number of days to go back
+ * @returns {Date} - Date object X days ago
+ */
+export function getDateDaysAgo(daysAgo) {
+    const date = new Date();
+    date.setDate(date.getDate() - daysAgo);
+    return date;
+  }
   
   /**
    * Get date range for a specific period

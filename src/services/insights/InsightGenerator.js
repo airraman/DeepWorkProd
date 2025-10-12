@@ -1,8 +1,8 @@
 // src/services/insights/InsightGenerator.js
 
-import { SessionRepository } from '../database/SessionRepository';
-import { InsightCacheRepository } from '../database/InsightCacheRepository';
-import { DataAggregator } from './DataAggregator';
+import SessionRepository from '../database/SessionRepository';
+import InsightCacheRepository from '../database/InsightCacheRepository';
+import DataAggregator from './DataAggregator';
 import { CacheManager } from './CacheManager';
 import { generateDataHash } from '../../utils/hashHelper';
 import { 
@@ -11,6 +11,9 @@ import {
   getStartOfMonth,
   getDateDaysAgo 
 } from '../../utils/dateHelpers';
+// Session 4: Add OpenAI imports
+import OpenAIService from './OpenAIService';
+import PromptBuilder from './PromptBuilder';
 
 /**
  * InsightGenerator - Orchestrates the insight generation flow
@@ -18,7 +21,7 @@ import {
  * Responsibilities:
  * 1. Load relevant sessions
  * 2. Check cache validity
- * 3. Coordinate generation (placeholder for OpenAI - Session 4)
+ * 3. Coordinate generation with OpenAI
  * 4. Persist results
  * 
  * Pattern: Service Layer / Orchestrator
@@ -28,9 +31,9 @@ import {
 
 export class InsightGenerator {
   constructor() {
-    this.sessionRepo = new SessionRepository();
-    this.cacheRepo = new InsightCacheRepository();
-    this.aggregator = new DataAggregator();
+    this.sessionRepo = SessionRepository;
+    this.cacheRepo = InsightCacheRepository;
+    this.aggregator = DataAggregator;
   }
 
   /**
@@ -55,7 +58,7 @@ export class InsightGenerator {
       const timePeriod = this._getTimePeriod(insightType, referenceDate, activityType);
 
       // Step 2: Load sessions for this time period
-      const sessions = await this.sessionRepo.getSessionsInTimeRange(
+      const sessions = await this.sessionRepo.getSessionsByDateRange(
         timePeriod.start,
         timePeriod.end
       );
@@ -79,7 +82,7 @@ export class InsightGenerator {
 
       // Step 5: Check cache (unless force regenerate)
       if (!forceRegenerate) {
-        const cachedInsight = await this.cacheRepo.getCachedInsight(
+        const cachedInsight = await this.cacheRepo.get(
           insightType,
           timePeriod.start,
           timePeriod.end
@@ -94,10 +97,10 @@ export class InsightGenerator {
       // Step 6: Aggregate data (reduce tokens from ~1250 to ~200)
       const aggregatedData = this.aggregator.aggregateSessions(
         filteredSessions,
-        timePeriod
+        { timePeriod }
       );
 
-      // Step 7: Generate insight (PLACEHOLDER - OpenAI integration in Session 4)
+      // Step 7: Generate insight using OpenAI
       const insightText = await this._generateInsightText(
         aggregatedData,
         insightType,
@@ -105,7 +108,7 @@ export class InsightGenerator {
       );
 
       // Step 8: Cache the result
-      const cachedInsight = await this.cacheRepo.upsertCachedInsight({
+      const cachedInsightId = await this.cacheRepo.upsert({
         insight_type: insightType,
         generated_at: Date.now(),
         data_hash: currentDataHash,
@@ -113,6 +116,13 @@ export class InsightGenerator {
         time_period_start: timePeriod.start,
         time_period_end: timePeriod.end,
       });
+
+      // Retrieve the cached insight to return
+      const cachedInsight = await this.cacheRepo.get(
+        insightType,
+        timePeriod.start,
+        timePeriod.end
+      );
 
       return this._formatCachedInsight(cachedInsight);
 
@@ -179,28 +189,50 @@ export class InsightGenerator {
   }
 
   /**
-   * PLACEHOLDER: Generate insight text using AI
-   * Session 4 will replace this with OpenAI API call
+   * Generate insight text using OpenAI
    * @private
    */
   async _generateInsightText(aggregatedData, insightType, activityType) {
-    // Simulate async operation
-    await new Promise(resolve => setTimeout(resolve, 100));
+    try {
+      // Build appropriate prompt based on insight type
+      let prompt;
+      
+      switch (insightType) {
+        case 'daily':
+          prompt = PromptBuilder.buildDailyPrompt(aggregatedData);
+          break;
+        
+        case 'weekly':
+          prompt = PromptBuilder.buildWeeklyPrompt(aggregatedData);
+          break;
+        
+        case 'monthly':
+          prompt = PromptBuilder.buildMonthlyPrompt(aggregatedData);
+          break;
+        
+        default:
+          if (insightType.startsWith('activity_')) {
+            prompt = PromptBuilder.buildActivityPrompt(aggregatedData, activityType);
+          } else {
+            throw new Error(`Unknown insight type: ${insightType}`);
+          }
+      }
 
-    // For now, return formatted summary (Session 4 will use OpenAI)
-    const { summary } = aggregatedData;
-    
-    return `[PLACEHOLDER INSIGHT]
-Total Sessions: ${summary.totalSessions}
-Total Time: ${Math.round(summary.totalDuration / 60)} minutes
-Average Session: ${Math.round(summary.avgDuration / 60)} minutes
+      // Generate insight using OpenAI
+      const insightText = await OpenAIService.generateInsight(prompt);
+      
+      return insightText;
 
-Top Activities:
-${summary.topActivities.slice(0, 3).map((act, i) => 
-  `${i + 1}. ${act.name}: ${Math.round(act.duration / 60)} min (${act.sessionCount} sessions)`
-).join('\n')}
-
-[This will be replaced with AI-generated insights in Session 4]`;
+    } catch (error) {
+      console.error('[InsightGenerator] Error generating insight:', error);
+      
+      // Return fallback instead of crashing
+      const { summary } = aggregatedData;
+      const totalSessions = summary?.totalSessions || 0;
+      const totalHours = summary?.totalHours || 0;
+      
+      return `You completed ${totalSessions} focus sessions totaling ${totalHours.toFixed(1)} hours. Keep up the great work building your deep work habit!`;
+    }
   }
 
   /**
@@ -239,3 +271,5 @@ ${summary.topActivities.slice(0, 3).map((act, i) =>
     };
   }
 }
+
+export default new InsightGenerator();

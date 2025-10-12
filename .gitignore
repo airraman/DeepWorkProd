@@ -34,3 +34,16 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+
+# API Keys and Secrets
+src/config/openai.js
+.env
+.env*.local
+
+# Expo environment files
+.expo/
+expo-env.d.ts
+
+.env
+.env*.local
