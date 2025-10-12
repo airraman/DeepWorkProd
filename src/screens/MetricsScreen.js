@@ -18,10 +18,13 @@ import { deepWorkStore } from '../services/deepWorkStore';
 import SessionDetailsModal from '../components/modals/SessionDetailsModal';
 import ActivityGrid from '../components/ActivityGrid';
 import { useTheme } from '../context/ThemeContext';
+import InsightGenerator from '../services/insights/InsightGenerator';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BOX_SIZE = 24;
 const MAX_BOXES_PER_ROW = 10;
+
+
 
 const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr',
@@ -360,6 +363,10 @@ const MetricsScreen = () => {
   const [sessions, setSessions] = useState({});
   const [activities, setActivities] = useState([]);
   const [totalHours, setTotalHours] = useState(0);
+
+  const [weeklyInsight, setWeeklyInsight] = useState(null);
+const [insightLoading, setInsightLoading] = useState(false);
+const [insightError, setInsightError] = useState(null);
   
   const panX = useRef(new Animated.Value(0)).current;
 
@@ -370,6 +377,7 @@ const MetricsScreen = () => {
   useFocusEffect(
     React.useCallback(() => {
       loadInitialData();
+      loadWeeklyInsight();  // ADD THIS LINE
     }, [])
   );
 
@@ -455,8 +463,45 @@ const MetricsScreen = () => {
     setShowSessionDetails(true);
   };
 
-  const handleGenerateInsights = () => {
-    console.log('Generate Insights pressed');
+  const handleGenerateInsights = async () => {
+    try {
+      setInsightLoading(true);
+      setInsightError(null);
+      
+      console.log('[Metrics] Generating weekly insight...');
+      
+      const result = await InsightGenerator.generate('weekly', {
+        forceRegenerate: true  // Always fresh when user clicks button
+      });
+      
+      if (result.success) {
+        setWeeklyInsight(result);
+        console.log('[Metrics] Insight generated:', result.metadata.fromCache ? 'from cache' : 'fresh');
+      } else {
+        setInsightError('Unable to generate insight. Please try again.');
+      }
+      
+    } catch (error) {
+      console.error('[Metrics] Error generating insight:', error);
+      setInsightError('Failed to generate insight. Please try again.');
+    } finally {
+      setInsightLoading(false);
+    }
+  };
+
+  const loadWeeklyInsight = async () => {
+    try {
+      console.log('[Metrics] Loading weekly insight...');
+      
+      const result = await InsightGenerator.generate('weekly');
+      
+      if (result.success) {
+        setWeeklyInsight(result);
+      }
+    } catch (error) {
+      console.error('[Metrics] Failed to load insight:', error);
+      // Don't show error to user on auto-load, only on manual generate
+    }
   };
 
   const getDaysInMonth = () => {
@@ -534,6 +579,64 @@ const MetricsScreen = () => {
           <Text style={styles.sparkleEmoji}>✨</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Insights Section - ADD THIS ENTIRE BLOCK */}
+{weeklyInsight && (
+  <View style={[styles.insightSection, { 
+    backgroundColor: colors.cardBackground,
+    borderColor: colors.border,
+  }]}>
+    <View style={styles.insightHeader}>
+      <Text style={[styles.insightTitle, { color: colors.text }]}>
+        Weekly Insight
+      </Text>
+      <Text style={[styles.insightMeta, { color: colors.textSecondary }]}>
+        {weeklyInsight.metadata.fromCache ? '📦' : '✨'} {
+          new Date(weeklyInsight.metadata.generatedAt).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric'
+          })
+        }
+      </Text>
+    </View>
+    <Text style={[styles.insightText, { color: colors.text }]}>
+      {weeklyInsight.insightText}
+    </Text>
+  </View>
+)}
+
+{/* Loading State - ADD THIS */}
+{insightLoading && (
+  <View style={[styles.insightSection, { 
+    backgroundColor: colors.cardBackground,
+    borderColor: colors.border,
+  }]}>
+    <View style={styles.insightLoadingContainer}>
+      <ActivityIndicator size="small" color={colors.primary} />
+      <Text style={[styles.insightLoadingText, { color: colors.textSecondary }]}>
+        Generating insight...
+      </Text>
+    </View>
+  </View>
+)}
+
+{/* Error State - ADD THIS */}
+{insightError && !insightLoading && (
+  <View style={[styles.insightSection, { 
+    backgroundColor: colors.cardBackground,
+    borderColor: colors.border,
+  }]}>
+    <Text style={[styles.insightError, { color: colors.textSecondary }]}>
+      {insightError}
+    </Text>
+    <TouchableOpacity 
+      style={[styles.retryButton, { backgroundColor: colors.primary }]}
+      onPress={handleGenerateInsights}
+    >
+      <Text style={styles.retryButtonText}>Retry</Text>
+    </TouchableOpacity>
+  </View>
+)}
 
       <View style={[styles.chartsRow, { borderBottomColor: colors.border }]}>
         <View style={styles.compactActivitySection}>
@@ -1010,6 +1113,53 @@ const styles = StyleSheet.create({
   legendText: {
     fontSize: 12,
   },
+
+  // Add these to your existing styles object
+insightSection: {
+  marginHorizontal: 16,
+  marginTop: 12,
+  marginBottom: 6,
+  padding: 16,
+  borderRadius: 12,
+  borderWidth: 1,
+},
+insightHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 8,
+},
+insightTitle: {
+  fontSize: 14,
+  fontWeight: '600',
+  letterSpacing: 0.5,
+  textTransform: 'uppercase',
+},
+insightMeta: {
+  fontSize: 12,
+  fontWeight: '500',
+},
+insightText: {
+  fontSize: 15,
+  lineHeight: 22,
+  fontWeight: '400',
+},
+insightLoadingContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  paddingVertical: 8,
+  gap: 12,
+},
+insightLoadingText: {
+  fontSize: 14,
+  fontWeight: '500',
+},
+insightError: {
+  fontSize: 14,
+  textAlign: 'center',
+  marginBottom: 12,
+}
 });
 
 export default MetricsScreen;

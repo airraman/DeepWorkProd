@@ -10,17 +10,7 @@ import { Alert, View, Text, Platform, Dimensions, StatusBar } from 'react-native
 import { navigationRef, safeNavigate } from './src/services/navigationService';
 import backgroundTimer from './src/services/backgroundTimer';
 import ErrorBoundary from './src/components/ErrorBoundary';
-import { testOpenAI } from './src/services/insights/testOpenAI';
-
-
-
-testOpenAI();
-
-console.log('🔑 Environment Variable Check:');
-console.log('Key exists:', process.env.EXPO_PUBLIC_OPENAI_API_KEY ? '✅' : '❌');
-console.log('Key prefix:', process.env.EXPO_PUBLIC_OPENAI_API_KEY?.substring(0, 10));
-
-
+import DevToolsScreen from './src/screens/DevToolsScreen';  // ✅ ADD THIS LINE
 
 // DATABASE IMPORTS
 import DatabaseService from './src/services/database/DatabaseService';
@@ -550,6 +540,14 @@ function MainApp() {
                 })
               }}
             />
+            <Stack.Screen 
+  name="DevTools" 
+  component={DevToolsScreen}
+  options={{
+    presentation: 'modal',
+    gestureEnabled: true,
+  }}
+/>
           </Stack.Navigator>
         </NavigationContainer>
       </ThemeProvider>

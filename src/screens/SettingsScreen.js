@@ -18,6 +18,7 @@ import { deepWorkStore } from '../services/deepWorkStore';
 import { alarmService } from '../services/alarmService'; // NEW: Import alarm service
 import SharedHeader from '../components/SharedHeader';
 import { useTheme, THEMES } from '../context/ThemeContext';
+import { useNavigation } from '@react-navigation/native';  // ✅ ADD THIS LINE
 
 // Use the same header height as other screens
 const HEADER_HEIGHT = Platform.OS === 'ios' ? 60 : 50;
@@ -26,6 +27,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SettingsScreen = () => {
   const { colors, theme } = useTheme();
   const isDark = theme === THEMES.DARK;
+  const navigation = useNavigation();  // ✅ ADD THIS LINE
   
   // Core state management
   const [activities, setActivities] = useState([]);
@@ -288,6 +290,7 @@ const SettingsScreen = () => {
         >
           <X size={16} color={colors.textSecondary} />
         </TouchableOpacity>
+
       </View>
     </View>
   );
@@ -564,6 +567,19 @@ const SettingsScreen = () => {
             <Text style={styles.updateButtonText}>Save Settings</Text>
           )}
         </TouchableOpacity>
+
+        {__DEV__ && (
+  <TouchableOpacity
+    style={[
+      styles.updateButton,
+      { backgroundColor: '#6b7280', marginTop: 8 }
+    ]}
+    onPress={() => navigation.navigate('DevTools')}
+  >
+    <Text style={styles.updateButtonText}>🛠️ Dev Tools (Testing Only)</Text>
+  </TouchableOpacity>
+  
+)}
 
         {/* Extra padding at the bottom for better scrolling experience */}
         <View style={{ height: 80 }} />
