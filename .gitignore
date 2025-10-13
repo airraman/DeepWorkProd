@@ -45,5 +45,3 @@ src/config/openai.js
 .expo/
 expo-env.d.ts
 
-.env
-.env*.local

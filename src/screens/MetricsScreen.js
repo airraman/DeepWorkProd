@@ -30,9 +30,6 @@ const MONTHS = [
   'Sep', 'Oct', 'Nov', 'Dec'
 ];
 
-/**
- * CardContainer - Reusable card wrapper with theming
- */
 const CardContainer = ({ children, style }) => {
   const { colors } = useTheme();
 
@@ -53,9 +50,6 @@ const CardContainer = ({ children, style }) => {
   );
 };
 
-/**
- * Generate weekly chart data from sessions
- */
 const generateWeeklyChartData = (sessions) => {
   const today = new Date();
   const weekData = [];
@@ -81,9 +75,6 @@ const generateWeeklyChartData = (sessions) => {
   return weekData;
 };
 
-/**
- * WeeklyFocusChart - Bar chart showing last 7 days
- */
 const WeeklyFocusChart = ({ sessions }) => {
   const { colors } = useTheme();
   const [selectedBar, setSelectedBar] = useState(null);
@@ -114,42 +105,27 @@ const WeeklyFocusChart = ({ sessions }) => {
                   style={[
                     styles.bar, 
                     { 
-                      backgroundColor: selectedBar === index ? colors.primary : colors.primary,
+                      backgroundColor: colors.primary,
                       height: `${(day.hours / maxHours) * 100}%`,
-                      opacity: selectedBar === null ? 1 : selectedBar === index ? 1 : 0.6,
+                      opacity: selectedBar === null ? 1 : selectedBar === index ? 1 : 0.4,
                     }
                   ]} 
                 />
               </View>
               <Text style={[styles.barLabel, { 
                 color: selectedBar === index ? colors.text : colors.textSecondary,
-                fontWeight: selectedBar === index ? '600' : '400'
+                fontWeight: selectedBar === index ? '600' : '500'
               }]}>
                 {day.day}
               </Text>
-              <Text style={[styles.barValue, { 
-                color: selectedBar === index ? colors.text : colors.textSecondary,
-                fontWeight: selectedBar === index ? '700' : '500'
-              }]}>
-                {day.hours}h
-              </Text>
             </TouchableOpacity>
           ))}
-        </View>
-        
-        <View style={styles.chartFooter}>
-          <Text style={[styles.chartFooterText, { color: colors.textSecondary }]}>
-            {weekData.reduce((sum, day) => sum + day.hours, 0).toFixed(1)}h total
-          </Text>
         </View>
       </View>
     </View>
   );
 };
 
-/**
- * TotalTimeCard - Shows all-time focus hours with dynamic coloring
- */
 const TotalTimeCard = ({ totalHours }) => {
   const { colors } = useTheme();
   
@@ -191,9 +167,6 @@ const TotalTimeCard = ({ totalHours }) => {
   );
 };
 
-/**
- * CompactActivityGrid - GitHub-style activity heat map
- */
 const CompactActivityGrid = ({ sessions }) => {
   const { colors } = useTheme();
   
@@ -314,9 +287,6 @@ const CompactActivityGrid = ({ sessions }) => {
   );
 };
 
-/**
- * Main MetricsScreen Component
- */
 const MetricsScreen = () => {
   const { colors, theme } = useTheme();
   
@@ -491,7 +461,8 @@ const MetricsScreen = () => {
   };
 
   const formatDate = (date) => {
-    return `${date.getDate()}`;
+    const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'short' });
+    return `${dayOfWeek} ${date.getDate()}`;
   };
 
   const getColorForIntensity = (level) => {
@@ -549,7 +520,6 @@ const MetricsScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Expandable Insight */}
       {weeklyInsight && (
         <ExpandableInsight 
           insight={weeklyInsight}
@@ -557,7 +527,6 @@ const MetricsScreen = () => {
         />
       )}
 
-      {/* Loading State */}
       {insightLoading && (
         <View style={[styles.insightSection, { 
           backgroundColor: colors.cardBackground,
@@ -572,7 +541,6 @@ const MetricsScreen = () => {
         </View>
       )}
 
-      {/* Error State */}
       {insightError && !insightLoading && (
         <View style={[styles.insightSection, { 
           backgroundColor: colors.cardBackground,
@@ -626,10 +594,6 @@ const MetricsScreen = () => {
         {getDaysInMonth().map((date) => {
           const dateString = date.toISOString().split('T')[0];
           const daySessions = sessions[dateString] || [];
-
-          if (daySessions.length === 0) {
-            return null;
-          }
 
           return (
             <View key={dateString}>
@@ -765,8 +729,8 @@ const styles = StyleSheet.create({
   },
   insightSection: {
     marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 6,
+    marginTop: 8,
+    marginBottom: 4,
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
@@ -804,12 +768,13 @@ const styles = StyleSheet.create({
     gap: 6,
     alignItems: 'flex-end',
     position: 'relative',
+    height: 73,
   },
   compactActivitySection: {
-    flex: 2.5,
+    flex: 2.3,
   },
   weeklyChartSection: {
-    flex: 2,
+    flex: 2.2,
   },
   totalTimeSection: {
     flex: 1,
@@ -825,7 +790,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'left',
     marginBottom: 4,
-    opacity: 0.7,
+    opacity: 0.85,
   },
   gridArea: {
     flexDirection: 'row',
@@ -841,7 +806,7 @@ const styles = StyleSheet.create({
     fontSize: 7,
     textAlign: 'center',
     fontWeight: '500',
-    opacity: 0.6,
+    opacity: 0.8,
   },
   dayLabelSpacer: {
     height: 7,
@@ -876,12 +841,13 @@ const styles = StyleSheet.create({
   },
   heatMapLegendContainer: {
     position: 'absolute',
-    top: 8,
-    right: 16,
+    top: 4,
+    right: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
     zIndex: 10,
+    marginTop:-12,
   },
   legendBox: {
     width: 6,
@@ -893,61 +859,53 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   chartContainer: {
-    padding: 6,
-    height: 55,
-    justifyContent: 'space-between',
+    padding: 8,
+    paddingTop: 4,
+    height: 58,
+    justifyContent: 'flex-start',
   },
   chartTitle: {
     fontSize: 9,
     fontWeight: '600',
-    marginBottom: 2,
+    marginBottom: 6,
     textAlign: 'center',
   },
   chartContent: {
     flex: 1,
-  },
-  chartFooter: {
-    marginTop: 2,
-    alignItems: 'center',
-  },
-  chartFooterText: {
-    fontSize: 5,
+    justifyContent: 'flex-end',
   },
   barsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    flex: 1,
-    paddingTop: 2,
+    height: 28,
   },
   barWrapper: {
     alignItems: 'center',
     flex: 1,
   },
   barContainer: {
-    height: 28,
-    width: 6,
+    height: 18,
+    width: 8,
     justifyContent: 'flex-end',
-    marginBottom: 2,
+    marginBottom: 5,
   },
   bar: {
     width: '100%',
-    borderRadius: 1,
-    minHeight: 1,
+    borderRadius: 2,
+    minHeight: 2,
   },
   barLabel: {
-    fontSize: 5,
-    marginTop: 1,
-  },
-  barValue: {
-    fontSize: 6,
+    fontSize: 8,
+    marginTop: 2,
     fontWeight: '500',
+    textAlign: 'center',
   },
   totalTimeContainer: {
     padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 55,
+    height: 58,
     position: 'relative',
     borderRadius: 1,
   },
@@ -989,8 +947,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   dateText: {
-    width: 30,
-    fontSize: 12,
+    width: 50,
+    fontSize: 11,
+    fontWeight: '500',
   },
   boxesContainer: {
     flexDirection: 'row',
@@ -1012,6 +971,7 @@ const styles = StyleSheet.create({
   },
   legend: {
     padding: 12,
+    paddingTop: 20,
     borderTopWidth: 1,
   },
   legendTitle: {
