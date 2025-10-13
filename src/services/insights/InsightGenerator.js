@@ -4,14 +4,13 @@ import SessionRepository from '../database/SessionRepository';
 import InsightCacheRepository from '../database/InsightCacheRepository';
 import DataAggregator from './DataAggregator';
 import { CacheManager } from './CacheManager';
-import { generateDataHash } from '../../utils/hashHelper';
+import { hashSessions } from '../../utils/hashHelper'; // ✅ FIXED: was generateDataHash
 import { 
   getStartOfDay, 
   getStartOfWeek, 
   getStartOfMonth,
   getDateDaysAgo 
 } from '../../utils/dateHelpers';
-// Session 4: Add OpenAI imports
 import OpenAIService from './OpenAIService';
 import PromptBuilder from './PromptBuilder';
 
@@ -54,6 +53,8 @@ export class InsightGenerator {
         forceRegenerate = false 
       } = options;
 
+      console.log(`[InsightGenerator] Generating ${insightType} insight...`);
+
       // Step 1: Calculate time period
       const timePeriod = this._getTimePeriod(insightType, referenceDate, activityType);
 
@@ -65,6 +66,7 @@ export class InsightGenerator {
 
       // Handle empty data case
       if (sessions.length === 0) {
+        console.log('[InsightGenerator] No sessions found for period');
         return this._generateEmptyInsight(insightType, timePeriod);
       }
 
@@ -74,11 +76,12 @@ export class InsightGenerator {
         : sessions;
 
       if (filteredSessions.length === 0) {
+        console.log('[InsightGenerator] No sessions after filtering');
         return this._generateEmptyInsight(insightType, timePeriod);
       }
 
       // Step 4: Generate hash of current data
-      const currentDataHash = generateDataHash(filteredSessions);
+      const currentDataHash = hashSessions(filteredSessions); // ✅ FIXED: was generateDataHash
 
       // Step 5: Check cache (unless force regenerate)
       if (!forceRegenerate) {
@@ -94,11 +97,19 @@ export class InsightGenerator {
         }
       }
 
+      console.log('[InsightGenerator] Cache miss or force regenerate - generating new insight');
+
       // Step 6: Aggregate data (reduce tokens from ~1250 to ~200)
       const aggregatedData = this.aggregator.aggregateSessions(
         filteredSessions,
         { timePeriod }
       );
+
+      // ✅ ADD THIS DEBUG BLOCK
+console.log('[InsightGenerator] === DEBUG AGGREGATED DATA ===');
+console.log('Keys:', Object.keys(aggregatedData));
+console.log('Full structure:', JSON.stringify(aggregatedData, null, 2).substring(0, 1000));
+console.log('==========================================');
 
       // Step 7: Generate insight using OpenAI
       const insightText = await this._generateInsightText(
@@ -116,6 +127,8 @@ export class InsightGenerator {
         time_period_start: timePeriod.start,
         time_period_end: timePeriod.end,
       });
+
+      console.log('[InsightGenerator] Insight cached successfully');
 
       // Retrieve the cached insight to return
       const cachedInsight = await this.cacheRepo.get(
@@ -188,52 +201,88 @@ export class InsightGenerator {
     }
   }
 
-  /**
-   * Generate insight text using OpenAI
-   * @private
-   */
-  async _generateInsightText(aggregatedData, insightType, activityType) {
-    try {
-      // Build appropriate prompt based on insight type
-      let prompt;
+/**
+ * Generate insight text using OpenAI
+ * @private
+ */
+async _generateInsightText(aggregatedData, insightType, activityType) {
+  try {
+    // Debug: Log aggregated data structure
+    console.log('[InsightGenerator] Aggregated data keys:', Object.keys(aggregatedData || {}));
+    
+    // Build appropriate prompt based on insight type
+    let prompt;
+    
+    switch (insightType) {
+      case 'daily':
+        prompt = PromptBuilder.buildDailyPrompt(aggregatedData);
+        break;
       
-      switch (insightType) {
-        case 'daily':
-          prompt = PromptBuilder.buildDailyPrompt(aggregatedData);
-          break;
-        
-        case 'weekly':
-          prompt = PromptBuilder.buildWeeklyPrompt(aggregatedData);
-          break;
-        
-        case 'monthly':
-          prompt = PromptBuilder.buildMonthlyPrompt(aggregatedData);
-          break;
-        
-        default:
-          if (insightType.startsWith('activity_')) {
-            prompt = PromptBuilder.buildActivityPrompt(aggregatedData, activityType);
-          } else {
-            throw new Error(`Unknown insight type: ${insightType}`);
-          }
-      }
+      case 'weekly':
+        prompt = PromptBuilder.buildWeeklyPrompt(aggregatedData);
+        break;
+      
+      case 'monthly':
+        prompt = PromptBuilder.buildMonthlyPrompt(aggregatedData);
+        break;
+      
+      default:
+        if (insightType.startsWith('activity_')) {
+          prompt = PromptBuilder.buildActivityPrompt(aggregatedData, activityType);
+        } else {
+          throw new Error(`Unknown insight type: ${insightType}`);
+        }
+    }
 
-      // Generate insight using OpenAI
-      const insightText = await OpenAIService.generateInsight(prompt);
-      
-      return insightText;
+    console.log('[InsightGenerator] Calling OpenAI service...');
+    console.log('[InsightGenerator] Prompt preview:', prompt.substring(0, 200));
 
-    } catch (error) {
-      console.error('[InsightGenerator] Error generating insight:', error);
+    // Generate insight using OpenAI
+    const insightText = await OpenAIService.generateInsight(prompt);
+    
+    console.log('[InsightGenerator] OpenAI generation successful');
+
+    return insightText;
+
+  } catch (error) {
+    console.error('[InsightGenerator] Error generating insight text:', error);
+    console.error('[InsightGenerator] Error stack:', error.stack);
+    console.log('[InsightGenerator] Using fallback insight');
+    
+    // DEFENSIVE FALLBACK - Extract data from ANY possible structure
+    let totalSessions = 0;
+    let totalMinutes = 0;
+    
+    // Try multiple possible structures
+    if (aggregatedData?.summary) {
+      totalSessions = aggregatedData.summary.totalSessions || 0;
+      totalMinutes = aggregatedData.summary.totalMinutes || 0;
+    } else if (aggregatedData?.totals) {
+      totalSessions = aggregatedData.totals.sessions || 0;
+      totalMinutes = aggregatedData.totals.minutes || 0;
+    } else if (aggregatedData?.sessionCount !== undefined) {
+      totalSessions = aggregatedData.sessionCount;
+      totalMinutes = aggregatedData.totalDuration || 0;
+    } else {
+      // Last resort: log what we got and use generic message
+      console.error('[InsightGenerator] Could not extract stats from aggregatedData:', 
+        JSON.stringify(aggregatedData, null, 2).substring(0, 500));
       
-      // Return fallback instead of crashing
-      const { summary } = aggregatedData;
-      const totalSessions = summary?.totalSessions || 0;
-      const totalHours = summary?.totalHours || 0;
-      
-      return `You completed ${totalSessions} focus sessions totaling ${totalHours.toFixed(1)} hours. Keep up the great work building your deep work habit!`;
+      return `Keep up the great work on your focus sessions! Your consistent effort is building strong deep work habits.`;
+    }
+    
+    // Convert minutes to hours
+    const totalHours = (totalMinutes / 60).toFixed(1);
+    
+    console.log(`[InsightGenerator] Fallback stats: ${totalSessions} sessions, ${totalMinutes} minutes (${totalHours}h)`);
+    
+    if (totalSessions > 0) {
+      return `You completed ${totalSessions} focus sessions totaling ${totalHours} hours. Keep up the great work building your deep work habit!`;
+    } else {
+      return `Keep building your deep work habit! Consistent focus sessions lead to remarkable productivity gains.`;
     }
   }
+}
 
   /**
    * Generate fallback insight for empty data
@@ -247,6 +296,8 @@ export class InsightGenerator {
         insightType,
         timePeriod,
         isEmpty: true,
+        generatedAt: Date.now(),
+        fromCache: false,
       },
     };
   }

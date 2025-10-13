@@ -318,6 +318,62 @@ const DevToolsScreen = ({ navigation }) => {
           </TouchableOpacity>
 
           <TouchableOpacity
+  style={[styles.button, { backgroundColor: '#10b981' }]}
+  onPress={async () => {
+    try {
+      setLoading(true);
+      
+      const { deepWorkStore } = require('../services/deepWorkStore');
+      const DataAggregator = require('../services/insights/DataAggregator').default;
+      const SessionRepository = require('../services/database/SessionRepository').default;
+      
+      // Get last 7 days of sessions
+      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const sessions = await SessionRepository.getSessionsByDateRange(weekAgo, Date.now());
+      
+      console.log('\n🧪 ===== AGGREGATOR TEST =====');
+      console.log('Sessions found:', sessions.length);
+      console.log('Sample session:', JSON.stringify(sessions[0], null, 2));
+      
+      // Test aggregation
+      const aggregated = DataAggregator.aggregateSessions(sessions);
+      console.log('\nAggregated result:');
+      console.log(JSON.stringify(aggregated, null, 2));
+      console.log('================================\n');
+      
+      Alert.alert(
+        'Aggregator Test',
+        `Sessions: ${sessions.length}\n\nCheck console for details`
+      );
+    } catch (error) {
+      console.error('Test error:', error);
+      Alert.alert('Error', error.message);
+    } finally {
+      setLoading(false);
+    }
+  }}
+  disabled={loading}
+>
+  <Text style={styles.buttonText}>🧪 Test Aggregator</Text>
+</TouchableOpacity>
+
+<TouchableOpacity
+  style={[styles.button, { backgroundColor: '#10b981' }]}
+  onPress={() => {
+    const { OPENAI_API_KEY } = require('../config/openai');
+    
+    if (!OPENAI_API_KEY) {
+      Alert.alert('❌ Not Configured', 'API key is missing or undefined');
+    } else {
+      const preview = `${OPENAI_API_KEY.substring(0, 7)}...${OPENAI_API_KEY.substring(OPENAI_API_KEY.length - 4)}`;
+      Alert.alert('✅ Key Loaded', preview);
+    }
+  }}
+>
+  <Text style={styles.buttonText}>🔑 Verify API Key</Text>
+</TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.button, { backgroundColor: '#ef4444' }]}
             onPress={handleClearData}
             disabled={loading}
