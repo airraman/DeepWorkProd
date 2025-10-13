@@ -31,7 +31,7 @@ class SessionRepository {
             flatSessions.push({
               id: session.id,
               activity_type: session.activity, // Convert to snake_case for consistency
-              duration: session.duration,
+              duration: session.duration * 60,
               start_time: session.timestamp,
               end_time: session.timestamp + (session.duration * 60 * 1000),
               description: session.notes || null,

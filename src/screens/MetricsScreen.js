@@ -1,4 +1,5 @@
-// MetricsScreen.js - Updated with bottom-aligned cards and repositioned legend
+// src/screens/MetricsScreen.js
+
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -11,20 +12,17 @@ import {
   Animated,
   PanResponder,
   ActivityIndicator,
-  Modal
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { deepWorkStore } from '../services/deepWorkStore';
 import SessionDetailsModal from '../components/modals/SessionDetailsModal';
-import ActivityGrid from '../components/ActivityGrid';
 import { useTheme } from '../context/ThemeContext';
 import InsightGenerator from '../services/insights/InsightGenerator';
+import ExpandableInsight from '../components/ExpandableInsight';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BOX_SIZE = 24;
 const MAX_BOXES_PER_ROW = 10;
-
-
 
 const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr',
@@ -33,7 +31,7 @@ const MONTHS = [
 ];
 
 /**
- * STATIC CARD CONTAINER
+ * CardContainer - Reusable card wrapper with theming
  */
 const CardContainer = ({ children, style }) => {
   const { colors } = useTheme();
@@ -56,7 +54,7 @@ const CardContainer = ({ children, style }) => {
 };
 
 /**
- * DATA TRANSFORMATION FOR WEEKLY CHART
+ * Generate weekly chart data from sessions
  */
 const generateWeeklyChartData = (sessions) => {
   const today = new Date();
@@ -84,7 +82,7 @@ const generateWeeklyChartData = (sessions) => {
 };
 
 /**
- * WEEKLY FOCUS CHART COMPONENT
+ * WeeklyFocusChart - Bar chart showing last 7 days
  */
 const WeeklyFocusChart = ({ sessions }) => {
   const { colors } = useTheme();
@@ -95,33 +93,30 @@ const WeeklyFocusChart = ({ sessions }) => {
   
   const handleBarPress = (day, index) => {
     setSelectedBar(index === selectedBar ? null : index);
-    console.log(`${day.fullDate}: ${day.hours}h (${day.sessionsCount} sessions)`);
   };
-  
+
   return (
     <View style={styles.chartContainer}>
-      <Text style={[styles.chartTitle, { color: colors.text }]}>This Week</Text>
+      <Text style={[styles.chartTitle, { color: colors.text }]}>
+        This Week
+      </Text>
+      
       <View style={styles.chartContent}>
         <View style={styles.barsContainer}>
           {weekData.map((day, index) => (
-            <TouchableOpacity 
-              key={index} 
+            <TouchableOpacity
+              key={day.date}
               style={styles.barWrapper}
               onPress={() => handleBarPress(day, index)}
-              activeOpacity={0.7}
             >
               <View style={styles.barContainer}>
                 <View 
                   style={[
-                    styles.bar,
-                    {
+                    styles.bar, 
+                    { 
+                      backgroundColor: selectedBar === index ? colors.primary : colors.primary,
                       height: `${(day.hours / maxHours) * 100}%`,
-                      backgroundColor: selectedBar === index 
-                        ? colors.primary 
-                        : day.hours > 0 
-                          ? '#4ADE80' 
-                          : colors.border,
-                      opacity: selectedBar === null || selectedBar === index ? 1 : 0.6,
+                      opacity: selectedBar === null ? 1 : selectedBar === index ? 1 : 0.6,
                     }
                   ]} 
                 />
@@ -153,7 +148,7 @@ const WeeklyFocusChart = ({ sessions }) => {
 };
 
 /**
- * TOTAL TIME CARD COMPONENT
+ * TotalTimeCard - Shows all-time focus hours with dynamic coloring
  */
 const TotalTimeCard = ({ totalHours }) => {
   const { colors } = useTheme();
@@ -197,7 +192,7 @@ const TotalTimeCard = ({ totalHours }) => {
 };
 
 /**
- * COMPACT ACTIVITY GRID COMPONENT - GitHub-style heat map
+ * CompactActivityGrid - GitHub-style activity heat map
  */
 const CompactActivityGrid = ({ sessions }) => {
   const { colors } = useTheme();
@@ -211,125 +206,101 @@ const CompactActivityGrid = ({ sessions }) => {
     for (let week = 0; week < weeks; week++) {
       const weekData = [];
       for (let day = 0; day < 7; day++) {
+        const daysAgo = week * 7 + day;
         const date = new Date(today);
-        date.setDate(today.getDate() - (weeks - week - 1) * 7 - (6 - day));
+        date.setDate(today.getDate() - daysAgo);
         const dateString = date.toISOString().split('T')[0];
         
-        const dayMinutes = (sessions[dateString] || []).reduce((total, session) => {
-          return total + session.duration;
-        }, 0);
+        const daySessions = sessions[dateString] || [];
+        const activityCount = daySessions.length;
         
-        if (dayMinutes > maxActivity) {
-          maxActivity = dayMinutes;
+        if (activityCount > maxActivity) {
+          maxActivity = activityCount;
         }
         
-        weekData.push({
+        weekData.unshift({
           date: dateString,
-          minutes: dayMinutes,
-          day: date.getDay(),
-          month: date.getMonth(),
-          dayOfMonth: date.getDate()
+          count: activityCount,
+          sessions: daySessions
         });
       }
-      gridData.push(weekData);
+      gridData.unshift(weekData);
     }
     
     return { gridData, maxActivity };
   };
   
+  const getIntensityColor = (count, maxActivity) => {
+    if (count === 0) return '#484848';
+    const ratio = count / maxActivity;
+    if (ratio <= 0.25) return '#0e4429';
+    if (ratio <= 0.5) return '#006d32';
+    if (ratio <= 0.75) return '#26a641';
+    return '#39d353';
+  };
+  
   const { gridData, maxActivity } = generateActivityGridData();
   
-  const getMonthLabelsWithPositions = () => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const labels = [];
-    let lastMonth = -1;
+  const monthLabels = [];
+  const today = new Date();
+  for (let i = 0; i < gridData.length; i++) {
+    const weekDate = new Date(today);
+    weekDate.setDate(today.getDate() - (gridData.length - i - 1) * 7);
     
-    gridData.forEach((week, weekIndex) => {
-      const firstDay = week[0];
-      if (firstDay.month !== lastMonth) {
-        labels.push({
-          month: months[firstDay.month],
-          position: weekIndex
-        });
-        lastMonth = firstDay.month;
-      }
-    });
-    
-    return labels;
-  };
-  
-  const getIntensityLevel = (minutes) => {
-    if (minutes === 0) return 0;
-    const quartile = maxActivity / 4;
-    if (minutes <= quartile) return 1;
-    if (minutes <= quartile * 2) return 2;
-    if (minutes <= quartile * 3) return 3;
-    return 4;
-  };
-  
-  const getColorForIntensity = (level) => {
-    const colorMap = {
-      0: '#484848',    
-      1: '#0e4429',    
-      2: '#006d32',    
-      3: '#26a641',    
-      4: '#39d353'     
-    };
-    return colorMap[level] || colorMap[0];
-  };
-  
-  const monthLabels = getMonthLabelsWithPositions();
+    if (weekDate.getDate() <= 7 || i === 0) {
+      monthLabels.push({
+        month: MONTHS[weekDate.getMonth()],
+        position: i
+      });
+    }
+  }
   
   return (
     <View style={styles.compactActivityContainer}>
-      <Text style={[styles.compactActivityTitle, { color: colors.textSecondary }]}>Activity</Text>
+      <Text style={[styles.compactActivityTitle, { color: colors.textSecondary }]}>
+        Activity
+      </Text>
       
       <View style={styles.gridArea}>
         <View style={styles.dayLabels}>
-          <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>M</Text>
-          <View style={styles.dayLabelSpacer} />
-          <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>W</Text>
-          <View style={styles.dayLabelSpacer} />
-          <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>F</Text>
-          <View style={styles.dayLabelSpacer} />
-          <View style={styles.dayLabelSpacer} />
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+            <View key={index} style={styles.dayLabelSpacer}>
+              {(index === 1 || index === 3 || index === 5) && (
+                <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>
+                  {day}
+                </Text>
+              )}
+            </View>
+          ))}
         </View>
         
         <View style={styles.activityGrid}>
           {gridData.map((week, weekIndex) => (
             <View key={weekIndex} style={styles.weekColumn}>
               {week.map((day, dayIndex) => (
-                <TouchableOpacity
-                  key={`${weekIndex}-${dayIndex}`}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    if (day.minutes > 0) {
-                      console.log(`${day.date}: ${Math.round(day.minutes/60 * 10)/10}h`);
+                <View
+                  key={dayIndex}
+                  style={[
+                    styles.daySquare,
+                    { 
+                      backgroundColor: getIntensityColor(day.count, maxActivity),
+                      borderRadius: 1
                     }
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.daySquare,
-                      {
-                        backgroundColor: getColorForIntensity(getIntensityLevel(day.minutes))
-                      }
-                    ]}
-                  />
-                </TouchableOpacity>
+                  ]}
+                />
               ))}
             </View>
           ))}
         </View>
       </View>
       
-      {/* <View style={styles.monthLabelsContainer}>
+      <View style={styles.monthLabelsContainer}>
         {monthLabels.map((label, index) => (
-          <Text 
+          <Text
             key={index}
             style={[
-              styles.monthLabel, 
-              { 
+              styles.monthLabel,
+              {
                 color: colors.textSecondary,
                 left: `${(label.position / gridData.length) * 100}%`
               }
@@ -338,13 +309,13 @@ const CompactActivityGrid = ({ sessions }) => {
             {label.month}
           </Text>
         ))}
-      </View> */}
+      </View>
     </View>
   );
 };
 
 /**
- * MAIN METRICS SCREEN COMPONENT
+ * Main MetricsScreen Component
  */
 const MetricsScreen = () => {
   const { colors, theme } = useTheme();
@@ -365,8 +336,8 @@ const MetricsScreen = () => {
   const [totalHours, setTotalHours] = useState(0);
 
   const [weeklyInsight, setWeeklyInsight] = useState(null);
-const [insightLoading, setInsightLoading] = useState(false);
-const [insightError, setInsightError] = useState(null);
+  const [insightLoading, setInsightLoading] = useState(false);
+  const [insightError, setInsightError] = useState(null);
   
   const panX = useRef(new Animated.Value(0)).current;
 
@@ -377,7 +348,7 @@ const [insightError, setInsightError] = useState(null);
   useFocusEffect(
     React.useCallback(() => {
       loadInitialData();
-      loadWeeklyInsight();  // ADD THIS LINE
+      loadWeeklyInsight();
     }, [])
   );
 
@@ -411,6 +382,46 @@ const [insightError, setInsightError] = useState(null);
     });
     const hours = (totalMinutes / 60).toFixed(1);
     setTotalHours(parseFloat(hours));
+  };
+
+  const loadWeeklyInsight = async () => {
+    try {
+      console.log('[Metrics] Loading weekly insight...');
+      
+      const result = await InsightGenerator.generate('weekly');
+      
+      if (result.success) {
+        setWeeklyInsight(result);
+      }
+    } catch (error) {
+      console.error('[Metrics] Failed to load insight:', error);
+    }
+  };
+
+  const handleGenerateInsights = async () => {
+    try {
+      setInsightLoading(true);
+      setInsightError(null);
+      
+      console.log('[Metrics] Generating weekly insight...');
+      
+      const result = await InsightGenerator.generate('weekly', {
+        forceRegenerate: true
+      });
+      
+      if (result.success) {
+        setWeeklyInsight(result);
+        console.log('[Metrics] Insight generated:', result.metadata.fromCache ? 'from cache' : 'fresh');
+      } else {
+        setInsightError('Unable to generate insight. Please try again.');
+      }
+      
+    } catch (error) {
+      console.error('[Metrics] Error generating insight:', error);
+      setInsightError('Failed to generate insight. Please try again.');
+    } finally {
+      setInsightLoading(false);
+    }
   };
 
   const panResponder = useRef(
@@ -463,47 +474,6 @@ const [insightError, setInsightError] = useState(null);
     setShowSessionDetails(true);
   };
 
-  const handleGenerateInsights = async () => {
-    try {
-      setInsightLoading(true);
-      setInsightError(null);
-      
-      console.log('[Metrics] Generating weekly insight...');
-      
-      const result = await InsightGenerator.generate('weekly', {
-        forceRegenerate: true  // Always fresh when user clicks button
-      });
-      
-      if (result.success) {
-        setWeeklyInsight(result);
-        console.log('[Metrics] Insight generated:', result.metadata.fromCache ? 'from cache' : 'fresh');
-      } else {
-        setInsightError('Unable to generate insight. Please try again.');
-      }
-      
-    } catch (error) {
-      console.error('[Metrics] Error generating insight:', error);
-      setInsightError('Failed to generate insight. Please try again.');
-    } finally {
-      setInsightLoading(false);
-    }
-  };
-
-  const loadWeeklyInsight = async () => {
-    try {
-      console.log('[Metrics] Loading weekly insight...');
-      
-      const result = await InsightGenerator.generate('weekly');
-      
-      if (result.success) {
-        setWeeklyInsight(result);
-      }
-    } catch (error) {
-      console.error('[Metrics] Failed to load insight:', error);
-      // Don't show error to user on auto-load, only on manual generate
-    }
-  };
-
   const getDaysInMonth = () => {
     const dates = [];
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
@@ -524,7 +494,6 @@ const [insightError, setInsightError] = useState(null);
     return `${date.getDate()}`;
   };
 
-  // Helper function for legend colors
   const getColorForIntensity = (level) => {
     const colorMap = {
       0: '#484848',    
@@ -580,63 +549,46 @@ const [insightError, setInsightError] = useState(null);
         </TouchableOpacity>
       </View>
 
-      {/* Insights Section - ADD THIS ENTIRE BLOCK */}
-{weeklyInsight && (
-  <View style={[styles.insightSection, { 
-    backgroundColor: colors.cardBackground,
-    borderColor: colors.border,
-  }]}>
-    <View style={styles.insightHeader}>
-      <Text style={[styles.insightTitle, { color: colors.text }]}>
-        Weekly Insight
-      </Text>
-      <Text style={[styles.insightMeta, { color: colors.textSecondary }]}>
-        {weeklyInsight.metadata.fromCache ? '📦' : '✨'} {
-          new Date(weeklyInsight.metadata.generatedAt).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric'
-          })
-        }
-      </Text>
-    </View>
-    <Text style={[styles.insightText, { color: colors.text }]}>
-      {weeklyInsight.insightText}
-    </Text>
-  </View>
-)}
+      {/* Expandable Insight */}
+      {weeklyInsight && (
+        <ExpandableInsight 
+          insight={weeklyInsight}
+          title="WEEKLY INSIGHT"
+        />
+      )}
 
-{/* Loading State - ADD THIS */}
-{insightLoading && (
-  <View style={[styles.insightSection, { 
-    backgroundColor: colors.cardBackground,
-    borderColor: colors.border,
-  }]}>
-    <View style={styles.insightLoadingContainer}>
-      <ActivityIndicator size="small" color={colors.primary} />
-      <Text style={[styles.insightLoadingText, { color: colors.textSecondary }]}>
-        Generating insight...
-      </Text>
-    </View>
-  </View>
-)}
+      {/* Loading State */}
+      {insightLoading && (
+        <View style={[styles.insightSection, { 
+          backgroundColor: colors.cardBackground,
+          borderColor: colors.border,
+        }]}>
+          <View style={styles.insightLoadingContainer}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.insightLoadingText, { color: colors.textSecondary }]}>
+              Generating insight...
+            </Text>
+          </View>
+        </View>
+      )}
 
-{/* Error State - ADD THIS */}
-{insightError && !insightLoading && (
-  <View style={[styles.insightSection, { 
-    backgroundColor: colors.cardBackground,
-    borderColor: colors.border,
-  }]}>
-    <Text style={[styles.insightError, { color: colors.textSecondary }]}>
-      {insightError}
-    </Text>
-    <TouchableOpacity 
-      style={[styles.retryButton, { backgroundColor: colors.primary }]}
-      onPress={handleGenerateInsights}
-    >
-      <Text style={styles.retryButtonText}>Retry</Text>
-    </TouchableOpacity>
-  </View>
-)}
+      {/* Error State */}
+      {insightError && !insightLoading && (
+        <View style={[styles.insightSection, { 
+          backgroundColor: colors.cardBackground,
+          borderColor: colors.border,
+        }]}>
+          <Text style={[styles.insightError, { color: colors.textSecondary }]}>
+            {insightError}
+          </Text>
+          <TouchableOpacity 
+            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            onPress={handleGenerateInsights}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View style={[styles.chartsRow, { borderBottomColor: colors.border }]}>
         <View style={styles.compactActivitySection}>
@@ -667,73 +619,47 @@ const [insightError, setInsightError] = useState(null);
       </View>
 
       <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={[styles.monthTabsContainer, { borderBottomColor: colors.border }]}
-        contentContainerStyle={styles.monthTabsContent}
-      >
-        {MONTHS.map((month, index) => {
-          const isVisible = currentYear < currentRealYear || 
-            (currentYear === currentRealYear && index <= currentRealMonth);
-          
-          if (!isVisible) return null;
-
-          return (
-            <TouchableOpacity
-              key={month}
-              onPress={() => setCurrentMonth(index)}
-              style={[
-                styles.monthTab,
-                currentMonth === index && styles.monthTabActive
-              ]}
-            >
-              <Text style={[
-                styles.monthTabText,
-                { color: colors.textSecondary },
-                currentMonth === index && { color: colors.text }
-              ]}>
-                {month}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-      
-      <ScrollView 
         style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContentContainer}
         {...panResponder.panHandlers}
       >
-        {getDaysInMonth().map((date, index) => {
+        {getDaysInMonth().map((date) => {
           const dateString = date.toISOString().split('T')[0];
           const daySessions = sessions[dateString] || [];
-          
+
+          if (daySessions.length === 0) {
+            return null;
+          }
+
           return (
-            <View key={index} style={[styles.dateRow, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.dateText, { color: colors.text }]}>
-                {formatDate(date)}
-              </Text>
-              <View style={styles.boxesContainer}>
-                <View style={styles.activitiesSection}>
-                  {daySessions.map((session, sessionIndex) => (
-                    <TouchableOpacity
-                      key={`${dateString}-${sessionIndex}`}
-                      onPress={() => handleSessionPress(session)}
-                    >
+            <View key={dateString}>
+              <View style={[styles.dateRow, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.dateText, { color: colors.textSecondary }]}>
+                  {formatDate(date)}
+                </Text>
+                
+                <View style={styles.boxesContainer}>
+                  <View style={styles.activitiesSection}>
+                    {daySessions.map((session, index) => (
+                      <TouchableOpacity
+                        key={`${session.id}-${index}`}
+                        onPress={() => handleSessionPress(session)}
+                      >
+                        <View
+                          style={[
+                            styles.activityBox,
+                            { backgroundColor: getActivityColor(session.activity) }
+                          ]}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                    {[...Array(Math.max(0, MAX_BOXES_PER_ROW - daySessions.length))].map((_, emptyIndex) => (
                       <View
-                        style={[
-                          styles.activityBox,
-                          { backgroundColor: getActivityColor(session.activity) }
-                        ]}
+                        key={`empty-${dateString}-${emptyIndex}`}
+                        style={[styles.activityBox, styles.emptyBox]}
                       />
-                    </TouchableOpacity>
-                  ))}
-                  {[...Array(Math.max(0, MAX_BOXES_PER_ROW - daySessions.length))].map((_, emptyIndex) => (
-                    <View
-                      key={`empty-${dateString}-${emptyIndex}`}
-                      style={[styles.activityBox, styles.emptyBox]}
-                    />
-                  ))}
+                    ))}
+                  </View>
                 </View>
               </View>
             </View>
@@ -777,7 +703,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  
   loadingText: {
     marginTop: 12,
     fontSize: 16,
@@ -797,7 +722,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-
   headerContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -839,22 +763,45 @@ const styles = StyleSheet.create({
   sparkleEmoji: {
     fontSize: 12,
   },
-  
+  insightSection: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 6,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  insightLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    gap: 12,
+  },
+  insightLoadingText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  insightError: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
   cardContainer: {
-    borderRadius: 7,        // Changed from 12 to match heat map
-    borderWidth: 1,         // Changed from 0.5 for better visibility
+    borderRadius: 7,
+    borderWidth: 1,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
-    overflow: 'hidden',     // Added: ensures child content respects border radius
+    overflow: 'hidden',
   },
   chartsRow: {
     flexDirection: 'row',           
     paddingHorizontal: 16,
     paddingVertical: 6,           
     borderBottomWidth: 1,
-    gap: 6,                        // Changed to 6 for balanced spacing
+    gap: 6,
     alignItems: 'flex-end',
     position: 'relative',
   },
@@ -867,14 +814,12 @@ const styles = StyleSheet.create({
   totalTimeSection: {
     flex: 1,
   },
-  
   compactActivityContainer: {
-    padding: 4,                    // Changed from 8 to 4 to reduce visual gap
+    padding: 4,
     height: 70,
     justifyContent: 'space-between',
     backgroundColor: 'transparent',
   },
-
   compactActivityTitle: {
     fontSize: 9,
     fontWeight: '600',
@@ -885,7 +830,7 @@ const styles = StyleSheet.create({
   gridArea: {
     flexDirection: 'row',
     flex: 1,
-    zIndex: 1,                     // Added: Ensures grid stays below labels
+    zIndex: 1,
   },
   dayLabels: {
     width: 12,
@@ -921,7 +866,7 @@ const styles = StyleSheet.create({
     height: 12,
     marginTop: 2,
     marginLeft: 15,
-    zIndex: 10,                    // Added: Ensures labels appear on top
+    zIndex: 10,
   },
   monthLabel: {
     position: 'absolute',
@@ -929,7 +874,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     opacity: 0.6,
   },
-  
   heatMapLegendContainer: {
     position: 'absolute',
     top: 8,
@@ -948,13 +892,11 @@ const styles = StyleSheet.create({
     fontSize: 7,
     opacity: 0.6,
   },
-
   chartContainer: {
-    padding: 6,                    // Changed from 4 to 6 for more breathing room
-    height: 55,                    // Changed from 50 to 70 to match heat map
+    padding: 6,
+    height: 55,
     justifyContent: 'space-between',
   },
-
   chartTitle: {
     fontSize: 9,
     fontWeight: '600',
@@ -983,7 +925,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   barContainer: {
-    height: 28,                    // Changed from 15 to 28 for more visible bars
+    height: 28,
     width: 6,
     justifyContent: 'flex-end',
     marginBottom: 2,
@@ -1001,16 +943,14 @@ const styles = StyleSheet.create({
     fontSize: 6,
     fontWeight: '500',
   },
-  
   totalTimeContainer: {
     padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
     height: 55,
     position: 'relative',
-    borderRadius: 1,        // Added: makes background respect parent's border radius
+    borderRadius: 1,
   },
-
   totalTimeLabel: {
     fontSize: 7,
     fontWeight: '600',
@@ -1035,27 +975,6 @@ const styles = StyleSheet.create({
   achievementIcon: {
     fontSize: 10,
   },
-  
-  monthTabsContainer: {
-    maxHeight: 40,
-    borderBottomWidth: 1,
-  },
-  monthTabsContent: {
-    paddingHorizontal: 8,
-  },
-  monthTab: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  monthTabActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#E4D0FF',
-  },
-  monthTabText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  
   scrollContainer: {
     flex: 1,
     paddingHorizontal: 16,
@@ -1091,7 +1010,6 @@ const styles = StyleSheet.create({
   emptyBox: {
     backgroundColor: 'transparent',
   },
-  
   legend: {
     padding: 12,
     borderTopWidth: 1,
@@ -1113,53 +1031,6 @@ const styles = StyleSheet.create({
   legendText: {
     fontSize: 12,
   },
-
-  // Add these to your existing styles object
-insightSection: {
-  marginHorizontal: 16,
-  marginTop: 12,
-  marginBottom: 6,
-  padding: 16,
-  borderRadius: 12,
-  borderWidth: 1,
-},
-insightHeader: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: 8,
-},
-insightTitle: {
-  fontSize: 14,
-  fontWeight: '600',
-  letterSpacing: 0.5,
-  textTransform: 'uppercase',
-},
-insightMeta: {
-  fontSize: 12,
-  fontWeight: '500',
-},
-insightText: {
-  fontSize: 15,
-  lineHeight: 22,
-  fontWeight: '400',
-},
-insightLoadingContainer: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'center',
-  paddingVertical: 8,
-  gap: 12,
-},
-insightLoadingText: {
-  fontSize: 14,
-  fontWeight: '500',
-},
-insightError: {
-  fontSize: 14,
-  textAlign: 'center',
-  marginBottom: 12,
-}
 });
 
 export default MetricsScreen;

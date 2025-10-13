@@ -1,19 +1,15 @@
-// src/services/insights/PromptBuilder.js
+// src/services/insights/PromptBuilder.js - IMPROVED VERSION
 
 /**
- * PromptBuilder - Creates optimized prompts for OpenAI
- * 
- * Key concepts:
- * - Token optimization: Aggregated data uses ~200 tokens vs ~1250 for raw sessions
- * - Prompt engineering: Clear instructions, examples, constraints
- * - Context window management: Keep prompts concise but informative
+ * 🎯 KEY CHANGES:
+ * 1. Include sample descriptions (qualitative data)
+ * 2. Focus on observations over recommendations
+ * 3. Structure: Quantitative → Qualitative → Light suggestion
+ * 4. Analytical tone (data-driven, not coaching)
  */
 
 class PromptBuilder {
   
-  /**
-   * Build prompt for weekly insights
-   */
   static buildWeeklyPrompt(aggregatedData) {
     const { 
       totalSessions, 
@@ -26,28 +22,65 @@ class PromptBuilder {
       return this._buildEmptyPrompt('weekly');
     }
 
-    // Build activity breakdown text
+    // Build activity breakdown WITH descriptions
     const activityText = Object.entries(activitiesBreakdown || {})
-      .map(([activity, stats]) => 
-        `- ${activity}: ${stats.sessionCount} sessions (${stats.totalHours.toFixed(1)}h, avg ${stats.avgMinutes}min)`
-      )
-      .join('\n');
+      .map(([activity, stats]) => {
+        let text = `- ${activity}: ${stats.sessionCount} sessions, ${stats.totalHours.toFixed(1)}h total (avg ${stats.avgMinutes} min/session)`;
+        
+        // ✅ NEW: Include sample descriptions if available
+        if (stats.sampleDescriptions && stats.sampleDescriptions.length > 0) {
+          const descriptions = stats.sampleDescriptions
+            .slice(0, 3)  // Max 3 to control token usage
+            .map(desc => `"${desc}"`)
+            .join(', ');
+          text += `\n  Notes: ${descriptions}`;
+        }
+        
+        return text;
+      })
+      .join('\n\n');
 
-    return `Analyze this week's focus session data:
+    // ✅ IMPROVED PROMPT STRUCTURE
+    return `Analyze this week's focus work patterns:
 
-Sessions: ${totalSessions}
-Total Time: ${totalHours.toFixed(1)} hours
-Average Session: ${avgSessionMinutes} minutes
+QUANTITATIVE SUMMARY:
+• Sessions completed: ${totalSessions}
+• Total focus time: ${totalHours.toFixed(1)} hours
+• Average session length: ${avgSessionMinutes} minutes
 
-Activity Breakdown:
+ACTIVITY BREAKDOWN:
 ${activityText}
 
-Provide a brief, encouraging insight (2-3 sentences) about their productivity patterns and one specific actionable recommendation.`;
+Generate a 2-3 sentence analytical observation that:
+1. Identifies a pattern in the quantitative data (session length, distribution, consistency)
+2. References specific work from the session notes to add context
+3. Ends with ONE optional, data-driven suggestion (not generic advice)
+
+Use an analytical tone - you're a data analyst reviewing metrics, not a motivational coach.`;
   }
 
   /**
-   * Build prompt for daily insights
+   * 🎯 ADVANCED CONCEPT: Prompt Engineering Patterns
+   * 
+   * This prompt uses several techniques:
+   * 
+   * 1. STRUCTURED INPUT (Quantitative → Qualitative)
+   *    - Makes it easier for the AI to reference specific data points
+   *    - Separates numbers from context
+   * 
+   * 2. EXPLICIT OUTPUT FORMAT
+   *    - "2-3 sentence" constrains length
+   *    - "1. Pattern 2. Context 3. Suggestion" structures the response
+   * 
+   * 3. ROLE DEFINITION
+   *    - "data analyst" vs "coach" changes vocabulary/tone
+   *    - "not generic advice" prevents cliché recommendations
+   * 
+   * 4. SAMPLE DATA INCLUSION
+   *    - Descriptions provide concrete examples
+   *    - AI can reference actual work instead of abstractions
    */
+
   static buildDailyPrompt(aggregatedData) {
     const { 
       totalSessions, 
@@ -61,26 +94,30 @@ Provide a brief, encouraging insight (2-3 sentences) about their productivity pa
     }
 
     const activityText = Object.entries(activitiesBreakdown || {})
-      .map(([activity, stats]) => 
-        `- ${activity}: ${stats.sessionCount} sessions (${stats.totalHours.toFixed(1)}h)`
-      )
+      .map(([activity, stats]) => {
+        let text = `- ${activity}: ${stats.sessionCount} sessions, ${stats.totalHours.toFixed(1)}h`;
+        
+        if (stats.sampleDescriptions && stats.sampleDescriptions.length > 0) {
+          text += `\n  Worked on: ${stats.sampleDescriptions.join(', ')}`;
+        }
+        
+        return text;
+      })
       .join('\n');
 
-    return `Analyze yesterday's focus session data:
+    return `Review yesterday's focus sessions:
 
-Sessions: ${totalSessions}
-Total Time: ${totalHours.toFixed(1)} hours
-Average Session: ${avgSessionMinutes} minutes
+METRICS:
+• ${totalSessions} sessions completed
+• ${totalHours.toFixed(1)} hours total
+• ${avgSessionMinutes} min average
 
-Activities:
+ACTIVITIES:
 ${activityText}
 
-Provide a brief, encouraging insight (2-3 sentences) and one tip for today.`;
+Provide a brief analytical summary (2 sentences max): one quantitative observation about session patterns, and one observation about the type of work completed based on the notes.`;
   }
 
-  /**
-   * Build prompt for monthly insights
-   */
   static buildMonthlyPrompt(aggregatedData) {
     const { 
       totalSessions, 
@@ -94,56 +131,34 @@ Provide a brief, encouraging insight (2-3 sentences) and one tip for today.`;
     }
 
     const activityText = Object.entries(activitiesBreakdown || {})
-      .map(([activity, stats]) => 
-        `- ${activity}: ${stats.sessionCount} sessions (${stats.totalHours.toFixed(1)}h)`
-      )
+      .map(([activity, stats]) => {
+        let text = `- ${activity}: ${stats.sessionCount} sessions (${stats.totalHours.toFixed(1)}h total)`;
+        
+        if (stats.sampleDescriptions && stats.sampleDescriptions.length > 0) {
+          const topWork = stats.sampleDescriptions.slice(0, 2).join('; ');
+          text += `\n  Examples: ${topWork}`;
+        }
+        
+        return text;
+      })
       .join('\n');
 
-    return `Analyze this month's focus session data:
+    return `Analyze this month's focus patterns:
 
-Sessions: ${totalSessions}
-Total Time: ${totalHours.toFixed(1)} hours
-Average Session: ${avgSessionMinutes} minutes
-Sessions per week: ${(totalSessions / 4).toFixed(1)}
+METRICS:
+• ${totalSessions} total sessions (${(totalSessions / 4).toFixed(1)} per week)
+• ${totalHours.toFixed(1)} hours total focus time
+• ${avgSessionMinutes} min average session
 
-Activity Distribution:
+ACTIVITY DISTRIBUTION:
 ${activityText}
 
-Provide a brief insight (2-3 sentences) about their monthly progress and one goal for next month.`;
+Provide an analytical summary (2-3 sentences): highlight the most significant quantitative pattern (volume, consistency, or session length), reference 1-2 specific projects from the notes, and optionally suggest one area to track differently next month.`;
   }
 
-  /**
-   * Build prompt for activity-specific insights
-   */
-  static buildActivityPrompt(aggregatedData, activityType) {
-    const { 
-      totalSessions, 
-      totalHours, 
-      avgSessionMinutes,
-      activitiesBreakdown 
-    } = aggregatedData;
-    
-    const activityStats = activitiesBreakdown?.[activityType];
-    
-    if (!activityStats || activityStats.sessionCount === 0) {
-      return `No ${activityType} sessions in the past week. Consider scheduling dedicated time for this activity.`;
-    }
-
-    return `Analyze ${activityType} focus sessions from the past week:
-
-Sessions: ${activityStats.sessionCount}
-Total Time: ${activityStats.totalHours.toFixed(1)} hours
-Average Duration: ${activityStats.avgMinutes} minutes
-
-Provide a brief insight (2 sentences) about their ${activityType} practice and one tip to improve.`;
-  }
-
-  /**
-   * Build prompt for empty data case
-   * @private
-   */
   static _buildEmptyPrompt(insightType) {
-    return `Generate an encouraging message for someone who hasn't logged any ${insightType} focus sessions yet. Keep it brief (2 sentences) and motivational.`;
+    // Even empty prompts should be analytical, not motivational
+    return `No focus sessions recorded in this ${insightType} period. Consider what data points would be valuable to track.`;
   }
 }
 

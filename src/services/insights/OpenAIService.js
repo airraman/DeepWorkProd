@@ -7,15 +7,10 @@ import { OPENAI_API_KEY, OPENAI_CONFIG } from '../../config/openai';
  * OpenAIService - Handles all OpenAI API interactions
  * 
  * Key Responsibilities:
- * 1. API authentication
- * 2. Error handling and retries
- * 3. Rate limiting
- * 4. Response validation
- * 
- * IMPORTANT CONCEPTS FOR INTERVIEWS:
- * - API error handling (network failures, rate limits)
- * - Retry logic with exponential backoff
- * - Response parsing and validation
+ * - API authentication
+ * - Error handling and retries
+ * - Rate limiting
+ * - Response validation
  */
 
 class OpenAIService {
@@ -48,7 +43,7 @@ class OpenAIService {
 
     const {
       maxTokens = OPENAI_CONFIG.maxTokens,
-      temperature = OPENAI_CONFIG.temperature,
+      temperature = 0.6,
       retryCount = 0,
     } = options;
 
@@ -64,7 +59,20 @@ class OpenAIService {
         messages: [
           {
             role: 'system',
-            content: 'You are a productivity coach providing personalized insights based on focus session data. Be encouraging, specific, and actionable. Keep responses under 150 words.',
+            content: `You are a data analyst reviewing focus session metrics. Your role is to:
+
+1. Identify patterns in quantitative data (session frequency, duration, distribution)
+2. Observe themes in qualitative data (types of work, project focus areas)
+3. Make evidence-based observations, not motivational statements
+4. Reference specific session notes when available
+5. Offer data-driven suggestions sparingly - only when the metrics clearly indicate an opportunity
+
+Tone: Professional, observational, fact-based. Avoid:
+- Generic encouragement ("Great job!", "Keep it up!")
+- Prescriptive advice without data support
+- Assumptions about the user's goals or feelings
+
+Response length: 2-3 sentences maximum (under 100 words).`,
           },
           {
             role: 'user',
@@ -176,7 +184,7 @@ class OpenAIService {
    * @private
    */
   _getFallbackInsight() {
-    return `Great work on your focus sessions! Keep building your deep work habit. Track your progress over time to see improvements in your productivity patterns.`;
+    return `Unable to generate insight at this time. Please check your API configuration.`;
   }
 
   /**
@@ -186,8 +194,15 @@ class OpenAIService {
     return {
       totalRequests: this.requestCount,
       lastRequestTime: this.lastRequestTime,
-      configured: !!this.client,
     };
+  }
+
+  /**
+   * Reset statistics
+   */
+  resetStats() {
+    this.requestCount = 0;
+    this.lastRequestTime = 0;
   }
 }
 
