@@ -31,7 +31,8 @@
           }
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-asset"
     ],
     "assets": [
       "./assets/alarm.mp3",
