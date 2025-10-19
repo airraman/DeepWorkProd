@@ -38,8 +38,14 @@ const HomeScreen = () => {
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // CHANGED: All durations are now available - no need to load from settings
-  const availableDurations = [5, 10, 15, 20, 30, 45];
+// CHANGED: All durations available, with 15-second option in DEV mode
+// INTERVIEW CONCEPT: Conditional features based on environment
+// __DEV__ is a global boolean set by React Native
+// - true in development (npm start, expo start)
+// - false in production builds (eas build, app store builds)
+const availableDurations = __DEV__ 
+  ? [0.25, 5, 10, 15, 20, 30, 45]  // 0.25 = 15 seconds (15/60 = 0.25 minutes)
+  : [5, 10, 15, 20, 30, 45];       // Production: no test duration
 
   // Music options remain constant as they're not configurable in settings
   const musicOptions = [
@@ -119,26 +125,59 @@ const HomeScreen = () => {
   );
 
   // NEW: Render individual duration item in the horizontal list
-  const renderDuration = ({ item }) => (
-    <TouchableOpacity
-      style={[
-        styles.durationItem,
-        { backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6' },
-        duration === item.toString() && { backgroundColor: colors.primary }
-      ]}
-      onPress={() => setDuration(item.toString())}
-    >
-      <Text
+  const renderDuration = ({ item }) => {
+    // INTERVIEW CONCEPT: Conditional rendering based on data
+    // Format display differently for test duration vs normal durations
+    const displayText = item === 0.25 ? '15 sec' : `${item} min`;
+    
+    return (
+      <TouchableOpacity
         style={[
-          styles.durationItemText,
-          { color: isDark ? colors.textSecondary : '#6b7280' },
-          duration === item.toString() && { color: 'white' }
+          styles.durationItem,
+          { 
+            backgroundColor: isDark ? colors.card : colors.background,
+            borderColor: duration === item.toString() ? colors.primary : colors.border
+          },
+          duration === item.toString() && [
+            styles.durationItemSelected,
+            { backgroundColor: colors.primary }
+          ]
         ]}
+        onPress={() => setDuration(item.toString())}
       >
-        {item}m
-      </Text>
-    </TouchableOpacity>
-  );
+        <Text
+          style={[
+            styles.durationText,
+            { color: isDark ? '#fff' : colors.text },
+            duration === item.toString() && styles.durationTextSelected
+          ]}
+        >
+          {displayText}
+        </Text>
+        {/* OPTIONAL: Add a dev badge */}
+        {item === 0.25 && __DEV__ && (
+          <Text style={{ fontSize: 10, color: colors.primary, marginTop: 2 }}>
+            DEV
+          </Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
+  ```
+  
+  ---
+  
+  ## Visual Result
+  
+  In **Development Mode**, your duration selector will show:
+  ```
+  // [15 sec] [5 min] [10 min] [15 min] [20 min] [30 min] [45 min]
+  //   DEV
+  // ```
+  
+  // In **Production**, it will show:
+  // ```
+  // [5 min] [10 min] [15 min] [20 min] [30 min] [45 min]
 
   // Show loading screen while fetching settings
   if (isLoading) {
