@@ -1,4 +1,4 @@
-// src/screens/DeepWorkSession.js - SAFE VERSION
+// src/screens/DeepWorkSession.js - SAFE VERSION with Background Music
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -11,14 +11,16 @@ import {
   BackHandler,
   ActivityIndicator,
   TouchableOpacity,
-  PanResponder
+  PanResponder,
+  Platform
 } from 'react-native';
 
 import { deepWorkStore } from '../services/deepWorkStore';
 import SessionNotesModal from '../components/modals/SessionNotesModal';
 import { Pause, Play, ChevronLeft } from 'lucide-react-native';
 import backgroundTimer from '../services/backgroundTimer';
-
+import { audioService } from '../services/audioService';
+import { alarmService } from '../services/alarmService';
 
 const { width, height } = Dimensions.get('window');
 const isTablet = width > 768 || height > 768;
@@ -42,7 +44,8 @@ const DeepWorkSession = ({ route, navigation }) => {
   const [servicesReady, setServicesReady] = useState(false);
   const servicesRef = useRef({
     backgroundTimer: null,
-    alarmService: null
+    alarmService: null,
+    audioService: null
   });
 
   // Timer management
@@ -96,6 +99,15 @@ const DeepWorkSession = ({ route, navigation }) => {
         console.warn('🔔 Alarm service not available:', error.message);
       }
       
+      // ✅ Load audio service
+      try {
+        const audioModule = await import('../services/audioService');
+        servicesRef.current.audioService = audioModule.audioService;
+        console.log('🎵 Audio service loaded');
+      } catch (error) {
+        console.warn('🎵 Audio service not available:', error.message);
+      }
+      
       setServicesReady(true);
       console.log('🔍 Services loaded safely');
     };
@@ -133,6 +145,20 @@ const DeepWorkSession = ({ route, navigation }) => {
         } catch (error) {
           console.warn('🔍 Background timer failed to start:', error);
         }
+      }
+      
+      // ✅ START BACKGROUND MUSIC
+      if (servicesRef.current.audioService && musicChoice !== 'none') {
+        try {
+          console.log(`🎵 Starting background music: ${musicChoice}`);
+          await servicesRef.current.audioService.init();
+          await servicesRef.current.audioService.playMusic(musicChoice);
+          console.log('🎵 Background music started successfully');
+        } catch (error) {
+          console.warn('🎵 Music failed to start (non-critical):', error);
+        }
+      } else if (musicChoice === 'none') {
+        console.log('🎵 No background music selected');
       }
       
       // Initialize alarm service if available
@@ -191,6 +217,16 @@ const DeepWorkSession = ({ route, navigation }) => {
       
       setIsPaused(true);
       
+      // ✅ STOP BACKGROUND MUSIC
+      if (servicesRef.current.audioService) {
+        try {
+          await servicesRef.current.audioService.stopMusic();
+          console.log('🎵 Background music stopped');
+        } catch (error) {
+          console.warn('🎵 Music stop error:', error);
+        }
+      }
+      
       // ADDED: Send completion notification with sound
       try {
         await backgroundTimer.sendCompletionNotification();
@@ -233,9 +269,11 @@ const DeepWorkSession = ({ route, navigation }) => {
     );
   };
 
-  // Handle pause/resume
+  // ✅ UPDATED: Handle pause/resume with music control
   const togglePause = async () => {
     console.log('🔍 Toggle pause:', isPaused);
+    
+    const newPauseState = !isPaused;
     
     if (isPaused) {
       // Resume
@@ -255,6 +293,17 @@ const DeepWorkSession = ({ route, navigation }) => {
           console.warn('Background pause update failed:', error);
         }
       }
+      
+      // ✅ RESUME MUSIC
+      if (servicesRef.current.audioService) {
+        try {
+          await servicesRef.current.audioService.resumeMusic();
+          console.log('🎵 Music resumed');
+        } catch (error) {
+          console.warn('🎵 Music resume error:', error);
+        }
+      }
+      
     } else {
       // Pause
       animatedHeight.stopAnimation();
@@ -267,9 +316,19 @@ const DeepWorkSession = ({ route, navigation }) => {
           console.warn('Background pause update failed:', error);
         }
       }
+      
+      // ✅ PAUSE MUSIC
+      if (servicesRef.current.audioService) {
+        try {
+          await servicesRef.current.audioService.pauseMusic();
+          console.log('🎵 Music paused');
+        } catch (error) {
+          console.warn('🎵 Music pause error:', error);
+        }
+      }
     }
 
-    setIsPaused(!isPaused);
+    setIsPaused(newPauseState);
   };
 
   // Pan responder for swipe to end
@@ -325,7 +384,7 @@ const DeepWorkSession = ({ route, navigation }) => {
     );
   };
 
-  // Safe cleanup function
+  // ✅ UPDATED: Safe cleanup function with music cleanup
   const cleanup = async () => {
     console.log('🔍 Cleaning up session...');
     
@@ -333,6 +392,16 @@ const DeepWorkSession = ({ route, navigation }) => {
       // Clear local timer
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+      }
+      
+      // ✅ STOP BACKGROUND MUSIC
+      if (servicesRef.current.audioService) {
+        try {
+          await servicesRef.current.audioService.stopMusic();
+          console.log('🎵 Music stopped during cleanup');
+        } catch (error) {
+          console.warn('🎵 Music cleanup error:', error);
+        }
       }
       
       // Stop background services if available
@@ -479,9 +548,12 @@ const DeepWorkSession = ({ route, navigation }) => {
             </Text>
             
             {/* Show services status for debugging */}
-            <Text style={styles.statusText}>
-              Services: {servicesReady ? 'Ready' : 'Loading...'}
-            </Text>
+            {__DEV__ && (
+              <Text style={styles.statusText}>
+                Services: {servicesReady ? '✅ Ready' : '⏳ Loading...'}
+                {musicChoice !== 'none' && ' | 🎵 Music: ' + musicChoice}
+              </Text>
+            )}
             
             {isSaving && (
               <ActivityIndicator

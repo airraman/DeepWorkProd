@@ -12,6 +12,7 @@ import backgroundTimer from './src/services/backgroundTimer';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import DevToolsScreen from './src/screens/DevToolsScreen';  // ✅ ADD THIS LINE
 
+
 // DATABASE IMPORTS
 import DatabaseService from './src/services/database/DatabaseService';
 // import { testDatabase } from './src/services/database/testDatabase';

@@ -43,47 +43,29 @@ class AlarmService {
    */
   async init() {
     try {
-      console.log('🔔 Initializing alarm service...');
+      console.log('🎵 Initializing audio service...');
       
-      /**
-       * Audio Mode for Alarms
-       * 
-       * INTERVIEW Q: Why different settings than background music?
-       * A: Alarms need to be HEARD - they should interrupt, be loud,
-       *    and work even when phone is on silent
-       */
       await Audio.setAudioModeAsync({
-        // CRITICAL: Play even when phone is on silent
+        // ✅ CRITICAL for background audio
         playsInSilentModeIOS: true,
+        staysActiveInBackground: true,  // Keep playing when locked/backgrounded
         
-        // Allow playing in background (if session completes while app backgrounded)
-        staysActiveInBackground: true,
-        
-        // Don't allow recording (we just need playback)
         allowsRecordingIOS: false,
-        
-        // DO NOT MIX - we want to interrupt other audio
-        // INTERVIEW CONCEPT: Alarms should grab attention!
-        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
-        
-        // Duck (lower) other apps' audio when we play
+        interruptionModeIOS: 1,
+        interruptionModeAndroid: 1,
         shouldDuckAndroid: true,
-        
-        // Stay active in background
-        staysActiveInBackground: true,
-        
-        // Use speaker, not earpiece
         playThroughEarpieceAndroid: false,
+        
+        // ✅ ADD THESE for better background support:
+        staysActiveInBackground: true,  // Redundant but explicit
       });
       
       this.isInitialized = true;
-      console.log('🔔 Alarm service initialized successfully');
+      console.log('🎵 Audio service initialized successfully');
       return true;
       
     } catch (error) {
-      console.error('🔔 Alarm initialization error:', error);
-      // Mark as initialized anyway so app doesn't break
+      console.error('🎵 Audio initialization error:', error);
       this.isInitialized = true;
       return false;
     }

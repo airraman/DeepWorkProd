@@ -34,20 +34,15 @@ const HomeScreen = () => {
   const [musicChoice, setMusicChoice] = useState('');
   
   // State for managing settings loaded from deepWorkStore
-  // CHANGED: availableDurations is now a constant array, not loaded from settings
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-// CHANGED: All durations available, with 15-second option in DEV mode
-// INTERVIEW CONCEPT: Conditional features based on environment
-// __DEV__ is a global boolean set by React Native
-// - true in development (npm start, expo start)
-// - false in production builds (eas build, app store builds)
-const availableDurations = __DEV__ 
-  ? [0.25, 5, 10, 15, 20, 30, 45]  // 0.25 = 15 seconds (15/60 = 0.25 minutes)
-  : [5, 10, 15, 20, 30, 45];       // Production: no test duration
+  // All durations available, with 15-second option in DEV mode
+  const availableDurations = __DEV__ 
+    ? [0.25, 5, 10, 15, 20, 30, 45]  // 0.25 = 15 seconds
+    : [5, 10, 15, 20, 30, 45];
 
-  // Music options remain constant as they're not configurable in settings
+  // Music options
   const musicOptions = [
     { value: 'none', label: 'No music' },
     { value: 'white-noise', label: 'White noise' },
@@ -61,7 +56,6 @@ const availableDurations = __DEV__
 
   const checkFirstTimeUser = async () => {
     const settings = await deepWorkStore.getSettings();
-    // CHANGED: Only check for activities, not durations
     if (!settings.activities.length) {
       navigation.replace('InitialSetup');
     } else {
@@ -70,7 +64,6 @@ const availableDurations = __DEV__
   };
 
   // Reload settings whenever the screen comes into focus
-  // This ensures we have the latest settings after changes in SettingsScreen
   useFocusEffect(
     React.useCallback(() => {
       loadSettings();
@@ -83,10 +76,9 @@ const availableDurations = __DEV__
       setIsLoading(true);
       const settings = await deepWorkStore.getSettings();
       
-      // CHANGED: Only load activities, not durations
       setActivities(settings.activities);
       
-      // CHANGED: Only validate activity selection
+      // Validate activity selection
       if (activity && !settings.activities.some(a => a.id === activity)) {
         setActivity('');
       }
@@ -124,10 +116,8 @@ const availableDurations = __DEV__
     </TouchableOpacity>
   );
 
-  // NEW: Render individual duration item in the horizontal list
+  // Render individual duration item in the horizontal list
   const renderDuration = ({ item }) => {
-    // INTERVIEW CONCEPT: Conditional rendering based on data
-    // Format display differently for test duration vs normal durations
     const displayText = item === 0.25 ? '15 sec' : `${item} min`;
     
     return (
@@ -154,7 +144,6 @@ const availableDurations = __DEV__
         >
           {displayText}
         </Text>
-        {/* OPTIONAL: Add a dev badge */}
         {item === 0.25 && __DEV__ && (
           <Text style={{ fontSize: 10, color: colors.primary, marginTop: 2 }}>
             DEV
@@ -163,21 +152,6 @@ const availableDurations = __DEV__
       </TouchableOpacity>
     );
   };
-  ```
-  
-  ---
-  
-  ## Visual Result
-  
-  In **Development Mode**, your duration selector will show:
-  ```
-  // [15 sec] [5 min] [10 min] [15 min] [20 min] [30 min] [45 min]
-  //   DEV
-  // ```
-  
-  // In **Production**, it will show:
-  // ```
-  // [5 min] [10 min] [15 min] [20 min] [30 min] [45 min]
 
   // Show loading screen while fetching settings
   if (isLoading) {
@@ -208,7 +182,7 @@ const availableDurations = __DEV__
         
         <View style={[styles.divider, { backgroundColor: colors.divider }]} />
         
-        {/* Activity Selection - Section */}
+        {/* Activity Selection Section */}
         <View style={[
           styles.section, 
           { 
@@ -231,7 +205,7 @@ const availableDurations = __DEV__
           />
         </View>
         
-        {/* Duration Selection - Section - CHANGED: Now uses FlatList */}
+        {/* Duration Selection Section */}
         <View style={[
           styles.section, 
           { 
@@ -255,7 +229,7 @@ const availableDurations = __DEV__
           />
         </View>
 
-        {/* Music Selection - Section */}
+        {/* Music Selection Section */}
         <View style={[
           styles.section, 
           { 
@@ -293,7 +267,7 @@ const availableDurations = __DEV__
           </View>
         </View>
         
-        {/* Extra padding at the bottom to ensure all content is visible above the footer */}
+        {/* Extra padding at bottom */}
         <View style={{ height: 80 }} />
       </ScrollView>
 
@@ -322,7 +296,6 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
   },
-  // Content styles
   content: {
     flex: 1,
     paddingHorizontal: 16,
@@ -368,7 +341,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   
-  // NEW: Duration List Styles (matching activity list pattern)
+  // Duration Styles
   durationsList: {
     flexGrow: 0,
     paddingVertical: 8,
@@ -383,10 +356,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 70,
+    borderWidth: 1,
   },
-  durationItemText: {
+  durationItemSelected: {
+    borderWidth: 2,
+  },
+  durationText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  durationTextSelected: {
+    color: 'white',
+    fontWeight: '600',
   },
   
   // Activity Styles

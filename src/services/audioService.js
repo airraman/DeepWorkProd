@@ -49,41 +49,19 @@ class AudioService {
     try {
       console.log('🎵 Initializing audio service...');
       
-      /**
-       * CRITICAL SECTION: Audio Mode Configuration
-       * 
-       * INTERVIEW TOPIC: Audio Session Management
-       * Each property here tells the OS how to handle our audio:
-       */
       await Audio.setAudioModeAsync({
-        // iOS: Play sound even when the phone's silent switch is on
-        // Why? Users want focus music even if phone is silenced
+        // ✅ CRITICAL for background audio
         playsInSilentModeIOS: true,
+        staysActiveInBackground: true,  // Keep playing when locked/backgrounded
         
-        // Keep playing audio when app goes to background
-        // IMPORTANT: Requires background audio permissions (we have this in app.json)
-        staysActiveInBackground: true,
-        
-        // iOS: Allow mixing with other apps' audio (e.g., podcasts)
-        // Set to false so our music doesn't compete with other audio
         allowsRecordingIOS: false,
-        
-        // iOS: What happens when other audio interrupts us?
-        // 'mixWithOthers' = play alongside, 'duckOthers' = lower their volume
-        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-        
-        // Android: Similar to iOS interruptionMode
-        // We don't want to mix with other audio
-        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
-        
-        // Android: Lower volume of other apps when we play
+        interruptionModeIOS: 1,
+        interruptionModeAndroid: 1,
         shouldDuckAndroid: true,
-        
-        // Android: Keep playing when app loses focus (backgrounded)
-        staysActiveInBackground: true,
-        
-        // Use speaker output (not earpiece)
         playThroughEarpieceAndroid: false,
+        
+        // ✅ ADD THESE for better background support:
+        staysActiveInBackground: true,  // Redundant but explicit
       });
       
       this.isInitialized = true;
@@ -92,8 +70,6 @@ class AudioService {
       
     } catch (error) {
       console.error('🎵 Audio initialization error:', error);
-      // Still mark as initialized so the app doesn't break
-      // The playMusic function will handle the error gracefully
       this.isInitialized = true;
       return false;
     }
