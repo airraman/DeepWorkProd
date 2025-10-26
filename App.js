@@ -1,16 +1,18 @@
-// App.js - Production Version with iOS Notification Fix + Database
+// App.js - Production Version with iOS Notification Fix + Database + RevenueCat
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { ThemeProvider } from './src/context/ThemeContext';
+import { SubscriptionProvider } from './src/context/SubscriptionContext';  // ✅ NEW IMPORT
 import * as Notifications from 'expo-notifications';
 import * as Updates from 'expo-updates';
 import { Alert, View, Text, Platform, Dimensions, StatusBar } from 'react-native';
 import { navigationRef, safeNavigate } from './src/services/navigationService';
 import backgroundTimer from './src/services/backgroundTimer';
 import ErrorBoundary from './src/components/ErrorBoundary';
-import DevToolsScreen from './src/screens/DevToolsScreen';  // ✅ ADD THIS LINE
+import DevToolsScreen from './src/screens/DevToolsScreen';
+// import DeepWorkSession from './src/screens/DeepWorkSession';
 
 
 // DATABASE IMPORTS
@@ -236,123 +238,104 @@ function MainApp() {
             ...prev,
             database: 'failed'
           }));
-          // Show user-friendly error
-          Alert.alert(
-            'Database Error',
-            'Failed to initialize local storage. Some features may not work properly.',
-            [{ text: 'OK' }]
-          );
+          throw dbError;
         }
         
-        // STEP 2: Mark app as ready (UI can render)
-        setIsAppReady(true);
-        
-        // STEP 3: Initialize background services with delay (non-blocking)
-        setTimeout(async () => {
-          try {
-            const bgSuccess = await initializeBackgroundServices();
-            setInitializationStatus(prev => ({
-              ...prev,
-              backgroundServices: bgSuccess ? 'success' : 'failed'
-            }));
-          } catch (error) {
-            console.error('🚀 Background services error:', error);
-            setInitializationStatus(prev => ({
-              ...prev,
-              backgroundServices: 'failed'
-            }));
-            // Don't crash the app
-          }
-        }, isTablet ? 3000 : 1500);
-        
-      } catch (error) {
-        console.error('🚀 Critical app initialization error:', error);
-        setIsAppReady(true);
-      }
-    };
-    
-    initApp();
-    
-    // Handle updates with error handling
-    const checkForUpdates = async () => {
-      try {
-        if (__DEV__) {
-          console.log('🚀 Development mode - skipping update check');
+        // STEP 2: Initialize background services
+        try {
+          console.log('🚀 Initializing background services...');
+          await initializeBackgroundServices();
+          console.log('✅ Background services initialized');
+          
           setInitializationStatus(prev => ({
             ...prev,
-            updates: 'skipped-dev'
+            backgroundServices: 'success'
           }));
-          return;
+        } catch (bgError) {
+          console.error('❌ Background services initialization failed:', bgError);
+          setInitializationStatus(prev => ({
+            ...prev,
+            backgroundServices: 'failed'
+          }));
         }
         
-        console.log('🚀 Checking for updates...');
-        const update = await Updates.checkForUpdateAsync();
-        
-        setInitializationStatus(prev => ({
-          ...prev,
-          updates: 'checked'
-        }));
-        
-        if (update.isAvailable) {
-          console.log('🚀 Update available, fetching...');
-          await Updates.fetchUpdateAsync();
-          
-          Alert.alert(
-            'Update Available',
-            'A new version is available. Would you like to restart now?',
-            [
-              { text: 'Later', style: 'cancel' },
-              { 
-                text: 'Restart', 
-                onPress: async () => {
-                  try {
-                    await Updates.reloadAsync();
-                  } catch (updateError) {
-                    console.error('🚀 Failed to reload with update:', updateError);
+        // STEP 3: Check for app updates (non-blocking)
+        try {
+          if (!__DEV__) {
+            console.log('🔄 Checking for updates...');
+            const update = await Updates.checkForUpdateAsync();
+            
+            if (update.isAvailable) {
+              console.log('📥 Update available, fetching...');
+              await Updates.fetchUpdateAsync();
+              
+              Alert.alert(
+                'Update Available',
+                'A new version of DeepWork has been downloaded. Would you like to restart to apply it?',
+                [
+                  { text: 'Later', style: 'cancel' },
+                  { 
+                    text: 'Restart Now', 
+                    onPress: () => Updates.reloadAsync() 
                   }
-                }
-              }
-            ]
-          );
+                ]
+              );
+            } else {
+              console.log('✅ App is up to date');
+            }
+          }
+          
+          setInitializationStatus(prev => ({
+            ...prev,
+            updates: 'success'
+          }));
+        } catch (updateError) {
+          console.warn('⚠️ Update check failed (non-critical):', updateError);
+          setInitializationStatus(prev => ({
+            ...prev,
+            updates: 'skipped'
+          }));
         }
+        
+        console.log('✅ App initialization completed successfully');
+        
+        // Mark app as ready
+        setIsAppReady(true);
+        
       } catch (error) {
-        console.log('🚀 Update check failed (non-critical):', error);
-        setInitializationStatus(prev => ({
-          ...prev,
-          updates: 'failed'
-        }));
+        console.error('❌ Critical app initialization error:', error);
+        
+        Alert.alert(
+          'Initialization Error',
+          'There was a problem starting DeepWork. Please try restarting the app.',
+          [{ text: 'OK' }]
+        );
+        
+        setIsAppReady(true);
       }
     };
-    
-    setTimeout(checkForUpdates, isTablet ? 5000 : 3000);
 
-    // Setup notifications with safe alarm handling
+    initApp();
+    
     const setupNotifications = async () => {
       try {
-        console.log('🚀 Setting up notification handlers...');
-        
-        const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+        const subscription = Notifications.addNotificationResponseReceivedListener(async response => {
           try {
-            const actionId = response.actionIdentifier;
-            const notificationData = response.notification.request.content.data || {};
+            const data = response.notification.request.content.data;
             
-            if (actionId === Notifications.DEFAULT_ACTION_IDENTIFIER) {
-              // SAFE: Check if this notification should trigger an alarm
-              if (notificationData.shouldPlayAlarm) {
-                console.log('🔔 User opened app from completion notification - trying to play alarm');
-                handleCompletionAlarmFromNotification(notificationData);
-              }
-              
-              // Navigate to the specified screen
-              const { screen, params } = notificationData;
-              if (screen) {
-                safeNavigate(screen, params);
-              }
-            }
-            else if (actionId === 'PAUSE_RESUME') {
+            if (data.action === 'pauseResume') {
               handlePauseResumeAction();
-            }
-            else if (actionId === 'END_SESSION') {
+            } else if (data.action === 'endSession') {
+              handleEndSession();
+            } else if (data.type === 'sessionComplete') {
+              await handleCompletionAlarmFromNotification(data);
+            } else if (data.action === 'navigateToSession') {
+              safeNavigate('DeepWorkSession');
+            } else if (data.type === 'timerUpdate') {
+              // Just update - no action needed
+            } else if (data.type === 'pauseResume') {
+              handlePauseResumeAction();
+            } else if (data.type === 'endSession') {
               handleEndSession();
             }
           } catch (error) {
@@ -488,70 +471,74 @@ function MainApp() {
   
   return (
     <ErrorBoundary>
-      <ThemeProvider>
-        <StatusBar 
-          barStyle="dark-content" 
-          backgroundColor="transparent" 
-          translucent={false}
-        />
-        
-        <NavigationContainer ref={navigationRef}>
-          <Stack.Navigator
-            initialRouteName="InitialSetup"
-            screenOptions={{
-              headerShown: false,
-              gestureEnabled: false,
-              presentation: 'card',
-              animationTypeForReplace: 'push',
-              ...(isTablet && {
-                contentStyle: { 
-                  backgroundColor: 'transparent' 
-                },
-                cardStyle: { 
-                  backgroundColor: 'transparent' 
-                }
-              })
-            }}
-          >
-            <Stack.Screen 
-              name="InitialSetup" 
-              component={InitialSetupScreen}
-              options={{
-                presentation: 'card',
+      {/* ✅ UPDATED: SubscriptionProvider wraps ThemeProvider */}
+      <SubscriptionProvider>
+        <ThemeProvider>
+          <StatusBar 
+            barStyle="dark-content" 
+            backgroundColor="transparent" 
+            translucent={false}
+          />
+          
+          <NavigationContainer ref={navigationRef}>
+            <Stack.Navigator
+              initialRouteName="InitialSetup"
+              screenOptions={{
+                headerShown: false,
                 gestureEnabled: false,
-              }}
-            />
-            <Stack.Screen 
-              name="MainApp" 
-              component={TabNavigator}
-              options={{
                 presentation: 'card',
-                gestureEnabled: false,
-              }}
-            />
-            <Stack.Screen 
-              name="DeepWorkSession" 
-              component={DeepWorkSession}
-              options={{
-                presentation: 'card',
-                gestureEnabled: false,
                 animationTypeForReplace: 'push',
                 ...(isTablet && {
-                  orientation: 'portrait',
+                  contentStyle: { 
+                    backgroundColor: 'transparent' 
+                  },
+                  cardStyle: { 
+                    backgroundColor: 'transparent' 
+                  }
                 })
               }}
-            />
-            <Stack.Screen 
-  name="DevTools" 
-  component={DevToolsScreen}
-  options={{
-    presentation: 'modal',
-    gestureEnabled: true,
-  }}
-/>
-          </Stack.Navigator>
-        </NavigationContainer>
-      </ThemeProvider>
+            >
+              <Stack.Screen 
+                name="InitialSetup" 
+                component={InitialSetupScreen}
+                options={{
+                  presentation: 'card',
+                  gestureEnabled: false,
+                }}
+              />
+              <Stack.Screen 
+                name="MainApp" 
+                component={TabNavigator}
+                options={{
+                  presentation: 'card',
+                  gestureEnabled: false,
+                }}
+              />
+              <Stack.Screen 
+                name="DeepWorkSession" 
+                component={DeepWorkSession}
+                options={{
+                  presentation: 'card',
+                  gestureEnabled: false,
+                  animationTypeForReplace: 'push',
+                  ...(isTablet && {
+                    orientation: 'portrait',
+                  })
+                }}
+              />
+              <Stack.Screen 
+                name="DevTools" 
+                component={DevToolsScreen}
+                options={{
+                  presentation: 'modal',
+                  gestureEnabled: true,
+                }}
+              />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </ThemeProvider>
+      </SubscriptionProvider>
+      {/* ✅ END OF UPDATED SECTION */}
     </ErrorBoundary>
   );
 }

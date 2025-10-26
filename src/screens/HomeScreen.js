@@ -17,6 +17,8 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { deepWorkStore } from '../services/deepWorkStore';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import SharedHeader from '../components/SharedHeader';
+import { useSubscription } from '../context/SubscriptionContext';  // ✅ NEW IMPORT
+import { PaywallModal } from '../components/PaywallModal';  // ✅ NEW IMPORT
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isTablet = SCREEN_WIDTH > 768 || SCREEN_HEIGHT > 768;
@@ -27,6 +29,10 @@ const HomeScreen = () => {
   const navigation = useNavigation();
   const { colors, theme } = useTheme();
   const isDark = theme === THEMES.DARK;
+  
+  // ✅ NEW: RevenueCat subscription state
+  const { isPremium, isLoading: isSubscriptionLoading } = useSubscription();
+  const [showPaywall, setShowPaywall] = useState(false);
   
   // Core state for session configuration
   const [duration, setDuration] = useState('');
@@ -176,6 +182,60 @@ const HomeScreen = () => {
         style={[styles.content, { paddingTop: CONTENT_PADDING_TOP }]}
         contentContainerStyle={styles.contentContainer}
       >
+        {/* ✅ NEW: RevenueCat Test Section - TEMPORARY FOR TESTING */}
+        {__DEV__ && (
+          <View style={[
+            styles.testSection,
+            { 
+              backgroundColor: isDark ? '#2a2a2a' : '#f0f9ff',
+              borderColor: isDark ? '#404040' : '#bae6fd'
+            }
+          ]}>
+            <Text style={[styles.testSectionTitle, { color: colors.text }]}>
+              🧪 RevenueCat Test
+            </Text>
+            
+            {isSubscriptionLoading ? (
+              <View style={styles.testLoadingContainer}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[styles.testLoadingText, { color: colors.textSecondary }]}>
+                  Loading subscription...
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.testContent}>
+                <View style={styles.testStatusRow}>
+                  <Text style={[styles.testLabel, { color: colors.textSecondary }]}>
+                    Status:
+                  </Text>
+                  <View style={[
+                    styles.testStatusBadge,
+                    { backgroundColor: isPremium ? '#22c55e' : '#f59e0b' }
+                  ]}>
+                    <Text style={styles.testStatusText}>
+                      {isPremium ? '✅ Premium' : '🔒 Free'}
+                    </Text>
+                  </View>
+                </View>
+                
+                {!isPremium && (
+                  <TouchableOpacity
+                    style={[styles.testButton, { backgroundColor: colors.primary }]}
+                    onPress={() => setShowPaywall(true)}
+                  >
+                    <Text style={styles.testButtonText}>Test Paywall Modal</Text>
+                  </TouchableOpacity>
+                )}
+                
+                <Text style={[styles.testHint, { color: colors.textSecondary }]}>
+                  This test section only appears in DEV mode
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+        {/* ✅ END TEST SECTION */}
+
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Prepare Deep Work Session</Text>
         </View>
@@ -287,6 +347,13 @@ const HomeScreen = () => {
           <Text style={[styles.startButtonText, { color: 'white' }]}>Begin Deep Work Timer</Text>
         </TouchableOpacity>
       </View>
+
+      {/* ✅ NEW: Paywall Modal */}
+      <PaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        limitType="session"
+      />
     </SafeAreaView>
   );
 };
@@ -446,6 +513,65 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
+  },
+
+  // ✅ NEW: Test Section Styles
+  testSection: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 2,
+    width: '100%',
+  },
+  testSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  testLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  testLoadingText: {
+    fontSize: 14,
+  },
+  testContent: {
+    gap: 12,
+  },
+  testStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  testLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  testStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  testStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  testButton: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  testButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  testHint: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
 });
 
