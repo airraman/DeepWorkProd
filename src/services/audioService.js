@@ -119,7 +119,7 @@ class AudioService {
           soundSource = require('../../assets/whitenoise.mp3');
           break;
         case 'lofi':
-          soundSource = require('../../assets/sounds/lofi.mp3');
+          soundSource = require('../../assets/lofi.mp3');
           break;
         default:
           console.warn(`🎵 Unknown music choice: ${musicChoice}`);

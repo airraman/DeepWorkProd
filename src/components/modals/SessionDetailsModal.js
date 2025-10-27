@@ -10,8 +10,36 @@ import {
 } from 'react-native';
 import { X } from 'lucide-react-native';
 
-const SessionDetailsModal = ({ visible, session, onClose }) => {
+const SessionDetailsModal = ({ visible, session, activities = [], onClose }) => {
   if (!session) return null;
+
+  /**
+   * Get the activity name by looking up the activity ID
+   * 
+   * INTERVIEW CONCEPT: Data normalization
+   * Sessions store activity IDs (like "1", "2") instead of full activity objects
+   * This is called "normalization" - storing references instead of duplicating data
+   * 
+   * Benefits:
+   * - If activity name changes, we only update it in one place (activities list)
+   * - Sessions take up less storage space
+   * - Prevents data inconsistency
+   * 
+   * Trade-off: Need to "join" the data when displaying (like SQL joins)
+   */
+  const getActivityName = () => {
+    // Find the activity object that matches the session's activity ID
+    const activity = activities.find(a => a.id === session.activity);
+    
+    // If found, return the name; otherwise return a formatted version of the ID
+    if (activity) {
+      return activity.name;
+    }
+    
+    // Fallback: If activity not found (maybe it was deleted?), format the ID
+    // This prevents the app from crashing if data is inconsistent
+    return formatActivityName(session.activity);
+  };
 
   const formatTime = (isoString) => {
     const date = new Date(isoString);
@@ -33,6 +61,8 @@ const SessionDetailsModal = ({ visible, session, onClose }) => {
   };
 
   const formatActivityName = (name) => {
+    // Helper function for formatting activity IDs as fallback
+    // Handles cases like "deep-work" → "Deep Work"
     return name.split('-').map(word => 
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
@@ -63,7 +93,7 @@ const SessionDetailsModal = ({ visible, session, onClose }) => {
             <View style={styles.detailSection}>
               <Text style={styles.label}>Activity</Text>
               <Text style={styles.value}>
-                {formatActivityName(session.activity)}
+                {getActivityName()}
               </Text>
             </View>
 

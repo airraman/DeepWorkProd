@@ -552,6 +552,7 @@ const MetricsScreen = () => {
       <SessionDetailsModal
         visible={showSessionDetails}
         session={selectedSession}
+        activities={activities}  // ✅ ADD THIS LINE
         onClose={() => {
           setShowSessionDetails(false);
           setSelectedSession(null);
