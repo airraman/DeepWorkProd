@@ -50,18 +50,18 @@ class AudioService {
       console.log('🎵 Initializing audio service...');
       
       await Audio.setAudioModeAsync({
-        // ✅ CRITICAL for background audio
+        // ✅ CRITICAL: These tell iOS to keep audio active when locked
         playsInSilentModeIOS: true,
-        staysActiveInBackground: true,  // Keep playing when locked/backgrounded
+        staysActiveInBackground: true,
         
+        // ✅ NEW: Set proper interruption mode for background playback
+        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+        
+        // Keep these as they are
         allowsRecordingIOS: false,
-        interruptionModeIOS: 1,
-        interruptionModeAndroid: 1,
         shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
-        
-        // ✅ ADD THESE for better background support:
-        staysActiveInBackground: true,  // Redundant but explicit
       });
       
       this.isInitialized = true;
@@ -116,7 +116,7 @@ class AudioService {
       let soundSource;
       switch (musicChoice) {
         case 'white-noise':
-          soundSource = require('../../assets/sounds/white-noise.mp3');
+          soundSource = require('../../assets/whitenoise.mp3');
           break;
         case 'lofi':
           soundSource = require('../../assets/sounds/lofi.mp3');

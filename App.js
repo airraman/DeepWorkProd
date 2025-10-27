@@ -7,8 +7,7 @@ import { ThemeProvider } from './src/context/ThemeContext';
 import { SubscriptionProvider } from './src/context/SubscriptionContext';  // ✅ NEW IMPORT
 import * as Notifications from 'expo-notifications';
 import * as Updates from 'expo-updates';
-import { Alert, View, Text, Platform, Dimensions, StatusBar } from 'react-native';
-import { navigationRef, safeNavigate } from './src/services/navigationService';
+import { Alert, View, Text, Platform, Dimensions, StatusBar, Linking } from 'react-native';import { navigationRef, safeNavigate } from './src/services/navigationService';
 import backgroundTimer from './src/services/backgroundTimer';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import DevToolsScreen from './src/screens/DevToolsScreen';
@@ -90,35 +89,47 @@ const initializeBackgroundServices = async () => {
     let permissionsGranted = false;
     try {
       console.log('📱 Requesting notification permissions...');
-      const { status } = await Notifications.requestPermissionsAsync();
+      
+      // ✅ Request with all options
+      const { status } = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+          allowAnnouncements: true,
+          allowCriticalAlerts: false, // Requires special entitlement
+        },
+      });
       
       if (status === 'granted') {
         console.log('📱 Notification permissions granted');
         permissionsGranted = true;
       } else {
-        console.warn('📱 Notification permissions denied - audio may not work');
+        console.warn('📱 Notification permissions denied');
         
-        // Show user-friendly alert about enabling notifications
+        // Show alert explaining why notifications are important
         setTimeout(() => {
           Alert.alert(
-            'Notifications Disabled',
-            'To hear session completion sounds, please enable notifications for DeepWork in your device Settings.',
+            'Enable Notifications',
+            'DeepWork needs notifications to alert you when sessions complete, even when your phone is locked.\n\nTo enable:\n1. Open Settings\n2. Find DeepWork\n3. Enable Notifications\n4. Enable Sounds',
             [
-              { text: 'Skip', style: 'cancel' },
+              { text: 'Later', style: 'cancel' },
               { 
                 text: 'Open Settings', 
                 onPress: () => {
-                  // Note: Linking.openSettings() would need to be imported
-                  console.log('User should manually open Settings');
+                  if (Platform.OS === 'ios') {
+                    Linking.openURL('app-settings:');
+                  } else {
+                    Linking.openSettings();
+                  }
                 }
               }
             ]
           );
         }, 2000);
       }
-    } catch (permissionError) {
-      console.error('📱 Permission request failed:', permissionError);
-      permissionsGranted = false;
+    } catch (error) {
+      console.error('📱 Permission request error:', error);
     }
     
     // STEP 2: Initialize alarm service with error handling

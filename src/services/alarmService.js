@@ -43,29 +43,27 @@ class AlarmService {
    */
   async init() {
     try {
-      console.log('🎵 Initializing audio service...');
+      console.log('🔔 Initializing alarm service...');
       
       await Audio.setAudioModeAsync({
-        // ✅ CRITICAL for background audio
         playsInSilentModeIOS: true,
-        staysActiveInBackground: true,  // Keep playing when locked/backgrounded
+        staysActiveInBackground: true,
+        
+        // ✅ NEW: Proper interruption mode for alarm sounds
+        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
         
         allowsRecordingIOS: false,
-        interruptionModeIOS: 1,
-        interruptionModeAndroid: 1,
         shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
-        
-        // ✅ ADD THESE for better background support:
-        staysActiveInBackground: true,  // Redundant but explicit
       });
       
       this.isInitialized = true;
-      console.log('🎵 Audio service initialized successfully');
+      console.log('🔔 Alarm service initialized successfully');
       return true;
       
     } catch (error) {
-      console.error('🎵 Audio initialization error:', error);
+      console.error('🔔 Alarm initialization error:', error);
       this.isInitialized = true;
       return false;
     }
@@ -122,7 +120,7 @@ class AlarmService {
       
       const { sound } = await Audio.Sound.createAsync(
         // Use require() to bundle the asset at compile time
-        require('../../assets/sounds/completion-alarm.mp3'),
+        require('../../assets/alarm.mp3'),
         {
           // Start playing immediately
           shouldPlay: true,

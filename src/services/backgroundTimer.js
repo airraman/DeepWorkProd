@@ -83,37 +83,134 @@ const calculateRemainingTime = (sessionData) => {
 };
 
 // Enhanced completion notification with alarm trigger
+// Enhanced completion notification with alarm trigger
 const sendCompletionNotification = async () => {
   try {
     debugLog('Session completed - sending notification with SOUND');
     
+    // ✅ CRITICAL FIX: Set notification handler RIGHT BEFORE sending
+    // This ensures the handler is active when the notification arrives
+    /**
+     * WHY THIS IS HERE:
+     * - Notification handlers can be overridden by other parts of the app
+     * - By setting it immediately before sending, we guarantee it's active
+     * - This is especially important for FOREGROUND notifications
+     * 
+     * INTERVIEW CONCEPT: Timing matters in mobile notifications
+     * - iOS/Android check the handler when notification is RECEIVED, not sent
+     * - Setting handler during app init might not persist until session ends
+     * - This pattern ensures consistent behavior
+     */
+    await Notifications.setNotificationHandler({
+      handleNotification: async (notification) => {
+        try {
+          // Check if this is a completion notification (has alarm data)
+          const isCompletion = notification.request.content.data?.shouldPlayAlarm;
+          const isTimerUpdate = notification.request.content.data?.isTimerUpdate;
+          
+          /**
+           * PRESENTATION CONFIGURATION
+           * 
+           * shouldShowAlert: Controls if notification shows as banner/popup
+           * - TRUE = Shows even when app is in foreground ✅
+           * - FALSE = Only shows when app is backgrounded
+           * 
+           * shouldPlaySound: Controls if notification plays sound
+           * - TRUE for completion notifications (important!)
+           * - FALSE for timer updates (would be annoying every second)
+           * 
+           * shouldSetBadge: Controls app icon badge number (iOS)
+           * - TRUE for completion (user should see they finished)
+           * - FALSE for updates (don't clutter badge)
+           * 
+           * INTERVIEW Q: Why return different values for different notification types?
+           * A: User experience! Completion is important (loud), updates are info (quiet)
+           */
+          return {
+            shouldShowAlert: true,        // ✅ ALWAYS show, even in foreground
+            shouldPlaySound: isCompletion, // ✅ Only sound for completion
+            shouldSetBadge: isCompletion,  // ✅ Only badge for completion
+            
+            // Priority affects Android notification behavior
+            priority: isCompletion 
+              ? Notifications.AndroidNotificationPriority.MAX      // Completion: MAX priority
+              : (isTablet 
+                  ? Notifications.AndroidNotificationPriority.DEFAULT  // iPad updates: normal
+                  : Notifications.AndroidNotificationPriority.HIGH)   // Phone updates: high
+          };
+        } catch (handlerError) {
+          // If handler logic fails, use safe defaults
+          debugLog('Notification handler error:', handlerError);
+          return {
+            shouldShowAlert: true,
+            shouldPlaySound: false,
+            shouldSetBadge: false
+          };
+        }
+      },
+    });
+    
+    debugLog('✅ Notification handler configured for completion notification');
+    
     // Get session data for personalized notification
-    let sessionInfo = { activity: 'Focus Session', duration: 'Unknown' };
+    let sessionInfo = { 
+      activity: 'Focus Session', 
+      duration: 'Unknown',
+      color: '#4ADE80'
+    };
+    
     try {
       const sessionData = await getActiveSessionFromStorage();
       if (sessionData) {
         const settings = await deepWorkStore.getSettings();
         const activityDetails = settings.activities.find(a => a.id === sessionData.activity);
         
-        sessionInfo = {
-          activity: activityDetails ? activityDetails.name : 'Focus Session',
-          duration: Math.floor(sessionData.duration / 60000),
-          color: activityDetails ? activityDetails.color : '#4ADE80'
-        };
+        if (activityDetails) {
+          sessionInfo = {
+            activity: activityDetails.name,
+            duration: Math.floor(sessionData.duration / 60000),
+            color: activityDetails.color
+          };
+        } else {
+          // Fallback if activity not found
+          sessionInfo.duration = Math.floor(sessionData.duration / 60000);
+        }
       }
     } catch (error) {
       debugLog('Error getting session info for notification:', error);
+      // Continue with default sessionInfo
     }
     
-    // Schedule completion notification with ENHANCED AUDIO settings
+    /**
+     * NOTIFICATION CONTENT CONSTRUCTION
+     * 
+     * This is the actual notification that will appear on the user's screen
+     * Key components:
+     * - title: Main heading
+     * - body: Detailed message
+     * - data: Metadata for app to handle notification tap
+     * - sound: Enable/disable audio
+     * - Platform-specific enhancements (iOS vs Android)
+     */
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'Deep Work Session Complete!',
+        title: '🎉 Deep Work Session Complete!',
         body: `Congratulations! Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has finished.`,
+        
+        /**
+         * DATA PAYLOAD
+         * 
+         * INTERVIEW CONCEPT: Notification data vs content
+         * - content: What the USER sees (title, body)
+         * - data: What the APP sees when notification is tapped
+         * 
+         * This data is available in App.js notification listener
+         * Used to trigger alarm, navigate to screens, etc.
+         */
         data: { 
-          screen: 'MainApp', 
-          params: { screen: 'Metrics' },
-          shouldPlayAlarm: true,
+          screen: 'MainApp',              // Where to navigate on tap
+          params: { screen: 'Metrics' },  // Sub-navigation
+          shouldPlayAlarm: true,           // ✅ Trigger alarm service
           completedAt: new Date().toISOString(),
           sessionInfo: sessionInfo,
           alarmSettings: {
@@ -122,38 +219,98 @@ const sendCompletionNotification = async () => {
           }
         },
         
-        // ENHANCED SOUND SETTINGS for testing
+        // ✅ CRITICAL: Enable sound for this notification
         sound: true,
+        
+        // Set high priority for Android
         priority: Notifications.AndroidNotificationPriority.MAX,
         
-        // iOS-specific sound enhancements
+        /**
+         * iOS-SPECIFIC ENHANCEMENTS
+         * 
+         * INTERVIEW CONCEPT: Platform-specific notification features
+         * iOS has unique notification properties that Android doesn't have:
+         * - subtitle: Secondary text under title
+         * - badge: Red number on app icon
+         * - interruptionLevel: How aggressively notification interrupts user
+         * - relevanceScore: Helps iOS decide which notifications to show first
+         */
         ...(Platform.OS === 'ios' && {
           subtitle: `${sessionInfo.activity} completed!`,
-          badge: 1,
-          sound: 'default', // Uses system notification sound
-          interruptionLevel: 'active', // Ensures sound plays
-          relevanceScore: 1.0, // High priority
+          badge: 1,  // Show "1" on app icon
+          sound: 'default',  // Use system notification sound
+          
+          /**
+           * INTERRUPTION LEVEL
+           * 
+           * Options:
+           * - passive: Silent, only in notification center
+           * - active: Standard notification
+           * - timeSensitive: Breaks through Focus modes ✅
+           * - critical: Even breaks Do Not Disturb (requires special permission)
+           * 
+           * We use 'active' here (you had this originally)
+           * Consider 'timeSensitive' if users complain about missing notifications
+           */
+          interruptionLevel: 'active',
+          relevanceScore: 1.0,  // Highest relevance (0.0 to 1.0)
         }),
         
-        // Android-specific sound enhancements
+        /**
+         * ANDROID-SPECIFIC ENHANCEMENTS
+         * 
+         * INTERVIEW CONCEPT: Android notification channels
+         * Android 8.0+ requires channels - categories for notifications
+         * Each channel has its own settings (sound, vibration, importance)
+         * 
+         * 'session-completion' channel was created in configureNotifications()
+         */
         ...(Platform.OS === 'android' && {
-          channelId: 'session-completion',
-          sticky: false,
-          autoCancel: true,
-          lights: true,
-          lightColor: sessionInfo.color,
-          vibrationPattern: [0, 500, 200, 500], // Stronger vibration pattern
+          channelId: 'session-completion',  // References channel we created
+          sticky: false,        // User can swipe away
+          autoCancel: true,     // Dismiss when tapped
+          lights: true,         // LED notification light (if device has one)
+          lightColor: sessionInfo.color,  // Match activity color
+          vibrationPattern: [0, 500, 200, 500],  // Custom vibration pattern
           importance: Notifications.AndroidImportance.HIGH,
         })
       },
+      
+      /**
+       * TRIGGER
+       * 
+       * INTERVIEW Q: Why is trigger set to null?
+       * A: null = "show immediately"
+       * 
+       * Other trigger options:
+       * - { seconds: 10 } = show after 10 seconds
+       * - { date: new Date() } = show at specific time
+       * - { channelId: 'X' } = recurring notification
+       * 
+       * We want immediate notification when session completes
+       */
       trigger: null,
     });
     
-    debugLog('Enhanced completion notification with sound sent successfully');
+    debugLog('✅ Enhanced completion notification sent successfully');
+    
   } catch (error) {
-    debugLog('Failed to send completion notification:', error);
+    debugLog('❌ Failed to send completion notification:', error);
+    
+    /**
+     * ERROR HANDLING
+     * 
+     * INTERVIEW CONCEPT: Graceful degradation
+     * Even if notification fails (permissions denied, system error, etc.):
+     * - Don't crash the app
+     * - Log for debugging
+     * - The alarm service in handleTimeout() will still provide feedback
+     * 
+     * Multiple feedback layers ensure user always knows session completed
+     */
   }
 };
+
 // Update timer notification with iPad optimizations
 const updateTimerNotification = async (timeRemaining, sessionData) => {
   try {
