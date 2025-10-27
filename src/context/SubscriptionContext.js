@@ -50,7 +50,7 @@ export function SubscriptionProvider({ children }) {
 
   function updateSubscriptionStatus(customerInfo) {
     // 'premium' is your entitlement identifier - we'll set this up in dashboard next
-    const hasAccess = customerInfo.entitlements.active['premium'] !== undefined;
+    const hasAccess = customerInfo.entitlements.active['Pro'] !== undefined;
     setIsPremium(hasAccess);
   }
 

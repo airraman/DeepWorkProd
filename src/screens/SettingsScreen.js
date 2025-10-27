@@ -11,23 +11,26 @@ import {
   Modal,
   ActivityIndicator,
   Platform,
-  Dimensions
+  Dimensions,
+  Alert,
 } from 'react-native';
 import { Plus, X, Save, Clock, Pencil, Volume2 } from 'lucide-react-native';
 import { deepWorkStore } from '../services/deepWorkStore';
-import { alarmService } from '../services/alarmService'; // NEW: Import alarm service
+import { alarmService } from '../services/alarmService';
 import SharedHeader from '../components/SharedHeader';
 import { useTheme, THEMES } from '../context/ThemeContext';
-import { useNavigation } from '@react-navigation/native';  // ✅ ADD THIS LINE
+import { useNavigation } from '@react-navigation/native';
+import { useSubscription } from '../context/SubscriptionContext';  // ✅ NEW IMPORT
+import { PaywallModal } from '../components/PaywallModal';  // ✅ NEW IMPORT
 
-// Use the same header height as other screens
 const HEADER_HEIGHT = Platform.OS === 'ios' ? 60 : 50;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const SettingsScreen = () => {
   const { colors, theme } = useTheme();
   const isDark = theme === THEMES.DARK;
-  const navigation = useNavigation();  // ✅ ADD THIS LINE
+  const navigation = useNavigation();
+  const { isPremium } = useSubscription();  // ✅ NEW: Get subscription status
   
   // Core state management
   const [activities, setActivities] = useState([]);
@@ -35,7 +38,7 @@ const SettingsScreen = () => {
   const [selectedColor, setSelectedColor] = useState('#c8b2d6');
   const [selectedDurations, setSelectedDurations] = useState([]);
   
-  // NEW: Alarm settings state
+  // Alarm settings state
   const [alarmEnabled, setAlarmEnabled] = useState(true);
   const [alarmVolume, setAlarmVolume] = useState(0.8);
   
@@ -45,6 +48,9 @@ const SettingsScreen = () => {
   const [alertMessage, setAlertMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // ✅ NEW: Paywall state
+  const [showPaywall, setShowPaywall] = useState(false);
 
   const colorPalette = [
     '#c8b2d6', '#f1dbbc', '#bcd2f1', '#d6b2c8', 
@@ -53,7 +59,6 @@ const SettingsScreen = () => {
 
   const durations = [5, 10, 15, 20, 30, 45];
 
-  // Load saved settings when component mounts
   useEffect(() => {
     loadSettings();
   }, []);
@@ -65,7 +70,6 @@ const SettingsScreen = () => {
       setActivities(settings.activities);
       setSelectedDurations(settings.durations);
       
-      // NEW: Load alarm settings (with defaults if not present)
       setAlarmEnabled(settings.alarmEnabled !== undefined ? settings.alarmEnabled : true);
       setAlarmVolume(settings.alarmVolume !== undefined ? settings.alarmVolume : 0.8);
       
@@ -83,11 +87,25 @@ const SettingsScreen = () => {
     setTimeout(() => setShowAlert(false), 2000);
   };
 
+  // ✅ UPDATED: Add paywall gate to activity creation
   const handleAddActivity = async () => {
     if (!newActivity.trim()) return;
 
+    // 🔒 PAYWALL GATE: Check activity limit for free users
+    if (!isPremium && activities.length >= 2) {
+      console.log('🔒 Activity limit reached - showing paywall');
+      console.log('Current activities:', activities.length);
+      console.log('User isPremium:', isPremium);
+      
+      // Show paywall
+      setShowPaywall(true);
+      return; // Block the action
+    }
+
     try {
       setIsSaving(true);
+      console.log('✅ Adding activity...');
+      
       const id = newActivity.toLowerCase().replace(/\s+/g, '-');
       const updatedActivities = [
         ...activities, 
@@ -169,11 +187,9 @@ const SettingsScreen = () => {
     }
   };
 
-  // NEW: Handle alarm setting changes
   const handleAlarmEnabledChange = async (enabled) => {
     try {
       setAlarmEnabled(enabled);
-      // Save immediately to storage
       const currentSettings = await deepWorkStore.getSettings();
       const success = await deepWorkStore.updateSettings({
         ...currentSettings,
@@ -181,7 +197,6 @@ const SettingsScreen = () => {
       });
       
       if (!success) {
-        // Revert on failure
         setAlarmEnabled(!enabled);
         showFeedback('Failed to update alarm setting');
       }
@@ -196,7 +211,6 @@ const SettingsScreen = () => {
     try {
       setAlarmVolume(volume);
       
-      // Save immediately to storage
       const currentSettings = await deepWorkStore.getSettings();
       const success = await deepWorkStore.updateSettings({
         ...currentSettings,
@@ -204,7 +218,6 @@ const SettingsScreen = () => {
       });
       
       if (!success) {
-        // Revert on failure
         setAlarmVolume(alarmVolume);
         showFeedback('Failed to update volume setting');
       } else {
@@ -216,13 +229,11 @@ const SettingsScreen = () => {
     }
   };
 
-  // NEW: Handle alarm testing
   const handleTestAlarm = async () => {
     try {
       setIsSaving(true);
       showFeedback('Testing alarm...');
       
-      // Test the alarm with current settings
       const alarmPlayed = await alarmService.testAlarm();
       
       if (alarmPlayed) {
@@ -252,7 +263,6 @@ const SettingsScreen = () => {
       const success = await deepWorkStore.updateSettings({
         activities,
         durations: selectedDurations,
-        // NEW: Include alarm settings in save
         alarmEnabled,
         alarmVolume,
       });
@@ -290,7 +300,6 @@ const SettingsScreen = () => {
         >
           <X size={16} color={colors.textSecondary} />
         </TouchableOpacity>
-
       </View>
     </View>
   );
@@ -316,52 +325,81 @@ const SettingsScreen = () => {
         contentContainerStyle={{ paddingTop: HEADER_HEIGHT, paddingHorizontal: 12 }}
       >
         <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Set Your Preferences</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            Customize Your DeepWork Experience
+          </Text>
         </View>
         
         <View style={[styles.divider, { backgroundColor: colors.divider }]} />
         
-        {/* Add Activity Section */}
+        {/* Activities Section */}
         <View style={[
           styles.section, 
           { 
-            backgroundColor: colors.card,
+            backgroundColor: isDark ? '#1f1f1f' : colors.card,
             borderColor: colors.border,
-            borderRadius: 12, 
-            borderWidth: 2 
+            borderWidth: 1,
+            borderRadius: 12,
           }
         ]}>
           <View style={styles.sectionHeader}>
-            <Plus stroke={colors.textSecondary} size={20} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Add Activity</Text>
+            <Pencil stroke={colors.textSecondary} size={20} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Activity Names
+            </Text>
+            {/* ✅ NEW: Show premium badge for free users */}
+            {!isPremium && (
+              <View style={styles.premiumBadge}>
+                <Text style={styles.premiumBadgeText}>PRO</Text>
+              </View>
+            )}
           </View>
+          
+          {/* ✅ NEW: Show limit warning for free users */}
+          {!isPremium && activities.length >= 2 && (
+            <View style={[styles.limitWarning, { backgroundColor: colors.warningBackground, borderColor: colors.warning }]}>
+              <Text style={[styles.limitWarningText, { color: colors.warningText }]}>
+                🔒 Free users can have up to 2 activities
+              </Text>
+              <TouchableOpacity 
+                style={[styles.upgradeButton, { backgroundColor: colors.primary }]}
+                onPress={() => setShowPaywall(true)}
+              >
+                <Text style={styles.upgradeButtonText}>Upgrade for Unlimited</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           
           <View style={styles.addActivityForm}>
             <TextInput
               style={[
                 styles.input,
                 { 
-                  borderColor: colors.border, 
-                  backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6',
-                  color: colors.text
+                  backgroundColor: isDark ? '#2a2a2a' : 'white',
+                  borderColor: colors.border,
+                  color: colors.text 
                 }
               ]}
+              placeholder="Enter activity name"
+              placeholderTextColor={colors.textSecondary}
               value={newActivity}
               onChangeText={setNewActivity}
-              placeholder="Activity name"
-              placeholderTextColor={colors.textSecondary}
-              maxLength={20}
-              editable={!isSaving}
             />
+            
             <View style={styles.formControls}>
               <View style={styles.colorSelectContainer}>
-                <Text style={[styles.colorSelectLabel, { color: colors.textSecondary }]}>Color:</Text>
+                <Text style={[styles.colorSelectLabel, { color: colors.textSecondary }]}>
+                  Color:
+                </Text>
                 <TouchableOpacity
-                  style={[styles.selectedColorPreview, { backgroundColor: selectedColor, borderColor: colors.border }]}
+                  style={[
+                    styles.selectedColorPreview,
+                    { backgroundColor: selectedColor, borderColor: colors.border }
+                  ]}
                   onPress={() => setShowColorPicker(true)}
-                  disabled={isSaving}
                 />
               </View>
+              
               <TouchableOpacity
                 style={[
                   styles.addButton,
@@ -375,115 +413,99 @@ const SettingsScreen = () => {
                   <ActivityIndicator size="small" color="white" />
                 ) : (
                   <>
-                    <Plus size={20} color="white" />
+                    <Plus size={16} color="white" />
                     <Text style={styles.buttonText}>Add</Text>
                   </>
                 )}
               </TouchableOpacity>
             </View>
           </View>
+          
+          {activities.length > 0 && (
+            <FlatList
+              data={activities}
+              renderItem={renderActivity}
+              keyExtractor={item => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.activitiesList}
+            />
+          )}
         </View>
 
-        {/* Activities List */}
+        {/* Duration Selection Section */}
         <View style={[
           styles.section, 
           { 
-            backgroundColor: colors.card,
+            backgroundColor: isDark ? '#1f1f1f' : colors.card,
             borderColor: colors.border,
-            borderRadius: 12, 
-            borderWidth: 2
-          }
-        ]}>
-          <View style={styles.sectionHeader}>
-            <Pencil stroke={colors.textSecondary} size={20} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Activities</Text>
-          </View>
-          
-          <FlatList
-            data={activities}
-            renderItem={renderActivity}
-            keyExtractor={item => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.activitiesList}
-          />
-        </View>
-
-        {/* Duration Selection */}
-        {/* <View style={[
-          styles.section, 
-          { 
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-            borderRadius: 12, 
-            borderWidth: 2
+            borderWidth: 1,
+            borderRadius: 12,
           }
         ]}>
           <View style={styles.sectionHeader}>
             <Clock stroke={colors.textSecondary} size={20} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Session Lengths</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Available Durations
+            </Text>
           </View>
           
           <Text style={[styles.helpText, { color: colors.textSecondary }]}>
-            Select 3 options ({selectedDurations.length}/3)
+            Select exactly 3 durations
           </Text>
           
           <View style={styles.durationButtons}>
-            {durations.map((duration) => (
-              <TouchableOpacity
-                key={duration}
-                style={[
-                  styles.durationButton,
-                  { backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6' },
-                  selectedDurations.includes(duration) && { backgroundColor: colors.primary },
-                  selectedDurations.length === 3 &&
-                    !selectedDurations.includes(duration) &&
-                    styles.disabledDuration
-                ]}
-                onPress={() => handleDurationClick(duration)}
-                disabled={
-                  isSaving ||
-                  (selectedDurations.length === 3 &&
-                    !selectedDurations.includes(duration))
-                }
-              >
-                <Text
+            {durations.map(duration => {
+              const isSelected = selectedDurations.includes(duration);
+              const isDisabled = selectedDurations.length === 3 && !isSelected;
+              
+              return (
+                <TouchableOpacity
+                  key={duration}
                   style={[
-                    styles.durationButtonText,
-                    { color: isDark ? colors.textSecondary : '#1f2937' },
-                    selectedDurations.includes(duration) && { color: 'white' }
+                    styles.durationButton,
+                    { 
+                      backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6',
+                      borderColor: isSelected ? colors.primary : colors.border,
+                      borderWidth: isSelected ? 2 : 1,
+                    },
+                    isDisabled && styles.disabledDuration
                   ]}
+                  onPress={() => handleDurationClick(duration)}
+                  disabled={isDisabled || isSaving}
                 >
-                  {duration}m
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text style={[
+                    styles.durationButtonText,
+                    { color: isSelected ? colors.primary : colors.text }
+                  ]}>
+                    {duration} min
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
-        </View> */}
+        </View>
 
-        {/* NEW: Alarm Settings Section */}
+        {/* Alarm Settings Section */}
         <View style={[
           styles.section, 
           { 
-            backgroundColor: colors.card,
+            backgroundColor: isDark ? '#1f1f1f' : colors.card,
             borderColor: colors.border,
-            borderRadius: 12, 
-            borderWidth: 2
+            borderWidth: 1,
+            borderRadius: 12,
           }
         ]}>
           <View style={styles.sectionHeader}>
             <Volume2 stroke={colors.textSecondary} size={20} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Session Alarm</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Alarm Settings
+            </Text>
           </View>
           
-          <Text style={[styles.helpText, { color: colors.textSecondary }]}>
-            Configure completion alarm settings
-          </Text>
-          
-          {/* Alarm Enable/Disable Toggle */}
           <View style={styles.settingRow}>
             <Text style={[styles.settingLabel, { color: colors.text }]}>
-              Enable Completion Alarm
+              Enable Alarm
             </Text>
             <TouchableOpacity
               style={[
@@ -492,74 +514,71 @@ const SettingsScreen = () => {
               ]}
               onPress={() => handleAlarmEnabledChange(!alarmEnabled)}
             >
-              <View style={[
-                styles.toggleIndicator,
-                { 
-                  backgroundColor: 'white',
-                  transform: [{ translateX: alarmEnabled ? 24 : 2 }]
-                }
-              ]} />
+              <View 
+                style={[
+                  styles.toggleIndicator,
+                  { 
+                    backgroundColor: '#FFFFFF',
+                    alignSelf: alarmEnabled ? 'flex-end' : 'flex-start'
+                  }
+                ]}
+              />
             </TouchableOpacity>
           </View>
           
-          {/* Alarm Volume Slider */}
           {alarmEnabled && (
-            <View style={styles.settingRow}>
-              <Text style={[styles.settingLabel, { color: colors.text }]}>
-                Alarm Volume: {Math.round(alarmVolume * 100)}%
-              </Text>
-              <View style={styles.volumeControls}>
-                {[0.3, 0.5, 0.8, 1.0].map((volume) => (
-                  <TouchableOpacity
-                    key={volume}
-                    style={[
-                      styles.volumeButton,
-                      { backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6' },
-                      alarmVolume === volume && { backgroundColor: colors.primary }
-                    ]}
-                    onPress={() => handleAlarmVolumeChange(volume)}
-                  >
-                    <Text
+            <>
+              <View style={styles.settingRow}>
+                <Text style={[styles.settingLabel, { color: colors.text }]}>
+                  Volume
+                </Text>
+                <View style={styles.volumeControls}>
+                  {[0.3, 0.5, 0.8, 1.0].map(vol => (
+                    <TouchableOpacity
+                      key={vol}
                       style={[
-                        styles.volumeButtonText,
-                        { color: isDark ? colors.textSecondary : '#1f2937' },
-                        alarmVolume === volume && { color: 'white' }
+                        styles.volumeButton,
+                        { 
+                          backgroundColor: alarmVolume === vol ? colors.primary : colors.border
+                        }
                       ]}
+                      onPress={() => handleAlarmVolumeChange(vol)}
                     >
-                      {Math.round(volume * 100)}%
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <Text style={[
+                        styles.volumeButtonText,
+                        { color: alarmVolume === vol ? '#FFFFFF' : colors.text }
+                      ]}>
+                        {Math.round(vol * 100)}%
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
-            </View>
-          )}
-          
-          {/* Test Alarm Button */}
-          {alarmEnabled && (
-            <TouchableOpacity
-              style={[
-                styles.testAlarmButton,
-                { backgroundColor: colors.textSecondary }
-              ]}
-              onPress={handleTestAlarm}
-              disabled={isSaving}
-            >
-              <Text style={styles.testAlarmButtonText}>
-                Test Alarm Sound
-              </Text>
-            </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.testAlarmButton, { backgroundColor: colors.primary }]}
+                onPress={handleTestAlarm}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.testAlarmButtonText}>Test Alarm</Text>
+                )}
+              </TouchableOpacity>
+            </>
           )}
         </View>
 
-        {/* Update Button */}
+        {/* Save Button */}
         <TouchableOpacity
           style={[
             styles.updateButton,
             { backgroundColor: colors.primary },
-            (selectedDurations.length !== 3 || isSaving) && styles.disabledButton,
+            isSaving && styles.disabledButton
           ]}
           onPress={handleSaveSettings}
-          disabled={selectedDurations.length !== 3 || isSaving}
+          disabled={isSaving}
         >
           {isSaving ? (
             <ActivityIndicator size="small" color="white" />
@@ -569,19 +588,17 @@ const SettingsScreen = () => {
         </TouchableOpacity>
 
         {__DEV__ && (
-  <TouchableOpacity
-    style={[
-      styles.updateButton,
-      { backgroundColor: '#6b7280', marginTop: 8 }
-    ]}
-    onPress={() => navigation.navigate('DevTools')}
-  >
-    <Text style={styles.updateButtonText}>🛠️ Dev Tools (Testing Only)</Text>
-  </TouchableOpacity>
-  
-)}
+          <TouchableOpacity
+            style={[
+              styles.updateButton,
+              { backgroundColor: '#6b7280', marginTop: 8 }
+            ]}
+            onPress={() => navigation.navigate('DevTools')}
+          >
+            <Text style={styles.updateButtonText}>🛠️ Dev Tools (Testing Only)</Text>
+          </TouchableOpacity>
+        )}
 
-        {/* Extra padding at the bottom for better scrolling experience */}
         <View style={{ height: 80 }} />
       </ScrollView>
 
@@ -614,6 +631,13 @@ const SettingsScreen = () => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* ✅ NEW: Paywall Modal */}
+      <PaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        limitType="activities"
+      />
 
       {/* Alert */}
       {showAlert && (
@@ -667,6 +691,42 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  // ✅ NEW: Premium badge styles
+  premiumBadge: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  premiumBadgeText: {
+    color: '#000',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  // ✅ NEW: Limit warning styles
+  limitWarning: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  limitWarningText: {
+    fontSize: 14,
+    marginBottom: 8,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  upgradeButton: {
+    padding: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  upgradeButtonText: {
+    color: '#FFF',
+    fontSize: 14,
     fontWeight: '600',
   },
   addActivityForm: {
@@ -764,7 +824,6 @@ const styles = StyleSheet.create({
   disabledDuration: {
     opacity: 0.5,
   },
-  // NEW: Alarm Settings Styles
   settingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

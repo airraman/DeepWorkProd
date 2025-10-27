@@ -97,6 +97,23 @@ const HomeScreen = () => {
 
   // Handle starting a new deep work session
   const handleStartSession = () => {
+    // Parse duration as number
+    const selectedDuration = parseFloat(duration);
+    
+    // 🔒 PAYWALL GATE: Check if session duration exceeds 30 minutes and user is not premium
+    if (!isPremium && selectedDuration > 30) {
+      console.log('🔒 Session limit reached - showing paywall');
+      console.log('Selected duration:', selectedDuration, 'minutes');
+      console.log('User isPremium:', isPremium);
+      
+      // Show paywall for sessions over 30 minutes
+      setShowPaywall(true);
+      return; // Block the action
+    }
+    
+    console.log('✅ Starting session - duration:', selectedDuration, 'minutes');
+    
+    // Allow session to start
     navigation.navigate('DeepWorkSession', {
       duration,
       activity,
