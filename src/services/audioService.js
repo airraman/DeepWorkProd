@@ -55,8 +55,8 @@ class AudioService {
         staysActiveInBackground: true,
         
         // ✅ NEW: Set proper interruption mode for background playback
-        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+        interruptionModeIOS: 1,
+        interruptionModeAndroid: 1,
         
         // Keep these as they are
         allowsRecordingIOS: false,

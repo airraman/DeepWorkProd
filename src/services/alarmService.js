@@ -50,8 +50,8 @@ class AlarmService {
         staysActiveInBackground: true,
         
         // ✅ NEW: Proper interruption mode for alarm sounds
-        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+        interruptionModeIOS: 1,
+        interruptionModeAndroid: 1,
         
         allowsRecordingIOS: false,
         shouldDuckAndroid: true,

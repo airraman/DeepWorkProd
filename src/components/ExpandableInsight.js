@@ -145,10 +145,10 @@ const styles = StyleSheet.create({
   // PREVIEW STYLES (Truncated view)
   // ================================================================
   insightSection: {
-    padding: 16,
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 14,
+    padding: 12,           // Reduced from 16
+    marginHorizontal: 1,
+    marginTop: 1,          // Reduced from 16
+    marginBottom: 1,       // Reduced from 14
     borderRadius: 12,
     borderWidth: 1,
   },
@@ -168,8 +168,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   insightText: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,          // Reduced from 15
+    lineHeight: 20,        // Reduced from 22
   },
   readMoreText: {
     fontSize: 14,
