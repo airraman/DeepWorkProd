@@ -33,26 +33,6 @@ const MONTHS = [
   'Sep', 'Oct', 'Nov', 'Dec'
 ];
 
-const CardContainer = ({ children, style }) => {
-  const { colors } = useTheme();
-
-  const containerStyle = [
-    styles.cardContainer,
-    {
-      backgroundColor: colors.cardBackground,
-      borderColor: colors.cardBorder,
-      shadowColor: colors.shadowColor,
-    },
-    style
-  ];
-
-  return (
-    <View style={containerStyle}>
-      {children}
-    </View>
-  );
-};
-
 const generateWeeklyChartData = (sessions) => {
   const today = new Date();
   const weekData = [];
@@ -292,26 +272,107 @@ const CompactActivityGrid = ({ sessions }) => {
   );
 };
 
-const SessionList = ({ sessions, activities, onSessionPress }) => {
+const MonthSelector = ({ selectedMonth, onMonthSelect, sessions }) => {
+  const { colors } = useTheme();
+  const scrollViewRef = useRef(null);
+  
+  const generateMonthsList = () => {
+    const months = [];
+    const today = new Date();
+    
+    // Find earliest session date
+    let earliestDate = today;
+    Object.keys(sessions).forEach(dateString => {
+      if (sessions[dateString].length > 0) {
+        const date = new Date(dateString);
+        if (date < earliestDate) {
+          earliestDate = date;
+        }
+      }
+    });
+    
+    // Generate months from earliest to now
+    const startYear = earliestDate.getFullYear();
+    const startMonth = earliestDate.getMonth();
+    const endYear = today.getFullYear();
+    const endMonth = today.getMonth();
+    
+    let currentDate = new Date(startYear, startMonth, 1);
+    const endDate = new Date(endYear, endMonth, 1);
+    
+    while (currentDate <= endDate) {
+      months.push({
+        month: MONTHS[currentDate.getMonth()],
+        year: currentDate.getFullYear(),
+        value: `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
+      });
+      currentDate.setMonth(currentDate.getMonth() + 1);
+    }
+    
+    return months.reverse(); // Most recent first
+  };
+  
+  const months = generateMonthsList();
+  
+  return (
+    <View style={[styles.monthSelectorContainer, { borderBottomColor: colors.border }]}>
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.monthScrollContent}
+      >
+        {months.map((month, index) => {
+          const isSelected = selectedMonth === month.value;
+          return (
+            <TouchableOpacity
+              key={month.value}
+              style={[
+                styles.monthButton,
+                isSelected && { backgroundColor: colors.primary }
+              ]}
+              onPress={() => onMonthSelect(month.value)}
+            >
+              <Text
+                style={[
+                  styles.monthButtonText,
+                  { color: isSelected ? '#FFFFFF' : colors.text }
+                ]}
+              >
+                {month.month}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+};
+
+const SessionList = ({ sessions, activities, onSessionPress, selectedMonth }) => {
   const { colors } = useTheme();
   
   const generateDaysList = () => {
     const days = [];
-    const today = new Date();
     
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() - i);
-      const dateString = date.toISOString().split('T')[0];
+    if (selectedMonth) {
+      const [year, month] = selectedMonth.split('-').map(Number);
+      const firstDay = new Date(year, month - 1, 1);
+      const lastDay = new Date(year, month, 0);
       
-      days.push({
-        date: dateString,
-        displayDate: date.toLocaleDateString('en-US', { 
-          weekday: 'short', 
-          day: 'numeric' 
-        }),
-        sessions: sessions[dateString] || []
-      });
+      for (let d = lastDay.getDate(); d >= 1; d--) {
+        const date = new Date(year, month - 1, d);
+        const dateString = date.toISOString().split('T')[0];
+        
+        days.push({
+          date: dateString,
+          displayDate: date.toLocaleDateString('en-US', { 
+            weekday: 'short', 
+            day: 'numeric' 
+          }),
+          sessions: sessions[dateString] || []
+        });
+      }
     }
     
     return days;
@@ -341,46 +402,55 @@ const SessionList = ({ sessions, activities, onSessionPress }) => {
               {day.displayDate}
             </Text>
             <Text style={[styles.daySessionCount, { color: colors.textSecondary }]}>
-              {day.sessions.length} {day.sessions.length === 1 ? 'session' : 'sessions'}
+              {day.sessions.length > 0 ? `${day.sessions.length} session${day.sessions.length !== 1 ? 's' : ''}` : '0h'}
             </Text>
           </View>
           
           {day.sessions.length > 0 && (
             <View style={styles.daySessionsContainer}>
-              {day.sessions.map((session, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.sessionCard,
-                    { 
-                      backgroundColor: colors.cardBackground,
-                      borderLeftColor: getActivityColor(session.activity),
-                      borderLeftWidth: 4
-                    }
-                  ]}
-                  onPress={() => onSessionPress(session)}
-                >
-                  <View style={styles.sessionCardContent}>
-                    <View style={styles.sessionCardHeader}>
-                      <Text style={[styles.sessionActivity, { color: colors.text }]}>
-                        {getActivityName(session.activity)}
-                      </Text>
-                      <Text style={[styles.sessionDuration, { color: colors.textSecondary }]}>
-                        {session.duration} min
-                      </Text>
+              {day.sessions.map((session) => {
+                const activityColor = getActivityColor(session.activityId);
+                const activityName = getActivityName(session.activityId);
+                
+                return (
+                  <TouchableOpacity
+                    key={session.id}
+                    style={[
+                      styles.sessionCard,
+                      { backgroundColor: colors.cardBackground }
+                    ]}
+                    onPress={() => onSessionPress(session)}
+                  >
+                    <View style={styles.sessionCardContent}>
+                      <View style={styles.sessionCardHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View 
+                            style={[
+                              styles.activityColorDot, 
+                              { backgroundColor: activityColor }
+                            ]} 
+                          />
+                          <Text style={[styles.sessionActivity, { color: colors.text }]}>
+                            {activityName}
+                          </Text>
+                        </View>
+                        <Text style={[styles.sessionDuration, { color: colors.textSecondary }]}>
+                          {session.duration}m
+                        </Text>
+                      </View>
+                      
+                      {session.description && (
+                        <Text 
+                          style={[styles.sessionDescription, { color: colors.textSecondary }]}
+                          numberOfLines={2}
+                        >
+                          {session.description}
+                        </Text>
+                      )}
                     </View>
-                    
-                    {session.description && (
-                      <Text 
-                        style={[styles.sessionDescription, { color: colors.textSecondary }]}
-                        numberOfLines={2}
-                      >
-                        {session.description}
-                      </Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              ))}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           )}
         </View>
@@ -389,374 +459,215 @@ const SessionList = ({ sessions, activities, onSessionPress }) => {
   );
 };
 
-const ActivitiesSection = ({ activities, onActivityPress }) => {
-  const { colors } = useTheme();
-  
-  return (
-    <View style={[styles.activitiesFilterContainer, { 
-      backgroundColor: colors.background, 
-      borderTopColor: colors.border 
-    }]}>
-      <Text style={[styles.activitiesLabel, { color: colors.text }]}>
-        Activities:
-      </Text>
-      
-      <View style={styles.activitiesCheckboxes}>
-        {activities.map((activity) => (
-          <TouchableOpacity
-            key={activity.id}
-            style={[styles.activityCard, { 
-              backgroundColor: activity.color + '20',
-              borderColor: activity.color,
-            }]}
-            onPress={() => onActivityPress(activity)}
-          >
-            <View style={[styles.activityColorDot, { backgroundColor: activity.color }]} />
-            <Text style={[styles.activityName, { color: colors.text }]}>
-              {activity.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-};
-
-// Main MetricsScreen Component
 const MetricsScreen = () => {
-  const { colors, theme } = useTheme();
-  const { isPremium } = useSubscription();
-  
-  const today = new Date();
-  const currentRealMonth = today.getMonth();
-  const currentRealYear = today.getFullYear();
-
-  const [currentMonth, setCurrentMonth] = useState(currentRealMonth);
-  const [currentYear, setCurrentYear] = useState(currentRealYear);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [showSessionDetails, setShowSessionDetails] = useState(false);
-  const [selectedSession, setSelectedSession] = useState(null);
+  const { colors, isDarkMode } = useTheme();
+  const { canGenerateInsights, generationsRemaining, isSubscribed } = useSubscription();
   const [sessions, setSessions] = useState({});
   const [activities, setActivities] = useState([]);
-  const [totalHours, setTotalHours] = useState(0);
-
-  const [weeklyInsight, setWeeklyInsight] = useState(null);
-  const [insightLoading, setInsightLoading] = useState(false);
+  const [selectedSession, setSelectedSession] = useState(null);
+  const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
+  const [currentInsight, setCurrentInsight] = useState(null);
   const [insightError, setInsightError] = useState(null);
-  
   const [showPaywall, setShowPaywall] = useState(false);
-  const [insightsGeneratedCount, setInsightsGeneratedCount] = useState(0);
-  
-  const [selectedActivity, setSelectedActivity] = useState(null);
-  const [showActivityInsights, setShowActivityInsights] = useState(false);
-  
-  const panX = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    loadInitialData();
-    loadInsightCount();
-  }, []);
+  const [selectedMonth, setSelectedMonth] = useState(null);
 
   useFocusEffect(
     React.useCallback(() => {
-      loadInitialData();
-      loadWeeklyInsight();
+      loadData();
     }, [])
   );
 
-  const loadInitialData = async () => {
+  useEffect(() => {
+    // Set default to current month
+    const today = new Date();
+    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    setSelectedMonth(currentMonth);
+  }, []);
+
+  const loadData = async () => {
     try {
-      setIsLoading(true);
-      setError(null);
-
-      const [sessionsData, settings] = await Promise.all([
-        deepWorkStore.getSessions(),
-        deepWorkStore.getSettings()
-      ]);
-
-      setSessions(sessionsData);
-      setActivities(settings.activities);
-      calculateTotalDeepWorkTime(sessionsData);
+      const loadedSessions = await deepWorkStore.getAllSessions();
+      const loadedActivities = await deepWorkStore.getAllActivities();
+      setSessions(loadedSessions);
+      setActivities(loadedActivities);
     } catch (error) {
-      console.error('Failed to load metrics data:', error);
-      setError('Failed to load data. Pull down to refresh.');
-    } finally {
-      setIsLoading(false);
+      console.error('Error loading metrics:', error);
     }
   };
-  
-  const loadInsightCount = async () => {
-    try {
-      const settings = await deepWorkStore.getSettings();
-      setInsightsGeneratedCount(settings.insightsGeneratedCount || 0);
-    } catch (error) {
-      console.error('Failed to load insight count:', error);
-    }
-  };
-  
-  const calculateTotalDeepWorkTime = (sessionsData) => {
-    const allSessions = Object.values(sessionsData).flat();
-    const totalMinutes = allSessions.reduce((sum, session) => sum + session.duration, 0);
-    const hours = parseFloat((totalMinutes / 60).toFixed(1));
-    setTotalHours(hours);
-  };
 
-  const loadWeeklyInsight = async () => {
-    if (!isPremium && insightsGeneratedCount >= 3) {
-      console.log('🔒 Insights limit reached - showing paywall');
+  const handleGenerateInsight = async () => {
+    if (!canGenerateInsights) {
       setShowPaywall(true);
       return;
     }
 
+    setIsGeneratingInsight(true);
+    setInsightError(null);
+    setCurrentInsight(null);
+
     try {
-      setInsightLoading(true);
-      setInsightError(null);
-      
-      const sessionsArray = Object.values(sessions).flat();
-      
-      if (sessionsArray.length === 0) {
-        setInsightError('No sessions to analyze yet. Start tracking your deep work!');
-        return;
-      }
-      
-      const result = await InsightGenerator.generateWeeklyInsight({
-        sessions: sessionsArray,
-        activities,
-        forceRegenerate: false
-      });
-      
-      console.log('📊 Insight generation result:', {
-        success: result.success,
-        hasText: !!result.insightText,
-        fromCache: result.metadata?.fromCache
-      });
-      
-      if (result.success && result.insightText) {
-        setWeeklyInsight({ 
-          insightText: result.insightText,
-          metadata: {
-            fromCache: result.metadata?.fromCache || false,
-            generatedAt: result.metadata?.generatedAt || new Date().toISOString()
-          }
-        });
-        
-        if (!isPremium) {
-          const newCount = insightsGeneratedCount + 1;
-          setInsightsGeneratedCount(newCount);
-          
-          const settings = await deepWorkStore.getSettings();
-          await deepWorkStore.updateSettings({
-            ...settings,
-            insightsGeneratedCount: newCount
-          });
-        }
-      } else {
-        setInsightError('Failed to generate insight. Please try again.');
-      }
+      const insight = await InsightGenerator.generateInsight(sessions, activities);
+      setCurrentInsight(insight);
     } catch (error) {
-      console.error('Failed to generate insight:', error);
-      setInsightError('Failed to generate insight. Please try again.');
+      console.error('Error generating insight:', error);
+      setInsightError('Unable to generate insight. Please try again.');
     } finally {
-      setInsightLoading(false);
+      setIsGeneratingInsight(false);
     }
+  };
+
+  const calculateTotalHours = () => {
+    let totalMinutes = 0;
+    Object.values(sessions).forEach(daySessions => {
+      daySessions.forEach(session => {
+        totalMinutes += session.duration;
+      });
+    });
+    return Math.round(totalMinutes / 60);
   };
 
   const handleSessionPress = (session) => {
     setSelectedSession(session);
-    setShowSessionDetails(true);
   };
 
-  const handleActivityPress = (activity) => {
-    setSelectedActivity(activity);
-    setShowActivityInsights(true);
+  const handleCloseModal = () => {
+    setSelectedSession(null);
   };
 
-  const getFilteredSessions = () => {
-    return sessions;
-  };
-
-  if (isLoading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.container, styles.centered]}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Loading metrics...
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.container, styles.centered]}>
-          <Text style={[styles.errorText, { color: colors.textSecondary }]}>{error}</Text>
-          <TouchableOpacity
-            style={[styles.retryButton, { backgroundColor: colors.primary }]}
-            onPress={loadInitialData}
-          >
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const totalHours = calculateTotalHours();
 
   return (
-    <>
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        {/* Header with Insights Button */}
-        <View style={[styles.headerContainer, { borderBottomColor: colors.border }]}>
-          <View style={styles.headerTitleContainer}>
-            <Text style={[styles.brandName, { color: colors.primary }]}>DEEP TRACKER.io</Text>
-            <Text style={[styles.title, { color: colors.text }]}>DEEP WORK SUMMARY</Text>
-          </View>
-          
-          <TouchableOpacity
-            style={[
-              styles.generateInsightsButton,
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          DeepWork.io
+        </Text>
+        <Text style={[styles.headerSubtitle, { color: colors.text }]}>
+          DEEP WORK SUMMARY
+        </Text>
+      </View>
+
+      <View style={styles.content}>
+        {/* Fixed Section: Insights + Metrics + Month Selector */}
+        <View style={styles.fixedSection}>
+          {/* Insights Section */}
+          {!isSubscribed && (
+            <View style={[
+              styles.limitIndicator,
               { 
-                backgroundColor: colors.primary,
-                shadowColor: colors.shadowColor,
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.border 
               }
-            ]}
-            onPress={loadWeeklyInsight}
-            disabled={insightLoading}
-          >
-            {insightLoading ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <>
-                <Text style={styles.sparkleEmoji}>✨</Text>
-                <Text style={styles.generateInsightsText}>Generate Insights</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Show remaining insights for free users */}
-        {!isPremium && (
-          <View style={[styles.limitIndicator, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.limitText, { color: colors.textSecondary }]}>
-              {3 - insightsGeneratedCount} free insights remaining
-            </Text>
-            <TouchableOpacity 
-              onPress={() => setShowPaywall(true)}
-              style={styles.upgradeLink}
-            >
-              <Text style={[styles.upgradeLinkText, { color: colors.primary }]}>
-                Upgrade →
+            ]}>
+              <Text style={[styles.limitText, { color: colors.textSecondary }]}>
+                {generationsRemaining} AI insight{generationsRemaining !== 1 ? 's' : ''} remaining
               </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+              <TouchableOpacity 
+                style={styles.upgradeLink}
+                onPress={() => setShowPaywall(true)}
+              >
+                <Text style={[styles.upgradeLinkText, { color: colors.primary }]}>
+                  Upgrade
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
-        {/* Insight Section */}
-        {(weeklyInsight || insightLoading || insightError) && (
-          <View style={[
-            styles.insightSection,
-            { 
-              backgroundColor: colors.cardBackground,
-              borderColor: colors.border 
-            }
-          ]}>
-            {insightLoading && (
+          {isGeneratingInsight && (
+            <View style={[
+              styles.insightSection,
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.border
+              }
+            ]}>
               <View style={styles.insightLoadingContainer}>
                 <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={[styles.insightLoadingText, { color: colors.text }]}>
+                <Text style={[styles.insightLoadingText, { color: colors.textSecondary }]}>
                   Generating insight...
                 </Text>
               </View>
-            )}
+            </View>
+          )}
 
-            {insightError && (
+          {insightError && (
+            <View style={[
+              styles.insightSection,
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.border
+              }
+            ]}>
               <Text style={[styles.insightError, { color: colors.error }]}>
                 {insightError}
               </Text>
-            )}
+            </View>
+          )}
 
-            {weeklyInsight && !insightLoading && (
-              <ExpandableInsight insight={weeklyInsight} />
-            )}
-          </View>
-        )}
+          {currentInsight && (
+            <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+              <ExpandableInsight insight={currentInsight} />
+            </View>
+          )}
 
-        {/* Charts Section */}
-        <View style={[styles.chartsRow, { borderBottomColor: colors.border }]}>
-          <View style={styles.compactActivitySection}>
-            <CompactActivityGrid sessions={sessions} />
+          {/* Metrics Row */}
+          <View style={[styles.chartsRow, { borderBottomColor: colors.border }]}>
+            <View style={styles.compactActivitySection}>
+              <CompactActivityGrid sessions={sessions} />
+            </View>
+            
+            <View style={styles.weeklyChartSection}>
+              <WeeklyFocusChart sessions={sessions} />
+            </View>
+            
+            <View style={styles.totalTimeSection}>
+              <TotalTimeCard totalHours={totalHours} />
+            </View>
           </View>
-          <View style={styles.weeklyChartSection}>
-            <WeeklyFocusChart sessions={sessions} />
-          </View>
-          <View style={styles.totalTimeSection}>
-            <TotalTimeCard totalHours={totalHours} />
-          </View>
+
+          {/* Month Selector */}
+          <MonthSelector 
+            selectedMonth={selectedMonth}
+            onMonthSelect={setSelectedMonth}
+            sessions={sessions}
+          />
         </View>
 
-        {/* Scrollable Session List */}
-        <SessionList
-          sessions={getFilteredSessions()}
+        {/* Scrollable Section: Session List Only */}
+        <SessionList 
+          sessions={sessions} 
           activities={activities}
           onSessionPress={handleSessionPress}
+          selectedMonth={selectedMonth}
         />
+      </View>
 
-        {/* Activities Section */}
-        <ActivitiesSection
-          activities={activities}
-          onActivityPress={handleActivityPress}
-        />
-
-        {/* Paywall Modal */}
-        <PaywallModal
-          visible={showPaywall}
-          onClose={() => setShowPaywall(false)}
-          limitType="insights"
-        />
-
-        {/* Session Details Modal */}
-        <SessionDetailsModal
-          visible={showSessionDetails}
-          session={selectedSession}
-          activities={activities}
-          onClose={() => {
-            setShowSessionDetails(false);
-            setSelectedSession(null);
-          }}
-        />
-      </SafeAreaView>
-
-      {/* Activity Insights Modal */}
-      <Modal
-        visible={showActivityInsights}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowActivityInsights(false)}
+      <TouchableOpacity 
+        style={[
+          styles.generateInsightsButton,
+          !canGenerateInsights && { opacity: 0.7 }
+        ]}
+        onPress={handleGenerateInsight}
+        disabled={isGeneratingInsight}
       >
-        <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              {selectedActivity?.name} Insights
-            </Text>
-            <TouchableOpacity
-              style={[styles.closeButton, { backgroundColor: colors.cardBackground }]}
-              onPress={() => setShowActivityInsights(false)}
-            >
-              <Text style={[styles.closeButtonText, { color: colors.text }]}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <ScrollView style={styles.modalContent}>
-            <Text style={[styles.modalInsightText, { color: colors.text }]}>
-              Activity-specific insights will appear here
-            </Text>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-    </>
+        <Text style={styles.sparkleEmoji}>✨</Text>
+        <Text style={styles.generateInsightsText}>
+          {isGeneratingInsight ? 'Generating...' : 'Generate Insight'}
+        </Text>
+      </TouchableOpacity>
+
+      <SessionDetailsModal
+        visible={!!selectedSession}
+        session={selectedSession}
+        activities={activities}
+        onClose={handleCloseModal}
+      />
+
+      <PaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+      />
+    </SafeAreaView>
   );
 };
 
@@ -764,55 +675,39 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  centered: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-  },
-  errorText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  retryButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  headerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  header: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingTop: 8,
+    paddingBottom: 12,
     borderBottomWidth: 1,
   },
-  headerTitleContainer: {
+  headerTitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  headerSubtitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  content: {
     flex: 1,
   },
-  brandName: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '600',
+  fixedSection: {
+    // No flex, this will size to content and stay fixed
   },
   generateInsightsButton: {
+    position: 'absolute',
+    bottom: 24,
+    right: 16,
+    backgroundColor: '#6366F1',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 7,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -833,7 +728,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginHorizontal: 16,
-    marginTop: 8,
+    marginTop: 12,
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
@@ -873,19 +768,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 12,
   },
-  cardContainer: {
-    borderRadius: 7,
-    borderWidth: 1,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    overflow: 'hidden',
-  },
   chartsRow: {
     flexDirection: 'row',           
     paddingHorizontal: 16,
-    paddingVertical: 6,           
+    paddingVertical: 6,
+    paddingTop: 12,
     borderBottomWidth: 1,
     gap: 6,
     alignItems: 'flex-end',
@@ -1036,6 +923,26 @@ const styles = StyleSheet.create({
   achievementIcon: {
     fontSize: 10,
   },
+  monthSelectorContainer: {
+    borderBottomWidth: 1,
+    paddingVertical: 12,
+  },
+  monthScrollContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  monthButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    minWidth: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
   sessionListContainer: {
     flex: 1,
     paddingHorizontal: 16,
@@ -1083,72 +990,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 4,
   },
-  activitiesFilterContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-  },
-  activitiesLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  activitiesCheckboxes: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  activityCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    gap: 8,
-  },
   activityColorDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-  },
-  activityName: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  modalContainer: {
-    flex: 1,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  modalContent: {
-    flex: 1,
-    padding: 20,
-  },
-  modalInsightText: {
-    fontSize: 16,
-    lineHeight: 24,
   },
 });
 
