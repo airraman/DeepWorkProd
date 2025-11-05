@@ -107,39 +107,41 @@ class AlarmService {
       await this.stopAlarm();
       
       /**
-       * AUDIO PLAYBACK
+       * AUDIO PLAYBACK (with fallback if file missing)
        * 
-       * INTERVIEW Q: Why createAsync instead of new Audio.Sound()?
-       * A: createAsync is a convenience method that:
-       *    1. Creates the Sound object
-       *    2. Loads the audio data
-       *    3. Optionally starts playing
-       *    All in one async call - cleaner code!
+       * INTERVIEW Q: Why try-catch around audio loading?
+       * A: The audio file might not exist (as in this case)
+       *    We gracefully degrade to vibration + visual only
        */
-      console.log('🔔 Loading completion alarm audio...');
-      
-      const { sound } = await Audio.Sound.createAsync(
-        // Use require() to bundle the asset at compile time
-        require('../../assets/alarm.mp3'),
-        {
-          // Start playing immediately
-          shouldPlay: true,
-          
-          // DON'T loop - this is a one-shot alarm
-          isLooping: false,
-          
-          // Higher volume for alarms (user configurable)
-          volume: volume,
-        },
-        // Status callback to track completion/errors
-        this.onPlaybackStatusUpdate
-      );
-      
-      // Store reference so we can stop it
-      this.alarmSound = sound;
-      this.isPlaying = true;
-      
-      console.log('🔔 Alarm audio playing');
+      try {
+        console.log('🔔 Loading completion alarm audio...');
+        
+        const { sound } = await Audio.Sound.createAsync(
+          // Use require() to bundle the asset at compile time
+          require('../../assets/alarm.mp3'),
+          {
+            // Start playing immediately
+            shouldPlay: true,
+            
+            // DON'T loop - this is a one-shot alarm
+            isLooping: false,
+            
+            // Higher volume for alarms (user configurable)
+            volume: volume,
+          },
+          // Status callback to track completion/errors
+          this.onPlaybackStatusUpdate
+        );
+        
+        // Store reference so we can stop it
+        this.alarmSound = sound;
+        this.isPlaying = true;
+        
+        console.log('🔔 Alarm audio playing');
+      } catch (audioError) {
+        console.log('🔔 Audio file not found, using vibration + visual only:', audioError.message);
+        // Continue without audio - vibration and visual alert still work
+      }
       
       /**
        * VIBRATION

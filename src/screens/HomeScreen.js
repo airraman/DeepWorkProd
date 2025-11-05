@@ -10,7 +10,8 @@ import {
   ScrollView,
   FlatList,
   ActivityIndicator,
-  Platform
+  Platform, 
+  Alert
 } from 'react-native';
 import { Clock, Music, Pencil } from 'lucide-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -55,6 +56,7 @@ const HomeScreen = () => {
     { value: 'lofi', label: 'Lo-fi' }
   ];
 
+
   // Load settings when component first mounts
   useEffect(() => {
     checkFirstTimeUser();
@@ -97,6 +99,12 @@ const HomeScreen = () => {
 
   // Handle starting a new deep work session
   const handleStartSession = () => {
+
+    if (!activity || !duration || !musicChoice) {
+      Alert.alert('Incomplete', 'Please select all options before starting');
+      return;
+    }
+  
     // Parse duration as number
     const selectedDuration = parseFloat(duration);
     

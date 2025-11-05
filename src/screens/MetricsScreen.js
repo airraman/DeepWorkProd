@@ -360,16 +360,14 @@ const SessionList = ({ sessions, activities, onSessionPress, selectedMonth }) =>
       const firstDay = new Date(year, month - 1, 1);
       const lastDay = new Date(year, month, 0);
       
-      for (let d = lastDay.getDate(); d >= 1; d--) {
-        const date = new Date(year, month - 1, d);
+      // Count DOWN from last day to 1 (reverse order)
+// Count UP from 1 to last day
+for (let d = 1; d <= lastDay.getDate(); d++) {        const date = new Date(year, month - 1, d);
         const dateString = date.toISOString().split('T')[0];
         
         days.push({
           date: dateString,
-          displayDate: date.toLocaleDateString('en-US', { 
-            weekday: 'short', 
-            day: 'numeric' 
-          }),
+          dayNumber: d,
           sessions: sessions[dateString] || []
         });
       }
@@ -385,77 +383,80 @@ const SessionList = ({ sessions, activities, onSessionPress, selectedMonth }) =>
     return activity?.color || colors.primary;
   };
   
-  const getActivityName = (activityId) => {
-    const activity = activities.find(a => a.id === activityId);
-    return activity?.name || activityId;
+  const calculateDayTotal = (daySessions) => {
+    const totalMinutes = daySessions.reduce((sum, session) => sum + session.duration, 0);
+    return (totalMinutes / 60).toFixed(1);
   };
   
   return (
-    <ScrollView 
-      style={styles.sessionListContainer}
-      showsVerticalScrollIndicator={false}
-    >
-      {days.map((day) => (
-        <View key={day.date}>
-          <View style={[styles.dayHeader, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.dayHeaderText, { color: colors.text }]}>
-              {day.displayDate}
-            </Text>
-            <Text style={[styles.daySessionCount, { color: colors.textSecondary }]}>
-              {day.sessions.length > 0 ? `${day.sessions.length} session${day.sessions.length !== 1 ? 's' : ''}` : '0h'}
-            </Text>
-          </View>
+    <View style={styles.sessionListContainer}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
+        {days.map((day) => {
+          const dayTotal = calculateDayTotal(day.sessions);
           
-          {day.sessions.length > 0 && (
-            <View style={styles.daySessionsContainer}>
-              {day.sessions.map((session) => {
-                const activityColor = getActivityColor(session.activityId);
-                const activityName = getActivityName(session.activityId);
-                
-                return (
-                  <TouchableOpacity
-                    key={session.id}
-                    style={[
-                      styles.sessionCard,
-                      { backgroundColor: colors.cardBackground }
-                    ]}
-                    onPress={() => onSessionPress(session)}
-                  >
-                    <View style={styles.sessionCardContent}>
-                      <View style={styles.sessionCardHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <View 
-                            style={[
-                              styles.activityColorDot, 
-                              { backgroundColor: activityColor }
-                            ]} 
-                          />
-                          <Text style={[styles.sessionActivity, { color: colors.text }]}>
-                            {activityName}
-                          </Text>
-                        </View>
-                        <Text style={[styles.sessionDuration, { color: colors.textSecondary }]}>
-                          {session.duration}m
-                        </Text>
-                      </View>
-                      
-                      {session.description && (
-                        <Text 
-                          style={[styles.sessionDescription, { color: colors.textSecondary }]}
-                          numberOfLines={2}
-                        >
-                          {session.description}
-                        </Text>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+          return (
+            <View key={day.date} style={styles.dayRow}>
+              {/* Date number on left */}
+              <View style={styles.dateColumn}>
+                <Text style={[styles.dateNumber, { color: colors.text }]}>
+                  {day.dayNumber}
+                </Text>
+              </View>
+              
+              {/* Session cubes in middle */}
+              <View style={styles.sessionsColumn}>
+                {day.sessions.length > 0 ? (
+                  <View style={styles.sessionCubesContainer}>
+                    {day.sessions.map((session) => (
+                      <TouchableOpacity
+                        key={session.id}
+                        style={[
+                          styles.sessionCube,
+                          { backgroundColor: getActivityColor(session.activity) }
+                        ]}
+                        onPress={() => onSessionPress(session)}
+                        activeOpacity={0.7}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+              
+              {/* Total hours on right */}
+              <View style={styles.totalColumn}>
+                {day.sessions.length > 0 && (
+                  <View style={styles.totalBadge}>
+                    <Text style={styles.totalText}>{dayTotal}h</Text>
+                  </View>
+                )}
+              </View>
             </View>
-          )}
+          );
+        })}
+      </ScrollView>
+      
+      {/* Activities Legend at bottom */}
+      <View style={[styles.activitiesLegend, { backgroundColor: colors.background }]}>
+        <Text style={[styles.legendTitle, { color: colors.text }]}>
+          Activities:
+        </Text>
+        <View style={styles.legendItems}>
+          {activities.map((activity) => (
+            <View key={activity.id} style={styles.legendItem}>
+              <View 
+                style={[styles.legendCube, { backgroundColor: activity.color }]} 
+              />
+              <Text style={[styles.legendText, { color: colors.text }]}>
+                {activity.name}
+              </Text>
+            </View>
+          ))}
         </View>
-      ))}
-    </ScrollView>
+      </View>
+    </View>
   );
 };
 
@@ -485,13 +486,158 @@ const MetricsScreen = () => {
   }, []);
 
   const loadData = async () => {
+    console.log('\n🔍 [MetricsScreen] Loading data...');
+    
     try {
-      const loadedSessions = await deepWorkStore.getAllSessions();
-      const loadedActivities = await deepWorkStore.getAllActivities();
+      const loadedSessions = await deepWorkStore.getSessions();
+      const settings = await deepWorkStore.getSettings();
+      const loadedActivities = settings.activities;
+      
+      console.log('✅ [MetricsScreen] Loaded successfully');
+      console.log(`   Sessions dates: ${Object.keys(loadedSessions).length}`);
+      console.log(`   Activities: ${loadedActivities.length}`);
+      
       setSessions(loadedSessions);
       setActivities(loadedActivities);
     } catch (error) {
-      console.error('Error loading metrics:', error);
+      console.error('❌ [MetricsScreen] Error loading:', error.message);
+      
+      // AGGRESSIVE REPAIR: Bypass all validation and directly fix storage
+      console.log('🔧 [MetricsScreen] Starting aggressive repair...');
+      
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        
+        // Read raw data
+        const rawSessions = await AsyncStorage.getItem('@deep_work_sessions');
+        console.log('📦 [MetricsScreen] Raw data exists?', !!rawSessions);
+        
+        if (!rawSessions) {
+          console.log('⚠️ [MetricsScreen] No session data in storage - initializing empty');
+          await AsyncStorage.setItem('@deep_work_sessions', JSON.stringify({}));
+          setSessions({});
+          const settings = await deepWorkStore.getSettings();
+          setActivities(settings.activities || []);
+          return;
+        }
+        
+        console.log('📦 [MetricsScreen] Raw data length:', rawSessions.length);
+        
+        // Parse raw data
+        let parsed;
+        try {
+          parsed = JSON.parse(rawSessions);
+          console.log('✅ [MetricsScreen] JSON parse successful');
+        } catch (parseError) {
+          console.error('❌ [MetricsScreen] JSON parse failed:', parseError.message);
+          console.log('🗑️ [MetricsScreen] Clearing corrupt JSON');
+          await AsyncStorage.setItem('@deep_work_sessions', JSON.stringify({}));
+          setSessions({});
+          const settings = await deepWorkStore.getSettings();
+          setActivities(settings.activities || []);
+          return;
+        }
+        
+        // Validate it's an object
+        if (!parsed || typeof parsed !== 'object') {
+          console.error('❌ [MetricsScreen] Data is not an object, type:', typeof parsed);
+          console.log('🗑️ [MetricsScreen] Clearing invalid data structure');
+          await AsyncStorage.setItem('@deep_work_sessions', JSON.stringify({}));
+          setSessions({});
+          const settings = await deepWorkStore.getSettings();
+          setActivities(settings.activities || []);
+          return;
+        }
+        
+        const dateKeys = Object.keys(parsed);
+        console.log(`📊 [MetricsScreen] Found ${dateKeys.length} date keys`);
+        
+        // Repair each date
+        const repairedSessions = {};
+        let totalValid = 0;
+        let totalInvalid = 0;
+        
+        dateKeys.forEach(date => {
+          const dateSessions = parsed[date];
+          
+          // Check if it's an array
+          if (!Array.isArray(dateSessions)) {
+            console.error(`❌ [MetricsScreen] ${date}: Not an array (${typeof dateSessions})`);
+            totalInvalid++;
+            return;
+          }
+          
+          // Filter valid sessions
+          const validSessions = dateSessions.filter((session, idx) => {
+            const isValid = (
+              session &&
+              typeof session.activity === 'string' &&
+              session.activity.length > 0 &&
+              typeof session.duration === 'number' &&
+              session.duration > 0 &&
+              typeof session.musicChoice === 'string'
+            );
+            
+            if (!isValid) {
+              console.error(`❌ [MetricsScreen] ${date}[${idx}] invalid:`, {
+                exists: !!session,
+                activity: session?.activity,
+                activityType: typeof session?.activity,
+                duration: session?.duration,
+                durationType: typeof session?.duration,
+                musicChoice: session?.musicChoice,
+                musicChoiceType: typeof session?.musicChoice
+              });
+              totalInvalid++;
+            } else {
+              totalValid++;
+            }
+            
+            return isValid;
+          });
+          
+          if (validSessions.length > 0) {
+            repairedSessions[date] = validSessions;
+          }
+        });
+        
+        console.log(`📊 [MetricsScreen] Repair complete:`);
+        console.log(`   Valid sessions: ${totalValid}`);
+        console.log(`   Invalid sessions: ${totalInvalid}`);
+        console.log(`   Repaired dates: ${Object.keys(repairedSessions).length}`);
+        
+        // Save repaired data
+        await AsyncStorage.setItem('@deep_work_sessions', JSON.stringify(repairedSessions));
+        console.log('✅ [MetricsScreen] Repaired data saved');
+        
+        // Load settings
+        const settings = await deepWorkStore.getSettings();
+        console.log(`✅ [MetricsScreen] Loaded ${settings.activities?.length || 0} activities`);
+        
+        // Set state
+        setSessions(repairedSessions);
+        setActivities(settings.activities || []);
+        
+        console.log('✅ [MetricsScreen] Repair successful, data loaded');
+        
+      } catch (repairError) {
+        console.error('❌ [MetricsScreen] Repair failed:', repairError);
+        console.error('❌ [MetricsScreen] Stack:', repairError.stack);
+        
+        // NUCLEAR OPTION: Clear everything and start fresh
+        console.log('☢️ [MetricsScreen] NUCLEAR: Clearing all session data');
+        try {
+          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+          await AsyncStorage.setItem('@deep_work_sessions', JSON.stringify({}));
+          console.log('✅ [MetricsScreen] Storage cleared');
+        } catch (clearError) {
+          console.error('❌ [MetricsScreen] Even clear failed:', clearError);
+        }
+        
+        // Set empty state
+        setSessions({});
+        setActivities([]);
+      }
     }
   };
 
@@ -946,54 +1092,83 @@ const styles = StyleSheet.create({
   sessionListContainer: {
     flex: 1,
     paddingHorizontal: 16,
+    position: 'relative',
   },
-  dayHeader: {
+  dayRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    marginTop: 8,
+    paddingVertical: 8,
+    minHeight: 40,
   },
-  dayHeaderText: {
+  dateColumn: {
+    width: 30,
+    alignItems: 'flex-start',
+  },
+  dateNumber: {
     fontSize: 16,
     fontWeight: '600',
   },
-  daySessionCount: {
-    fontSize: 14,
+  sessionsColumn: {
+    flex: 1,
+    paddingHorizontal: 8,
   },
-  daySessionsContainer: {
-    paddingVertical: 8,
-    gap: 8,
-  },
-  sessionCard: {
-    borderRadius: 8,
-    padding: 12,
-    marginVertical: 4,
-  },
-  sessionCardContent: {
+  sessionCubesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 4,
   },
-  sessionCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  sessionCube: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
   },
-  sessionActivity: {
-    fontSize: 15,
+  totalColumn: {
+    width: 60,
+    alignItems: 'flex-end',
+  },
+  totalBadge: {
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  totalText: {
+    fontSize: 12,
     fontWeight: '600',
+    color: '#1f2937',
   },
-  sessionDuration: {
+  activitiesLegend: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  legendTitle: {
     fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
   },
-  sessionDescription: {
-    fontSize: 14,
-    marginTop: 4,
+  legendItems: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  activityColorDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendCube: {
+    width: 16,
+    height: 16,
+    borderRadius: 3,
+  },
+  legendText: {
+    fontSize: 12,
   },
 });
 

@@ -30,7 +30,7 @@ const DeepWorkSession = ({ route, navigation }) => {
   console.log('🔍 DeepWorkSession starting with safe initialization...');
   
   const { duration, activity, musicChoice } = route.params;
-  const totalDuration = parseInt(duration) * 60 * 1000;
+  const totalDuration = parseFloat(duration) * 60 * 1000;
 
   // Core state - only what's essential
   const [timeLeft, setTimeLeft] = useState(totalDuration);
@@ -460,17 +460,65 @@ const DeepWorkSession = ({ route, navigation }) => {
       // Clean up services
       await cleanup();
 
+      // ===== ENHANCED VALIDATION SECTION =====
+      // Log all the data we're about to save
+      console.log('📝 ===== SESSION SAVE DEBUG =====');
+      console.log('Route params:', { duration, activity, musicChoice });
+      console.log('Notes:', notes);
+      
+      // Build session data matching deepWorkStore structure
+      const now = Date.now();
+      const dateString = new Date().toISOString().split('T')[0];
+      
+      const sessionData = {
+        id: `${dateString}-${now}`,
+        date: dateString,
+        activity: activity,              // ✅ No String() wrapper
+        duration: parseFloat(duration),  // ✅ parseFloat not parseInt
+        musicChoice: musicChoice || 'none',
+        notes: notes || '',
+        timestamp: now,
+        completedAt: new Date().toISOString(),
+        syncStatus: 'synced',
+        metadata: {
+          appVersion: '1.0.0',
+          created: now,
+          modified: now
+        }
+      };
+      
+      console.log('Prepared session data:', sessionData);
+      
+      // Additional validation checks
+      console.log('Validation checks:');
+      console.log('- activity type:', typeof sessionData.activity, 'value:', sessionData.activity);
+      console.log('- duration type:', typeof sessionData.duration, 'value:', sessionData.duration);
+      console.log('- musicChoice type:', typeof sessionData.musicChoice, 'value:', sessionData.musicChoice);
+      console.log('- notes type:', typeof sessionData.notes, 'value:', sessionData.notes);
+      console.log('- duration > 0?', sessionData.duration > 0);
+      console.log('- activity not empty?', sessionData.activity.length > 0);
+      
+      // Check for potential issues
+      if (!sessionData.activity || sessionData.activity.length === 0) {
+        throw new Error('Activity is required but was empty');
+      }
+      
+      if (isNaN(sessionData.duration) || sessionData.duration <= 0) {
+        throw new Error(`Invalid duration: ${sessionData.duration}`);
+      }
+      
+      console.log('✅ Validation passed, saving session...');
+      // ===== END VALIDATION SECTION =====
+
       // Save session to storage
-      const result = await deepWorkStore.addSession({
-        activity,
-        duration: parseInt(duration),
-        musicChoice,
-        notes
-      });
+      const result = await deepWorkStore.addSession(sessionData);
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to save session');
       }
+
+      console.log('✅ Session saved successfully!');
+      console.log('===================================\n');
 
       Alert.alert(
         'Session Complete!',
@@ -489,8 +537,14 @@ const DeepWorkSession = ({ route, navigation }) => {
 
       return true;
     } catch (error) {
-      console.error('Error completing session:', error);
-      Alert.alert('Error', 'Failed to save session');
+      console.error('❌ Error completing session:', error);
+      console.error('Error details:', error.message);
+      console.error('===================================\n');
+      
+      Alert.alert(
+        'Error', 
+        `Failed to save session: ${error.message}\n\nPlease check the console for details.`
+      );
       return false;
     } finally {
       setIsSaving(false);
