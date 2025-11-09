@@ -434,7 +434,7 @@ const SettingsScreen = () => {
         </View>
 
         {/* Duration Selection Section */}
-        <View style={[
+        {/* <View style={[
           styles.section, 
           { 
             backgroundColor: isDark ? '#1f1f1f' : colors.card,
@@ -484,7 +484,7 @@ const SettingsScreen = () => {
               );
             })}
           </View>
-        </View>
+        </View> */}
 
         {/* Alarm Settings Section */}
         <View style={[

@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Modal,
 } from 'react-native';
+import ActivitySummaryModal from '../components/modals/ActivitySummaryModal';
 import { useFocusEffect } from '@react-navigation/native';
 import { deepWorkStore } from '../services/deepWorkStore';
 import SessionDetailsModal from '../components/modals/SessionDetailsModal';
@@ -68,6 +69,7 @@ const WeeklyFocusChart = ({ sessions }) => {
   const handleBarPress = (day, index) => {
     setSelectedBar(index === selectedBar ? null : index);
   };
+
 
   return (
     <View style={styles.chartContainer}>
@@ -213,9 +215,9 @@ const CompactActivityGrid = ({ sessions }) => {
   
   return (
     <View style={styles.compactActivityContainer}>
-      <Text style={[styles.compactActivityTitle, { color: colors.textSecondary }]}>
+      {/* <Text style={[styles.compactActivityTitle, { color: colors.textSecondary }]}>
         Activity
-      </Text>
+      </Text> */}
       
       {/* Month labels now BEFORE the grid */}
       <View style={styles.monthLabelsContainer}>
@@ -349,7 +351,7 @@ const MonthSelector = ({ selectedMonth, onMonthSelect, sessions }) => {
   );
 };
 
-const SessionList = ({ sessions, activities, onSessionPress, selectedMonth }) => {
+const SessionList = ({ sessions, activities, onSessionPress, selectedMonth,  onActivityPress }) => {
   const { colors } = useTheme();
   
   const generateDaysList = () => {
@@ -444,16 +446,19 @@ for (let d = 1; d <= lastDay.getDate(); d++) {        const date = new Date(year
           Activities:
         </Text>
         <View style={styles.legendItems}>
-          {activities.map((activity) => (
-            <View key={activity.id} style={styles.legendItem}>
-              <View 
-                style={[styles.legendCube, { backgroundColor: activity.color }]} 
-              />
-              <Text style={[styles.legendText, { color: colors.text }]}>
-                {activity.name}
-              </Text>
-            </View>
-          ))}
+        {activities.map((activity) => (
+  <TouchableOpacity  // ✅ CHANGED from View to TouchableOpacity
+    key={activity.id} 
+    style={styles.legendItem}
+    onPress={() => onActivityPress(activity)}  // ✅ ADD THIS
+    activeOpacity={0.7}
+  >
+    <View style={[styles.legendCube, { backgroundColor: activity.color }]} />
+    <Text style={[styles.legendText, { color: colors.text }]}>
+      {activity.name}
+    </Text>
+  </TouchableOpacity>
+))}
         </View>
       </View>
     </View>
@@ -471,6 +476,7 @@ const MetricsScreen = () => {
   const [insightError, setInsightError] = useState(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(null);
+  const [selectedActivity, setSelectedActivity] = useState(null);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -680,6 +686,11 @@ const MetricsScreen = () => {
     setSelectedSession(null);
   };
 
+  const handleActivityPress = (activity) => {
+    console.log('📊 Activity pressed:', activity.name);
+    setSelectedActivity(activity);
+  };
+
   const totalHours = calculateTotalHours();
 
   return (
@@ -689,7 +700,7 @@ const MetricsScreen = () => {
           DeepWork.io
         </Text>
         <Text style={[styles.headerSubtitle, { color: colors.text }]}>
-          DEEP WORK SUMMARY
+          Metrics
         </Text>
       </View>
 
@@ -706,14 +717,14 @@ const MetricsScreen = () => {
               }
             ]}>
               <Text style={[styles.limitText, { color: colors.textSecondary }]}>
-                {generationsRemaining} AI insight{generationsRemaining !== 1 ? 's' : ''} remaining
+                Click to generate session summary
               </Text>
               <TouchableOpacity 
                 style={styles.upgradeLink}
-                onPress={() => setShowPaywall(true)}
+                onPress={handleGenerateInsight}
               >
                 <Text style={[styles.upgradeLinkText, { color: colors.primary }]}>
-                  Upgrade
+                  Generate Insight
                 </Text>
               </TouchableOpacity>
             </View>
@@ -785,22 +796,25 @@ const MetricsScreen = () => {
           activities={activities}
           onSessionPress={handleSessionPress}
           selectedMonth={selectedMonth}
+          onActivityPress={handleActivityPress}  // ✅ NEW: Pass the handler
         />
       </View>
 
-      <TouchableOpacity 
-        style={[
-          styles.generateInsightsButton,
-          !canGenerateInsights && { opacity: 0.7 }
-        ]}
-        onPress={handleGenerateInsight}
-        disabled={isGeneratingInsight}
-      >
-        <Text style={styles.sparkleEmoji}>✨</Text>
-        <Text style={styles.generateInsightsText}>
-          {isGeneratingInsight ? 'Generating...' : 'Generate Insight'}
-        </Text>
-      </TouchableOpacity>
+      {isSubscribed && (
+        <TouchableOpacity 
+          style={[
+            styles.generateInsightsButton,
+            !canGenerateInsights && { opacity: 0.7 }
+          ]}
+          onPress={handleGenerateInsight}
+          disabled={isGeneratingInsight}
+        >
+          <Text style={styles.sparkleEmoji}>✨</Text>
+          <Text style={styles.generateInsightsText}>
+            {isGeneratingInsight ? 'Generating...' : 'Generate Insight'}
+          </Text>
+        </TouchableOpacity>
+      )}
 
       <SessionDetailsModal
         visible={!!selectedSession}
@@ -808,6 +822,19 @@ const MetricsScreen = () => {
         activities={activities}
         onClose={handleCloseModal}
       />
+
+{selectedActivity && (
+        <ActivitySummaryModal
+        visible={!!selectedActivity}
+        activity={selectedActivity}
+        sessions={sessions}
+        selectedMonth={selectedMonth}
+        onClose={() => setSelectedActivity(null)}
+      />
+
+)}
+
+
 
       <PaywallModal
         visible={showPaywall}
@@ -839,6 +866,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    // marginBottom: 6
   },
   fixedSection: {
     // No flex, this will size to content and stay fixed
@@ -878,6 +906,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
+    marginBottom: 6
   },
   limitText: {
     fontSize: 13,
@@ -924,6 +953,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     position: 'relative',
     height: 73,
+    // marginBottom: 8,
   },
   compactActivitySection: {
     flex: 2.3,
