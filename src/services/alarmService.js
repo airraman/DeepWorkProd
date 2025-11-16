@@ -118,7 +118,7 @@ class AlarmService {
         
         const { sound } = await Audio.Sound.createAsync(
           // Use require() to bundle the asset at compile time
-          require('../../assets/alarm.mp3'),
+          require('../../assets/sounds/completion-alarm.mp3'),
           {
             // Start playing immediately
             shouldPlay: true,

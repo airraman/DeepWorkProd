@@ -116,10 +116,11 @@ class AudioService {
       let soundSource;
       switch (musicChoice) {
         case 'white-noise':
-          soundSource = require('../../assets/whitenoise.mp3');
+          // Note: File is called "white-noise.mp3" (with dash)
+          soundSource = require('../../assets/sounds/white-noise.mp3');
           break;
         case 'lofi':
-          soundSource = require('../../assets/lofi.mp3');
+          soundSource = require('../../assets/sounds/lofi.mp3');
           break;
         default:
           console.warn(`🎵 Unknown music choice: ${musicChoice}`);
