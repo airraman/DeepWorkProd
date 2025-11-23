@@ -11,6 +11,7 @@ import { Alert, View, Text, Platform, Dimensions, StatusBar, Linking } from 'rea
 import backgroundTimer from './src/services/backgroundTimer';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import DevToolsScreen from './src/screens/DevToolsScreen';
+import { notificationService } from './src/services/notificationService';
 // import DeepWorkSession from './src/screens/DeepWorkSession';
 
 
@@ -243,6 +244,22 @@ function MainApp() {
             ...prev,
             database: 'success'
           }));
+
+          // STEP 1A: Schedule reminder notifications
+  try {
+    console.log('🔔 Scheduling reminder notifications...');
+    const hasPermission = await notificationService.areNotificationsEnabled();
+    if (hasPermission) {
+      await notificationService.scheduleNotifications();
+      console.log('✅ Reminder notifications scheduled');
+    } else {
+      console.log('⚠️ Notification permissions not granted - reminders not scheduled');
+    }
+  } catch (notifError) {
+    console.error('❌ Error scheduling reminders:', notifError);
+    // Non-critical - continue app initialization
+  }
+  
         } catch (dbError) {
           console.error('❌ Database initialization failed:', dbError);
           setInitializationStatus(prev => ({

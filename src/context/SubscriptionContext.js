@@ -58,7 +58,12 @@ export function SubscriptionProvider({ children }) {
     isPremium,
     isLoading,
     checkSubscriptionStatus,
+    
+    // Add these for MetricsScreen compatibility
+    isSubscribed: isPremium,        // Alias for isPremium
+    canGenerateInsights: isPremium, // AI insights are premium-only
   };
+  
 
   return (
     <SubscriptionContext.Provider value={value}>

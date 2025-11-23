@@ -22,6 +22,8 @@ import { useTheme, THEMES } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { useSubscription } from '../context/SubscriptionContext';  // ✅ NEW IMPORT
 import { PaywallModal } from '../components/PaywallModal';  // ✅ NEW IMPORT
+import { notificationService } from '../services/notificationService';
+import { Bell } from 'lucide-react-native';
 
 const HEADER_HEIGHT = Platform.OS === 'ios' ? 60 : 50;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -51,7 +53,7 @@ const SettingsScreen = () => {
   
   // ✅ NEW: Paywall state
   const [showPaywall, setShowPaywall] = useState(false);
-
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const colorPalette = [
     '#c8b2d6', '#f1dbbc', '#bcd2f1', '#d6b2c8', 
     '#b2d6c8', '#dbbcf1', '#bcf1db', '#f1bcdb'
@@ -61,7 +63,13 @@ const SettingsScreen = () => {
 
   useEffect(() => {
     loadSettings();
+    loadNotificationStatus();
   }, []);
+
+  const loadNotificationStatus = async () => {
+    const enabled = await notificationService.areNotificationsEnabled();
+    setNotificationsEnabled(enabled);
+  };
 
   const loadSettings = async () => {
     try {
@@ -131,6 +139,37 @@ const SettingsScreen = () => {
       console.error('Failed to add activity:', error);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleToggleNotifications = async () => {
+    if (!notificationsEnabled) {
+      // Enabling - request permissions first
+      const granted = await notificationService.requestPermissions();
+      
+      if (granted) {
+        // Schedule notifications based on user's frequency preference
+        await notificationService.scheduleNotifications();
+        setNotificationsEnabled(true);
+        
+        // Get frequency to show in feedback
+        const frequency = await deepWorkStore.getReminderFrequency();
+        const message = frequency === 'daily' ? 'Daily reminders enabled' : 
+                        frequency === 'weekly' ? 'Weekly reminders enabled' : 
+                        'Reminders enabled';
+        showFeedback(message);
+      } else {
+        Alert.alert(
+          'Notifications Disabled',
+          'Please enable notifications in your device Settings to receive reminders.',
+          [{ text: 'OK' }]
+        );
+      }
+    } else {
+      // Disabling - cancel all notifications
+      await notificationService.cancelAllNotifications();
+      setNotificationsEnabled(false);
+      showFeedback('Reminders disabled');
     }
   };
 
@@ -251,6 +290,47 @@ const SettingsScreen = () => {
       setIsSaving(false);
     }
   };
+
+  {/* Notification Reminders Section */}
+<View style={[
+  styles.section, 
+  { 
+    backgroundColor: isDark ? '#1f1f1f' : colors.card,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 12,
+  }
+]}>
+  <View style={styles.sectionHeader}>
+    <Bell stroke={colors.textSecondary} size={20} />
+    <Text style={[styles.sectionTitle, { color: colors.text }]}>
+      Focus Reminders
+    </Text>
+  </View>
+  
+  <View style={styles.settingRow}>
+    <View style={styles.settingInfo}>
+      <Text style={[styles.settingLabel, { color: colors.text }]}>
+        Enable reminders
+      </Text>
+      <Text style={[styles.helpText, { color: colors.textSecondary, marginTop: 4 }]}>
+        Get reminded to start deep work sessions
+      </Text>
+    </View>
+    <TouchableOpacity
+      style={[
+        styles.toggle,
+        notificationsEnabled && { backgroundColor: colors.primary }
+      ]}
+      onPress={handleToggleNotifications}
+    >
+      <View style={[
+        styles.toggleCircle,
+        notificationsEnabled && styles.toggleCircleActive
+      ]} />
+    </TouchableOpacity>
+  </View>
+</View>
 
   const handleSaveSettings = async () => {
     if (selectedDurations.length !== 3) {
@@ -569,7 +649,46 @@ const SettingsScreen = () => {
             </>
           )}
         </View>
-
+      {/* Notification Reminders Section */}
+      <View style={[
+        styles.section, 
+        { 
+          backgroundColor: isDark ? '#1f1f1f' : colors.card,
+          borderColor: colors.border,
+          borderWidth: 1,
+          borderRadius: 12,
+        }
+      ]}>
+        <View style={styles.sectionHeader}>
+          <Bell stroke={colors.textSecondary} size={20} />
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Focus Reminders
+          </Text>
+        </View>
+        
+        <View style={styles.settingRow}>
+          <View style={styles.settingInfo}>
+            <Text style={[styles.settingLabel, { color: colors.text }]}>
+              Enable reminders
+            </Text>
+            <Text style={[styles.helpText, { color: colors.textSecondary, marginTop: 4 }]}>
+              Get reminded to start deep work sessions
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.toggle,
+              notificationsEnabled && { backgroundColor: colors.primary }
+            ]}
+            onPress={handleToggleNotifications}
+          >
+            <View style={[
+              styles.toggleCircle,
+              notificationsEnabled && styles.toggleCircleActive
+            ]} />
+          </TouchableOpacity>
+        </View>
+      </View>
         {/* Save Button */}
         <TouchableOpacity
           style={[
@@ -933,6 +1052,43 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '500',
   },
+  // Add these to the existing styles object:
+settingRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  paddingVertical: 12,
+},
+settingInfo: {
+  flex: 1,
+  marginRight: 12,
+},
+settingLabel: {
+  fontSize: 16,
+  fontWeight: '500',
+},
+toggle: {
+  width: 50,
+  height: 28,
+  borderRadius: 14,
+  backgroundColor: '#ccc',
+  padding: 2,
+  justifyContent: 'center',
+},
+toggleCircle: {
+  width: 24,
+  height: 24,
+  borderRadius: 12,
+  backgroundColor: 'white',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.2,
+  shadowRadius: 2,
+  elevation: 3,
+},
+toggleCircleActive: {
+  marginLeft: 22,
+},
 });
 
 export default SettingsScreen;

@@ -276,7 +276,9 @@ const CompactActivityGrid = ({ sessions }) => {
 
 const MonthSelector = ({ selectedMonth, onMonthSelect, sessions }) => {
   const { colors } = useTheme();
+  const { isPremium } = useSubscription();
   const scrollViewRef = useRef(null);
+  const [monthsLayout, setMonthsLayout] = useState([]);
   
   const generateMonthsList = () => {
     const months = [];
@@ -311,10 +313,51 @@ const MonthSelector = ({ selectedMonth, onMonthSelect, sessions }) => {
       currentDate.setMonth(currentDate.getMonth() + 1);
     }
     
-    return months.reverse(); // Most recent first
+    // ✅ CHANGE: Keep chronological order (oldest to newest, left to right)
+    return months;
   };
   
   const months = generateMonthsList();
+  
+  // Get current month value for comparison
+  const getCurrentMonthValue = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  };
+  
+  const currentMonthValue = getCurrentMonthValue();
+  
+  // ✅ NEW: Auto-scroll to current month on mount
+  useEffect(() => {
+    if (scrollViewRef.current && monthsLayout.length > 0) {
+      const currentMonthIndex = months.findIndex(m => m.value === currentMonthValue);
+      if (currentMonthIndex !== -1 && monthsLayout[currentMonthIndex]) {
+        // Scroll to show current month on the right side of screen
+        scrollViewRef.current.scrollTo({
+          x: monthsLayout[currentMonthIndex].x - 100, // Offset to show it near right edge
+          animated: true
+        });
+      }
+    }
+  }, [monthsLayout]);
+  
+  const handleMonthPress = (month) => {
+    // Current month is always accessible
+    if (month.value === currentMonthValue) {
+      onMonthSelect(month.value); // ✅ Calls the prop function
+      return;
+    }
+    
+    // Previous months require premium
+    if (!isPremium) {
+      // Show paywall - parent component will handle this via the prop
+      onMonthSelect(null, 'previousMonths'); // ✅ Calls the prop function with reason
+      return;
+    }
+    
+    // Premium users can access any month
+    onMonthSelect(month.value); // ✅ Calls the prop function
+  };
   
   return (
     <View style={[styles.monthSelectorContainer, { borderBottomColor: colors.border }]}>
@@ -326,22 +369,38 @@ const MonthSelector = ({ selectedMonth, onMonthSelect, sessions }) => {
       >
         {months.map((month, index) => {
           const isSelected = selectedMonth === month.value;
+          const isCurrentMonth = month.value === currentMonthValue;
+          
           return (
             <TouchableOpacity
               key={month.value}
               style={[
                 styles.monthButton,
-                isSelected && { backgroundColor: colors.primary }
+                {
+                  backgroundColor: isSelected ? colors.primary : colors.card,
+                  opacity: 1, // Always show full opacity
+                },
               ]}
-              onPress={() => onMonthSelect(month.value)}
+              onPress={() => handleMonthPress(month)}
+              onLayout={(event) => {
+                // Track layout positions for auto-scroll
+                const { x, width } = event.nativeEvent.layout;
+                setMonthsLayout(prev => {
+                  const newLayout = [...prev];
+                  newLayout[index] = { x, width };
+                  return newLayout;
+                });
+              }}
             >
               <Text
                 style={[
                   styles.monthButtonText,
-                  { color: isSelected ? '#FFFFFF' : colors.text }
+                  {
+                    color: isSelected ? '#fff' : colors.text,
+                  },
                 ]}
               >
-                {month.month}
+                {month.month} {month.year}
               </Text>
             </TouchableOpacity>
           );
@@ -467,7 +526,7 @@ for (let d = 1; d <= lastDay.getDate(); d++) {        const date = new Date(year
 
 const MetricsScreen = () => {
   const { colors, isDarkMode } = useTheme();
-  const { canGenerateInsights, generationsRemaining, isSubscribed } = useSubscription();
+  const { isPremium, canGenerateInsights, isSubscribed } = useSubscription();
   const [sessions, setSessions] = useState({});
   const [activities, setActivities] = useState([]);
   const [selectedSession, setSelectedSession] = useState(null);
@@ -691,6 +750,17 @@ const MetricsScreen = () => {
     setSelectedActivity(activity);
   };
 
+  const handleMonthSelect = (value, reason) => {
+    // If reason is provided, it means paywall should show
+    if (reason === 'previousMonths') {
+      setShowPaywall(true);
+      return;
+    }
+    
+    // Normal month selection
+    setSelectedMonth(value);
+  };
+
   const totalHours = calculateTotalHours();
 
   return (
@@ -707,28 +777,90 @@ const MetricsScreen = () => {
       <View style={styles.content}>
         {/* Fixed Section: Insights + Metrics + Month Selector */}
         <View style={styles.fixedSection}>
-          {/* Insights Section */}
-          {!isSubscribed && (
-            <View style={[
-              styles.limitIndicator,
-              { 
-                backgroundColor: colors.cardBackground,
-                borderColor: colors.border 
-              }
-            ]}>
-              <Text style={[styles.limitText, { color: colors.textSecondary }]}>
-                Click to generate session summary
-              </Text>
-              <TouchableOpacity 
-                style={styles.upgradeLink}
-                onPress={handleGenerateInsight}
-              >
-                <Text style={[styles.upgradeLinkText, { color: colors.primary }]}>
-                  Generate Insight
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
+{/* AI Insights Section - Gate for Premium */}
+{!isPremium ? (
+  // FREE USER: Show locked insight button
+  <View style={[
+    styles.insightSection,
+    { 
+      backgroundColor: colors.cardBackground,
+      borderColor: colors.border 
+    }
+  ]}>
+    <TouchableOpacity 
+      style={styles.lockedInsightButton}
+      onPress={() => setShowPaywall(true)}
+    >
+      <Text style={styles.lockIcon}>🔒</Text>
+      <Text style={[styles.lockedInsightText, { color: colors.text }]}>
+        Generate AI Insight
+      </Text>
+      <Text style={[styles.lockedInsightSubtext, { color: colors.textSecondary }]}>
+        Tap to unlock premium
+      </Text>
+    </TouchableOpacity>
+  </View>
+) : (
+  // PREMIUM USER: Show generate button or insight
+  <>
+    {!currentInsight && !isGeneratingInsight && !insightError && (
+      <View style={[
+        styles.insightSection,
+        { 
+          backgroundColor: colors.cardBackground,
+          borderColor: colors.border 
+        }
+      ]}>
+        <TouchableOpacity 
+          style={styles.generateInsightButton}
+          onPress={handleGenerateInsight}
+        >
+          <Text style={styles.sparkleEmoji}>✨</Text>
+          <Text style={[styles.generateInsightText, { color: colors.text }]}>
+            Generate AI Insight
+          </Text>
+        </TouchableOpacity>
+      </View>
+    )}
+
+    {isGeneratingInsight && (
+      <View style={[
+        styles.insightSection,
+        {
+          backgroundColor: colors.cardBackground,
+          borderColor: colors.border
+        }
+      ]}>
+        <View style={styles.insightLoadingContainer}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={[styles.insightLoadingText, { color: colors.textSecondary }]}>
+            Generating insight...
+          </Text>
+        </View>
+      </View>
+    )}
+
+    {insightError && (
+      <View style={[
+        styles.insightSection,
+        {
+          backgroundColor: colors.cardBackground,
+          borderColor: colors.border
+        }
+      ]}>
+        <Text style={[styles.insightError, { color: colors.error }]}>
+          {insightError}
+        </Text>
+      </View>
+    )}
+
+    {currentInsight && (
+      <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+        <ExpandableInsight insight={currentInsight} />
+      </View>
+    )}
+  </>
+)}
 
           {isGeneratingInsight && (
             <View style={[
@@ -785,7 +917,7 @@ const MetricsScreen = () => {
           {/* Month Selector */}
           <MonthSelector 
             selectedMonth={selectedMonth}
-            onMonthSelect={setSelectedMonth}
+            onMonthSelect={handleMonthSelect}
             sessions={sessions}
           />
         </View>
@@ -799,22 +931,6 @@ const MetricsScreen = () => {
           onActivityPress={handleActivityPress}  // ✅ NEW: Pass the handler
         />
       </View>
-
-      {isSubscribed && (
-        <TouchableOpacity 
-          style={[
-            styles.generateInsightsButton,
-            !canGenerateInsights && { opacity: 0.7 }
-          ]}
-          onPress={handleGenerateInsight}
-          disabled={isGeneratingInsight}
-        >
-          <Text style={styles.sparkleEmoji}>✨</Text>
-          <Text style={styles.generateInsightsText}>
-            {isGeneratingInsight ? 'Generating...' : 'Generate Insight'}
-          </Text>
-        </TouchableOpacity>
-      )}
 
       <SessionDetailsModal
         visible={!!selectedSession}
@@ -836,10 +952,11 @@ const MetricsScreen = () => {
 
 
 
-      <PaywallModal
-        visible={showPaywall}
-        onClose={() => setShowPaywall(false)}
-      />
+<PaywallModal
+  visible={showPaywall}
+  onClose={() => setShowPaywall(false)}
+  feature="previousMonths"
+/>
     </SafeAreaView>
   );
 };
@@ -1200,6 +1317,62 @@ const styles = StyleSheet.create({
   legendText: {
     fontSize: 12,
   },
+  insightSection: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  lockedInsightButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+    gap: 8,
+  },
+  lockIcon: {
+    fontSize: 20,
+  },
+  lockedInsightText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  lockedInsightSubtext: {
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  generateInsightButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+  },
+  sparkleEmoji: {
+    fontSize: 20,
+  },
+  generateInsightText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  insightLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    gap: 12,
+  },
+  insightLoadingText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  insightError: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 12,
+  }
 });
 
 export default MetricsScreen;

@@ -122,8 +122,8 @@ export function PaywallModal({ visible, onClose, limitType }) {
 
   const limitMessages = {
     session: 'Unlock unlimited session time',
-    activities: 'Add unlimited activities',
-    insights: 'Generate unlimited insights',
+    activities: 'Add more than 2 activities',
+    insights: 'Unlock AI-powered insights',
   };
 
   return (
@@ -149,13 +149,12 @@ export function PaywallModal({ visible, onClose, limitType }) {
           {/* Subtitle */}
           <Text style={styles.subtitle}>{limitMessages[limitType]}</Text>
 
-          {/* Benefits List */}
-          <View style={styles.benefitsContainer}>
-            <BenefitItem text="Unlimited session duration" />
-            <BenefitItem text="Unlimited activities" />
-            <BenefitItem text="Generate unlimited insights" />
-            <BenefitItem text="Advanced analytics" />
-          </View>
+{/* Benefits List */}
+<View style={styles.benefitsContainer}>
+  <BenefitItem text="Unlimited session duration" />
+  <BenefitItem text="More than 2 activities" />
+  <BenefitItem text="AI-powered insights" />
+</View>
 
           {/* Subscription Options */}
           <Text style={styles.sectionTitle}>Choose Your Plan</Text>
