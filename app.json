@@ -46,7 +46,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.airraman.deepwork",
-      "buildNumber": "3",
+      "buildNumber": "10",
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch",
