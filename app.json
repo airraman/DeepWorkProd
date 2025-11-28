@@ -46,7 +46,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.airraman.deepwork",
-      "buildNumber": "11",
+      "buildNumber": "12",
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch",
@@ -88,7 +88,7 @@
       }
     },
     "owner": "airraman",
-    "runtimeVersion": "1.0.1",
+    "runtimeVersion": "1.0.2",
     "updates": {
       "url": "https://u.expo.dev/6154a390-07d0-416c-955b-63179fba2bc8"
     }
