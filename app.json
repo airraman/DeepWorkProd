@@ -46,7 +46,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.airraman.deepwork",
-      "buildNumber": "12",
+      "buildNumber": "14",
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch",
@@ -57,7 +57,6 @@
           "com.expo.tasks.BACKGROUND_TIMER_TASK"
         ],
         "NSUserNotificationsUsageDescription": "This app uses notifications to remind you when your deep work sessions are complete and to track session progress.",
-        "NSUserTrackingUsageDescription": "This app does not track users.",
         "CFBundleDisplayName": "DeepWork.io",
         "ITSAppUsesNonExemptEncryption": false
       },
