@@ -8,11 +8,14 @@ import { SubscriptionProvider } from './src/context/SubscriptionContext';  // âœ
 import * as Notifications from 'expo-notifications';
 import * as Updates from 'expo-updates';
 import { Alert, View, Text, Platform, Dimensions, StatusBar, Linking } from 'react-native';import { navigationRef, safeNavigate } from './src/services/navigationService';
-import { versionCheckService } from './src/services/versionCheckService';
+import { versionCheckService } from './src/services/versionCheckService.js';
 
 import backgroundTimer from './src/services/backgroundTimer';
 import ErrorBoundary from './src/components/ErrorBoundary';
-import DevToolsScreen from './src/screens/DevToolsScreen';
+const DevToolsScreen = __DEV__ 
+  ? require('./src/screens/DevToolsScreen').default 
+  : () => null; // Return empty component in production
+
 import { notificationService } from './src/services/notificationService';
 // import DeepWorkSession from './src/screens/DeepWorkSession';
 
@@ -603,14 +606,17 @@ function MainApp() {
                   })
                 }}
               />
-              <Stack.Screen 
-                name="DevTools" 
-                component={DevToolsScreen}
-                options={{
-                  presentation: 'modal',
-                  gestureEnabled: true,
-                }}
-              />
+{/* Only include DevTools screen in development builds */}
+{__DEV__ && (
+  <Stack.Screen 
+    name="DevTools" 
+    component={DevToolsScreen}
+    options={{
+      presentation: 'modal',
+      gestureEnabled: true,
+    }}
+  />
+)}
             </Stack.Navigator>
           </NavigationContainer>
         </ThemeProvider>
