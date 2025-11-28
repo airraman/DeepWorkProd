@@ -11,11 +11,11 @@ PODS:
   - EXConstants (18.0.10):
     - ExpoModulesCore
   - EXJSONUtils (0.15.0)
-  - EXManifests (1.0.8):
+  - EXManifests (1.0.9):
     - ExpoModulesCore
-  - EXNotifications (0.32.12):
+  - EXNotifications (0.32.13):
     - ExpoModulesCore
-  - Expo (54.0.23):
+  - Expo (54.0.25):
     - boost
     - DoubleConversion
     - ExpoModulesCore
@@ -46,17 +46,17 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - expo-dev-client (6.0.17):
+  - expo-dev-client (6.0.18):
     - EXManifests
     - expo-dev-launcher
     - expo-dev-menu
     - expo-dev-menu-interface
     - EXUpdatesInterface
-  - expo-dev-launcher (6.0.17):
+  - expo-dev-launcher (6.0.18):
     - boost
     - DoubleConversion
     - EXManifests
-    - expo-dev-launcher/Main (= 6.0.17)
+    - expo-dev-launcher/Main (= 6.0.18)
     - expo-dev-menu
     - expo-dev-menu-interface
     - ExpoModulesCore
@@ -89,7 +89,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - expo-dev-launcher/Main (6.0.17):
+  - expo-dev-launcher/Main (6.0.18):
     - boost
     - DoubleConversion
     - EXManifests
@@ -126,7 +126,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - expo-dev-launcher/Unsafe (6.0.17):
+  - expo-dev-launcher/Unsafe (6.0.18):
     - boost
     - DoubleConversion
     - EXManifests
@@ -162,11 +162,11 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - expo-dev-menu (7.0.16):
+  - expo-dev-menu (7.0.17):
     - boost
     - DoubleConversion
-    - expo-dev-menu/Main (= 7.0.16)
-    - expo-dev-menu/ReactNativeCompatibles (= 7.0.16)
+    - expo-dev-menu/Main (= 7.0.17)
+    - expo-dev-menu/ReactNativeCompatibles (= 7.0.17)
     - fast_float
     - fmt
     - glog
@@ -193,7 +193,7 @@ PODS:
     - SocketRocket
     - Yoga
   - expo-dev-menu-interface (2.0.0)
-  - expo-dev-menu/Main (7.0.16):
+  - expo-dev-menu/Main (7.0.17):
     - boost
     - DoubleConversion
     - EXManifests
@@ -225,7 +225,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - expo-dev-menu/ReactNativeCompatibles (7.0.16):
+  - expo-dev-menu/ReactNativeCompatibles (7.0.17):
     - boost
     - DoubleConversion
     - fast_float
@@ -253,17 +253,17 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - ExpoAsset (12.0.9):
+  - ExpoAsset (12.0.10):
     - ExpoModulesCore
-  - ExpoBackgroundFetch (14.0.7):
+  - ExpoBackgroundFetch (14.0.8):
     - ExpoModulesCore
-  - ExpoFileSystem (19.0.17):
+  - ExpoFileSystem (19.0.19):
     - ExpoModulesCore
   - ExpoFont (14.0.9):
     - ExpoModulesCore
   - ExpoKeepAwake (15.0.7):
     - ExpoModulesCore
-  - ExpoModulesCore (3.0.25):
+  - ExpoModulesCore (3.0.26):
     - boost
     - DoubleConversion
     - fast_float
@@ -298,7 +298,7 @@ PODS:
   - EXTaskManager (14.0.8):
     - ExpoModulesCore
     - UMAppLoader
-  - EXUpdates (29.0.12):
+  - EXUpdates (29.0.13):
     - boost
     - DoubleConversion
     - EASClient
@@ -341,8 +341,8 @@ PODS:
   - hermes-engine (0.81.5):
     - hermes-engine/Pre-built (= 0.81.5)
   - hermes-engine/Pre-built (0.81.5)
-  - PurchasesHybridCommon (17.17.0):
-    - RevenueCat (= 5.47.0)
+  - PurchasesHybridCommon (17.19.1):
+    - RevenueCat (= 5.48.0)
   - RCT-Folly (2024.11.18.00):
     - boost
     - DoubleConversion
@@ -2591,11 +2591,11 @@ PODS:
     - React-perflogger (= 0.81.5)
     - React-utils (= 0.81.5)
     - SocketRocket
-  - RevenueCat (5.47.0)
+  - RevenueCat (5.48.0)
   - RNCAsyncStorage (2.2.0):
     - React-Core
-  - RNPurchases (9.6.5):
-    - PurchasesHybridCommon (= 17.17.0)
+  - RNPurchases (9.6.7):
+    - PurchasesHybridCommon (= 17.19.1)
     - React-Core
   - RNScreens (4.16.0):
     - boost
@@ -2954,30 +2954,30 @@ SPEC CHECKSUMS:
   EXAV: f33ecd2d85522045cb1f0cc2fae3aa53e4e0c3c0
   EXConstants: e6e50cdfcb4524f40121d1fdcff24e97b7dcd2fd
   EXJSONUtils: 1d3e4590438c3ee593684186007028a14b3686cd
-  EXManifests: 7469efed75d694ce3c43a6da9c6f3886f66d3c26
-  EXNotifications: 7aab54f0e5f3023122bc95699eaff7c52bacb559
-  Expo: 399f8f4d3d2c8f9ebabdaa6694ab80441bd9bb5f
-  expo-dev-client: 28ade03ca6998c063472d87013fc556aadd71897
-  expo-dev-launcher: 31e5c64b72085facfcf035b3164db8e218515b49
-  expo-dev-menu: 920eecb851b2c713d697cb9c84427dec5f8925a0
+  EXManifests: eaf327418721c4a7482576c579d215516d36319c
+  EXNotifications: 5edf06b6b41a52d8b5b3eccf0e951dc8a880a50b
+  Expo: 9c96eb9226fb298d17bc5cf4f1ef8a3a6d9a4c56
+  expo-dev-client: 779a96a1202684c756cfb159aea357ef01cfdbd9
+  expo-dev-launcher: 99b0f1f5e69f20394b51960bcc9cd173debe5c1d
+  expo-dev-menu: 0754357770f830a31960b86dca319ef36f1e869b
   expo-dev-menu-interface: 600df12ea01efecdd822daaf13cc0ac091775533
-  ExpoAsset: 3c3b7dd9b1318846a02ef05ce420e63d542aeb9f
-  ExpoBackgroundFetch: e0a8fba22cb21473f667eb8220cab7feef18e63c
-  ExpoFileSystem: 56f081328f5b48a6dcc8302eee51d4f2d9d0049b
+  ExpoAsset: ee515c16290e521de1870dcdee66d78173fbc533
+  ExpoBackgroundFetch: 273ad11f469a9f624ade76ee9230a2898093a9e6
+  ExpoFileSystem: 73a9f3f2e0affc61eba5b9326153f64870438af1
   ExpoFont: b881d43057dceb7b31ff767b24f612609e80f60f
   ExpoKeepAwake: 3f5e3ac53627849174f3603271df8e08f174ed4a
-  ExpoModulesCore: 79cf0bd0b3dd3d7444b6cc40fce085e19b2921b0
+  ExpoModulesCore: 6eea5936a60a8fc7fb4fbe01c4539b8f17a16756
   ExpoSQLite: 36b8723223f322148606473507da446b1912500c
   EXStructuredHeaders: c951e77f2d936f88637421e9588c976da5827368
   EXTaskManager: 53f87ed11659341c3f3f02c0041498ef293f5684
-  EXUpdates: e888f17645c0042deb94fee269252e70014ed852
+  EXUpdates: 54a56ab9bdac10de726b52e08cd175f23be9f4cf
   EXUpdatesInterface: 1436757deb0d574b84bba063bd024c315e0ec08b
   fast_float: b32c788ed9c6a8c584d114d0047beda9664e7cc6
   FBLazyVector: 5beb8028d5a2e75dd9634917f23e23d3a061d2aa
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
   hermes-engine: 9f4dfe93326146a1c99eb535b1cb0b857a3cd172
-  PurchasesHybridCommon: fc38c0596d63ad06a3acab2937496fbf77f8af07
+  PurchasesHybridCommon: a4837eebc889b973668af685d6c23b89a038461d
   RCT-Folly: 59ec0ac1f2f39672a0c6e6cecdd39383b764646f
   RCTDeprecation: 5eb1d2eeff5fb91151e8a8eef45b6c7658b6c897
   RCTRequired: cebcf9442fc296c9b89ac791dfd463021d9f6f23
@@ -3043,9 +3043,9 @@ SPEC CHECKSUMS:
   ReactAppDependencyProvider: c277c5b231881ad4f00cd59e3aa0671b99d7ebee
   ReactCodegen: 0936e9ff5fd359d5f6b5173c2a90e91b446d33a3
   ReactCommon: 8df6e27c060970b9fb77a86e69a1cf9b934ea458
-  RevenueCat: e9024be15991ff39bf6bd887def57693115ec8c5
+  RevenueCat: 1e61140a343a77dc286f171b3ffab99ca09a4b57
   RNCAsyncStorage: 23e56519cc41d3bade3c8d4479f7760cb1c11996
-  RNPurchases: 02f8270bf52dbb3d8408db4aeb90690255b859e6
+  RNPurchases: 121c761620615ae624ba7a74e2e5b94254995e6c
   RNScreens: 9ae2656a55e9466dc04da3ba196d7932a6bd8146
   RNSVG: 3e87821b2215b30e19f90232247007e5c313a06c
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748

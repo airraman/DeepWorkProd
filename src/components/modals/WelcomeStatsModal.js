@@ -50,6 +50,7 @@ const WelcomeStatsModal = ({
         <BaseModal 
             visible={visible} 
             onClose={onClose}
+            preventClose={true}  // ✅ FIXED: Hide the X button
             showProgress={showProgress}
             currentStep={currentStep}
             totalSteps={totalSteps}
@@ -80,7 +81,7 @@ const WelcomeStatsModal = ({
                     onPress={onClose}
                 >
                     <Text style={styles.startButtonText}>
-                        Start New Session
+                        Begin DeepWork
                     </Text>
                 </TouchableOpacity>
             </View>

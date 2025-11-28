@@ -1,6 +1,0 @@
-module Pods_DeepWorkio {
-  umbrella header "Pods-DeepWorkio-umbrella.h"
-
-  export *
-  module * { export * }
-}

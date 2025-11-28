@@ -8,6 +8,8 @@ import { SubscriptionProvider } from './src/context/SubscriptionContext';  // �
 import * as Notifications from 'expo-notifications';
 import * as Updates from 'expo-updates';
 import { Alert, View, Text, Platform, Dimensions, StatusBar, Linking } from 'react-native';import { navigationRef, safeNavigate } from './src/services/navigationService';
+import { versionCheckService } from './src/services/versionCheckService';
+
 import backgroundTimer from './src/services/backgroundTimer';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import DevToolsScreen from './src/screens/DevToolsScreen';
@@ -45,6 +47,7 @@ import DeepWorkSession from './src/screens/DeepWorkSession';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
+// const [isUpdateBlocking, setIsUpdateBlocking] = useState(false);
 
 // Safe iPad detection
 const { width, height } = Dimensions.get('window');
@@ -209,6 +212,8 @@ const initializeBackgroundServices = async () => {
 function MainApp() {
   const [notificationSubscription, setNotificationSubscription] = useState(null);
   const [isAppReady, setIsAppReady] = useState(false);
+  const [isUpdateBlocking, setIsUpdateBlocking] = useState(false);
+
   const [initializationStatus, setInitializationStatus] = useState({
     database: 'pending',
     backgroundServices: 'pending',
@@ -222,6 +227,16 @@ function MainApp() {
     const initApp = async () => {
       try {
         console.log('🚀 App initialization starting...');
+
+        console.log('📱 Step 0: Checking app version...');
+        const forceUpdate = await versionCheckService.performVersionCheck();
+        if (forceUpdate) {
+          console.log('🚫 Force update required - blocking app');
+          setIsUpdateBlocking(true);
+          setIsAppReady(true);
+          return; // Stop initialization
+        }
+        console.log('✅ Version check passed');
         
         // STEP 1: Initialize database FIRST (before anything else)
         try {
@@ -472,6 +487,40 @@ function MainApp() {
       console.error('🚀 End session error:', error);
     }
   };
+
+  if (isUpdateBlocking) {
+    return (
+      <ThemeProvider>
+        <View style={{ 
+          flex: 1, 
+          backgroundColor: '#fff', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          padding: 20 
+        }}>
+          <Text style={{ fontSize: 48, marginBottom: 20 }}>⚠️</Text>
+          <Text style={{ 
+            fontSize: 24, 
+            fontWeight: 'bold', 
+            color: '#1F2937', 
+            marginBottom: 12, 
+            textAlign: 'center' 
+          }}>
+            Update Required
+          </Text>
+          <Text style={{ 
+            fontSize: 16, 
+            color: '#6B7280', 
+            textAlign: 'center', 
+            lineHeight: 24,
+            marginBottom: 30 
+          }}>
+            A critical update is required to continue using DeepWork. Please update to the latest version from the App Store.
+          </Text>
+        </View>
+      </ThemeProvider>
+    );
+  }
   
   if (!isAppReady) {
     return (

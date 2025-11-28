@@ -22,15 +22,8 @@ const ReminderFrequencyModal = ({
     // State for tracking selected reminder frequency
     const [selectedFrequency, setSelectedFrequency] = useState('');
     
-    // UPDATED: Reminder frequency options - replaced 'multiple_daily' with 'none'
+    // ✅ FIXED: Moved 'none' option to the bottom per user request
     const frequencyOptions = [
-        { 
-            id: 'none', 
-            label: "Don't Remind me to Focus",
-            description: 'Never nudge me to focus',
-            icon: '🔕',  // Muted bell icon
-            value: 'none'
-        },
         { 
             id: 'daily', 
             label: 'Once a day',
@@ -44,6 +37,13 @@ const ReminderFrequencyModal = ({
             description: 'Weekly reflection and planning',
             icon: '📊',
             value: 'weekly'
+        },
+        { 
+            id: 'none', 
+            label: "Don't Remind me to Focus",
+            description: 'Never nudge me to focus',
+            icon: '🔕',  // Muted bell icon
+            value: 'none'
         }
     ];
 

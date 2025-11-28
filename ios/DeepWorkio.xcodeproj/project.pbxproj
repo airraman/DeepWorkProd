@@ -8,32 +8,28 @@
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		2B6264200CDE7E1CAF69999F /* libPods-DeepWorkio.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 719216CFF85DD93500AEFAC2 /* libPods-DeepWorkio.a */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		8E95FA73AF76799375BFB19D /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2414B6FEC5C5DB9E6052598C /* ExpoModulesProvider.swift */; };
-		B68B60F36A77B3717FBC4062 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 948345228D9F38DC12E6951E /* PrivacyInfo.xcprivacy */; };
+		57E82C8E567FE2EB4A9EC7F7 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62DD64978CD3333233C2C21C /* ExpoModulesProvider.swift */; };
+		60799F2733B1BDCF9815CF47 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 984A65B038FC7452E0A990F2 /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
+		C7249CD3154C22A99C82F1BA /* libPods-DeepWorkio.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7EDF766D3F6FB0F59E1E81D9 /* libPods-DeepWorkio.a */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
-		F1966C6B2ECABB6C00453112 /* Products.storekit in Resources */ = {isa = PBXBuildFile; fileRef = F1966C6A2ECABB6C00453112 /* Products.storekit */; };
-		F1DC27CB2ECEA50C006A96ED /* Products.storekit in Resources */ = {isa = PBXBuildFile; fileRef = F1DC27CA2ECEA50C006A96ED /* Products.storekit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		13B07F961A680F5B00A75B9A /* DeepWorkio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DeepWorkio.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = DeepWorkio/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = DeepWorkio/Info.plist; sourceTree = "<group>"; };
-		2414B6FEC5C5DB9E6052598C /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-DeepWorkio/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		2A2906CAB55E0801CBC8992A /* Pods-DeepWorkio.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DeepWorkio.release.xcconfig"; path = "Target Support Files/Pods-DeepWorkio/Pods-DeepWorkio.release.xcconfig"; sourceTree = "<group>"; };
-		719216CFF85DD93500AEFAC2 /* libPods-DeepWorkio.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-DeepWorkio.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		948345228D9F38DC12E6951E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = DeepWorkio/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		975AA9431C5B0D252E4BBFFA /* Pods-DeepWorkio.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DeepWorkio.debug.xcconfig"; path = "Target Support Files/Pods-DeepWorkio/Pods-DeepWorkio.debug.xcconfig"; sourceTree = "<group>"; };
+		2EF21AD0DE9F7B6A07BA6686 /* Pods-DeepWorkio.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DeepWorkio.release.xcconfig"; path = "Target Support Files/Pods-DeepWorkio/Pods-DeepWorkio.release.xcconfig"; sourceTree = "<group>"; };
+		62DD64978CD3333233C2C21C /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-DeepWorkio/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		7EDF766D3F6FB0F59E1E81D9 /* libPods-DeepWorkio.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-DeepWorkio.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		984A65B038FC7452E0A990F2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = DeepWorkio/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = DeepWorkio/SplashScreen.storyboard; sourceTree = "<group>"; };
+		ACC7FA8D0723A50609D7AF1B /* Pods-DeepWorkio.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DeepWorkio.debug.xcconfig"; path = "Target Support Files/Pods-DeepWorkio/Pods-DeepWorkio.debug.xcconfig"; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = DeepWorkio/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* DeepWorkio-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "DeepWorkio-Bridging-Header.h"; path = "DeepWorkio/DeepWorkio-Bridging-Header.h"; sourceTree = "<group>"; };
-		F1966C6A2ECABB6C00453112 /* Products.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Products.storekit; sourceTree = "<group>"; };
-		F1DC27CA2ECEA50C006A96ED /* Products.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Products.storekit; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -41,7 +37,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2B6264200CDE7E1CAF69999F /* libPods-DeepWorkio.a in Frameworks */,
+				C7249CD3154C22A99C82F1BA /* libPods-DeepWorkio.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -51,31 +47,30 @@
 		13B07FAE1A68108700A75B9A /* DeepWorkio */ = {
 			isa = PBXGroup;
 			children = (
-				F1966C6A2ECABB6C00453112 /* Products.storekit */,
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
 				F11748442D0722820044C1D9 /* DeepWorkio-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				948345228D9F38DC12E6951E /* PrivacyInfo.xcprivacy */,
+				984A65B038FC7452E0A990F2 /* PrivacyInfo.xcprivacy */,
 			);
 			name = DeepWorkio;
 			sourceTree = "<group>";
 		};
-		2B49615037E1BA9484337359 /* DeepWorkio */ = {
+		177FE436BB23EAC49B0BC390 /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				2414B6FEC5C5DB9E6052598C /* ExpoModulesProvider.swift */,
+				FF26048C9A400C746CB31292 /* DeepWorkio */,
 			);
-			name = DeepWorkio;
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				719216CFF85DD93500AEFAC2 /* libPods-DeepWorkio.a */,
+				7EDF766D3F6FB0F59E1E81D9 /* libPods-DeepWorkio.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -90,13 +85,12 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
-				F1DC27CA2ECEA50C006A96ED /* Products.storekit */,
 				13B07FAE1A68108700A75B9A /* DeepWorkio */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				B5B5A1D14A74E7BC48D3BD0A /* Pods */,
-				DDB2CAEA02F83C6D6BF817F0 /* ExpoModulesProviders */,
+				9C6A96B180BFC30C4B14E640 /* Pods */,
+				177FE436BB23EAC49B0BC390 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -111,12 +105,13 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		B5B5A1D14A74E7BC48D3BD0A /* Pods */ = {
+		9C6A96B180BFC30C4B14E640 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				975AA9431C5B0D252E4BBFFA /* Pods-DeepWorkio.debug.xcconfig */,
-				2A2906CAB55E0801CBC8992A /* Pods-DeepWorkio.release.xcconfig */,
+				ACC7FA8D0723A50609D7AF1B /* Pods-DeepWorkio.debug.xcconfig */,
+				2EF21AD0DE9F7B6A07BA6686 /* Pods-DeepWorkio.release.xcconfig */,
 			);
+			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -129,12 +124,12 @@
 			path = DeepWorkio/Supporting;
 			sourceTree = "<group>";
 		};
-		DDB2CAEA02F83C6D6BF817F0 /* ExpoModulesProviders */ = {
+		FF26048C9A400C746CB31292 /* DeepWorkio */ = {
 			isa = PBXGroup;
 			children = (
-				2B49615037E1BA9484337359 /* DeepWorkio */,
+				62DD64978CD3333233C2C21C /* ExpoModulesProvider.swift */,
 			);
-			name = ExpoModulesProviders;
+			name = DeepWorkio;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -145,13 +140,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "DeepWorkio" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				C1F57BD2B3B13F2E77C7EE0F /* [Expo] Configure project */,
+				90B1167D850E807BE6F95C69 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				51E94B94746720468D648457 /* [CP] Embed Pods Frameworks */,
+				CE21E02E4E78D6963C6AA308 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -201,9 +196,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				F1966C6B2ECABB6C00453112 /* Products.storekit in Resources */,
-				F1DC27CB2ECEA50C006A96ED /* Products.storekit in Resources */,
-				B68B60F36A77B3717FBC4062 /* PrivacyInfo.xcprivacy in Resources */,
+				60799F2733B1BDCF9815CF47 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -247,24 +240,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		51E94B94746720468D648457 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-DeepWorkio/Pods-DeepWorkio-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-DeepWorkio/Pods-DeepWorkio-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
@@ -321,7 +296,7 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-DeepWorkio/Pods-DeepWorkio-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		C1F57BD2B3B13F2E77C7EE0F /* [Expo] Configure project */ = {
+		90B1167D850E807BE6F95C69 /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -345,6 +320,24 @@
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-DeepWorkio/expo-configure-project.sh\"\n";
 		};
+		CE21E02E4E78D6963C6AA308 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-DeepWorkio/Pods-DeepWorkio-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-DeepWorkio/Pods-DeepWorkio-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -353,7 +346,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				8E95FA73AF76799375BFB19D /* ExpoModulesProvider.swift in Sources */,
+				57E82C8E567FE2EB4A9EC7F7 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -362,7 +355,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 975AA9431C5B0D252E4BBFFA /* Pods-DeepWorkio.debug.xcconfig */;
+			baseConfigurationReference = ACC7FA8D0723A50609D7AF1B /* Pods-DeepWorkio.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -398,7 +391,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 2A2906CAB55E0801CBC8992A /* Pods-DeepWorkio.release.xcconfig */;
+			baseConfigurationReference = 2EF21AD0DE9F7B6A07BA6686 /* Pods-DeepWorkio.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

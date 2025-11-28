@@ -145,7 +145,7 @@ const TotalTimeCard = ({ totalHours }) => {
       </Text>
       {totalHours > 50 && (
         <View style={styles.achievementContainer}>
-          <Text style={styles.achievementIcon}>🏆</Text>
+          <Text style={styles.achievementIcon}></Text>
         </View>
       )}
     </View>
