@@ -37,7 +37,7 @@ yarn-error.*
 
 
 # API Keys and Secrets
-src/config/openai.js
+# src/config/openai.js
 .env
 .env*.local
 
