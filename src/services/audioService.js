@@ -54,13 +54,18 @@ class AudioService {
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
         
-        // ✅ NEW: Set proper interruption mode for background playback
-        interruptionModeIOS: 1,
-        interruptionModeAndroid: 1,
+        // ✅ FIXED: Use proper Expo Audio constants for interruption mode
+        // DO_NOT_MIX means our audio will play exclusively (better for background music)
+        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
         
         // Keep these as they are
         allowsRecordingIOS: false,
-        shouldDuckAndroid: true,
+        
+        // ✅ FIXED: Changed from true to false
+        // shouldDuckAndroid: true reduces volume when other audio plays
+        // false means full volume always (better for focus music)
+        shouldDuckAndroid: false,
         playThroughEarpieceAndroid: false,
       });
       

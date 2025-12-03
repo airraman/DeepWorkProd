@@ -49,12 +49,16 @@ class AlarmService {
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
         
-        // ✅ NEW: Proper interruption mode for alarm sounds
-        interruptionModeIOS: 1,
-        interruptionModeAndroid: 1,
+        // ✅ FIXED: Use proper Expo Audio constants for interruption mode
+        // DO_NOT_MIX means alarm will play at full volume (better for alerts)
+        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
         
         allowsRecordingIOS: false,
-        shouldDuckAndroid: true,
+        
+        // ✅ FIXED: Changed from true to false
+        // Alarms should play at full volume, not ducked
+        shouldDuckAndroid: false,
         playThroughEarpieceAndroid: false,
       });
       
@@ -166,39 +170,27 @@ class AlarmService {
        *    - Device might not support vibration
        *    Always provide visual feedback!
        */
-      setTimeout(() => {
-        this.showCelebrationAlert(options);
-      }, 200); // Slight delay so audio/vibration start first
+      this.showCelebration();
       
       /**
        * AUTO-STOP TIMER
        * 
-       * INTERVIEW CONCEPT: Resource cleanup with timers
-       * - We don't want alarm playing forever (bad UX + wastes battery)
-       * - setTimeout creates a cleanup timer
-       * - Store timer ID so we can cancel if user manually stops
+       * INTERVIEW Q: Why auto-stop an alarm?
+       * A: Prevents annoying infinite alarms if user is away from device
+       *    Also prevents memory leaks from sounds playing indefinitely
        */
       this.autoStopTimer = setTimeout(() => {
         console.log('🔔 Auto-stopping alarm after timeout');
         this.stopAlarm();
       }, autoStopAfter * 1000);
       
-      console.log('🔔 Completion alarm playing successfully');
       return true;
       
     } catch (error) {
-      console.error('🔔 Error playing completion alarm:', error);
+      console.error('🔔 Error playing alarm:', error);
       
-      /**
-       * FALLBACK HANDLING
-       * 
-       * INTERVIEW CONCEPT: Graceful degradation
-       * - If audio fails (permissions, file missing, etc.), don't crash
-       * - Fall back to visual-only notification
-       * - User still knows their session completed
-       */
-      console.log('🔔 Falling back to visual-only alert');
-      this.showFallbackAlert();
+      // FALLBACK: Show visual alert even if everything else fails
+      this.showCelebration();
       
       return false;
     }
@@ -207,304 +199,160 @@ class AlarmService {
   /**
    * Trigger device vibration
    * 
-   * VIBRATION PATTERNS:
-   * Array of times [wait, vibrate, wait, vibrate, ...]
-   * Times in milliseconds
-   * 
    * Pattern explanation:
-   * [0, 400, 200, 400, 200, 600]
-   * - 0ms wait (start immediately)
-   * - 400ms vibrate (strong pulse)
-   * - 200ms wait (short pause)
-   * - 400ms vibrate (strong pulse)
-   * - 200ms wait (short pause)
-   * - 600ms vibrate (long finish)
+   * [0, 500, 200, 500]
+   * - 0ms wait
+   * - 500ms vibrate
+   * - 200ms pause
+   * - 500ms vibrate
    * 
-   * Result: "buzz-buzz-BUZZ" pattern that feels celebratory!
-   * 
-   * INTERVIEW CONCEPT: Haptic Design
-   * Different patterns convey different meanings:
-   * - Short single buzz: notification
-   * - Double buzz: warning
-   * - Triple buzz with crescendo: success/celebration
+   * Creates a distinctive double-pulse pattern
    */
   triggerVibration() {
     try {
-      /**
-       * SIMULATOR DETECTION
-       * 
-       * INTERVIEW Q: Why check __DEV__ and Platform.OS?
-       * A: 
-       * - __DEV__ = true when running in development mode
-       * - iOS simulator doesn't have haptic hardware
-       * - Calling Vibration.vibrate() in simulator logs warnings
-       * 
-       * We skip vibration in iOS simulator but:
-       * - Log that it would happen (for debugging)
-       * - Still works on real iOS devices
-       * - Works in Android emulator (it simulates vibration)
-       */
-      if (__DEV__ && Platform.OS === 'ios') {
-        console.log('🔔 iOS Simulator detected - vibration skipped (will work on real device)');
-        return;
+      if (Platform.OS === 'ios') {
+        // iOS: Simple vibration (doesn't support patterns)
+        Vibration.vibrate([0, 500, 200, 500]);
+      } else {
+        // Android: Full pattern support
+        Vibration.vibrate([0, 500, 200, 500], false);
       }
-      
-      // Pattern: buzz-buzz-BUZZ (celebratory!)
-      Vibration.vibrate([0, 400, 200, 400, 200, 600]);
       console.log('🔔 Vibration triggered');
-      
     } catch (error) {
-      // Vibration can fail on some devices (permissions, hardware)
-      // This is non-critical - just log and continue
-      console.log('🔔 Vibration failed (non-critical):', error.message);
+      console.warn('🔔 Vibration error:', error);
+      // Non-critical - continue without vibration
+    }
+  }
+
+  /**
+   * Show celebration alert
+   * 
+   * INTERVIEW CONCEPT: Alert vs Modal
+   * - Alert: System-level, always visible, works even if app backgrounded
+   * - Modal: In-app only, requires app to be in foreground
+   * 
+   * For alarms, Alert is better because it works even if user switches apps
+   */
+  showCelebration() {
+    try {
+      Alert.alert(
+        '🎉 Session Complete!',
+        'Congratulations on finishing your deep work session!',
+        [
+          {
+            text: 'Awesome!',
+            style: 'default',
+            onPress: () => {
+              console.log('🔔 User acknowledged completion');
+              this.stopAlarm();
+            }
+          }
+        ],
+        { cancelable: false }
+      );
+    } catch (error) {
+      console.warn('🔔 Alert error:', error);
+      // If alert fails, at least we have audio/vibration
     }
   }
 
   /**
    * Callback for audio playback status updates
    * 
-   * INTERVIEW CONCEPT: Event-driven programming
-   * - This function is called by expo-av whenever playback state changes
-   * - We use it to detect errors and completion
-   * - Arrow function preserves 'this' context
+   * Called automatically by expo-av when sound state changes
    */
   onPlaybackStatusUpdate = (status) => {
     try {
-      // Handle playback errors
       if (status.error) {
-        console.error('🔔 Alarm playback error:', status.error);
+        console.error('🔔 Playback error:', status.error);
         this.stopAlarm();
-        this.showFallbackAlert();
       }
       
-      // Alarm finished playing naturally (reached end of audio file)
-      if (status.didJustFinish) {
+      // Alarm finished playing naturally
+      if (status.didJustFinish && !status.isLooping) {
         console.log('🔔 Alarm finished playing');
-        this.isPlaying = false;
-        // Auto-cleanup after finish
-        setTimeout(() => this.stopAlarm(), 1000);
+        this.stopAlarm();
       }
-      
     } catch (error) {
       console.error('🔔 Status update error:', error);
     }
   };
 
   /**
-   * Show celebration alert with random messages
+   * Stop the alarm and clean up resources
    * 
-   * INTERVIEW CONCEPT: User engagement through variety
-   * - Randomized messages prevent habituation
-   * - Users don't tune out repeated messages
-   * - Keeps the experience fresh
-   */
-  showCelebrationAlert(options = {}) {
-    try {
-      // Array of celebration titles
-      const celebrations = [
-        '🎉 Outstanding Work!',
-        '🌟 Session Complete!',
-        '🎯 Focus Achieved!',
-        '💪 Well Done!',
-        '🏆 Success!',
-        '✨ Brilliant!',
-        '🚀 Crushing It!',
-      ];
-      
-      // Array of encouraging messages
-      const messages = [
-        'You just completed a deep work session! Your dedication is building powerful focus habits.',
-        'Another successful session completed! You\'re making real progress toward your goals.',
-        'Excellent concentration! You\'re developing the discipline that leads to breakthrough results.',
-        'Session finished! Take a moment to appreciate this accomplishment.',
-        'Outstanding focus! You\'re proving that deep work creates extraordinary outcomes.',
-        'Your commitment to deep work is inspiring! Keep up the amazing progress.',
-        'Session complete! Each focused hour compounds into remarkable achievements.',
-      ];
-      
-      // Pick random title and message
-      // INTERVIEW Q: Why Math.floor(Math.random() * array.length)?
-      // A: Math.random() gives 0 to 0.999...
-      //    Multiply by length gives 0 to (length - 0.001)
-      //    Math.floor rounds down to valid index
-      const randomTitle = celebrations[Math.floor(Math.random() * celebrations.length)];
-      const randomMessage = messages[Math.floor(Math.random() * messages.length)];
-      
-      /**
-       * Alert API
-       * 
-       * INTERVIEW CONCEPT: Native UI vs Custom UI
-       * Alert.alert uses NATIVE OS dialogs:
-       * - iOS: UIAlertController (iOS-style popup)
-       * - Android: AlertDialog (Material Design)
-       * 
-       * Pros: Familiar to users, accessible, system-handled
-       * Cons: Limited customization, blocking (modal)
-       */
-      Alert.alert(
-        randomTitle,
-        randomMessage,
-        [
-          {
-            text: 'View Progress',
-            style: 'default',
-            onPress: () => {
-              console.log('🔔 User wants to view progress');
-              this.stopAlarm();
-              // Navigation handled by DeepWorkSession
-            }
-          },
-          {
-            text: 'Another Session',
-            style: 'default',
-            onPress: () => {
-              console.log('🔔 User wants another session');
-              this.stopAlarm();
-              // Navigation handled by DeepWorkSession
-            }
-          }
-        ],
-        { 
-          // Allow dismissing by tapping outside
-          cancelable: true,
-          // Clean up when dismissed
-          onDismiss: () => {
-            this.stopAlarm();
-          }
-        }
-      );
-      
-    } catch (error) {
-      console.error('🔔 Celebration alert error:', error);
-      // Ultimate fallback - simple alert
-      Alert.alert('🎉 Session Complete!', 'Excellent work on your deep work session!');
-    }
-  }
-
-  /**
-   * Fallback alert when audio fails
-   * 
-   * Simpler message, no buttons, just acknowledgment
-   */
-  showFallbackAlert() {
-    try {
-      Alert.alert(
-        '🎉 Session Complete!',
-        'Congratulations! Your deep work session has finished.',
-        [{ text: 'Awesome!', style: 'default' }]
-      );
-    } catch (error) {
-      console.error('🔔 Fallback alert error:', error);
-    }
-  }
-
-  /**
-   * Stop the alarm
-   * 
-   * CRITICAL for resource management
-   * 
-   * Called when:
-   * - User dismisses celebration alert
-   * - Auto-stop timer triggers
-   * - New alarm needs to play
-   * - Session cleanup
+   * CRITICAL: Always clean up audio resources to prevent memory leaks
    */
   async stopAlarm() {
     try {
-      // Cancel auto-stop timer if it exists
+      // Clear auto-stop timer
       if (this.autoStopTimer) {
         clearTimeout(this.autoStopTimer);
         this.autoStopTimer = null;
       }
       
-      // Stop vibration (in case it's still going)
-      Vibration.cancel();
-      
-      // Stop and unload audio
+      // Stop and unload sound
       if (this.alarmSound) {
-        console.log('🔔 Stopping alarm audio...');
+        console.log('🔔 Stopping alarm...');
         
-        /**
-         * INTERVIEW CONCEPT: Why try-catch inside try-catch?
-         * A: The sound might already be unloaded or in a bad state
-         *    We want to ensure cleanup happens even if stop/unload fails
-         */
-        try {
-          await this.alarmSound.stopAsync();
-          await this.alarmSound.unloadAsync();
-        } catch (unloadError) {
-          console.log('🔔 Error unloading alarm (may already be unloaded):', unloadError.message);
-        }
+        await this.alarmSound.stopAsync();
+        await this.alarmSound.unloadAsync();
         
         this.alarmSound = null;
-        console.log('🔔 Alarm audio stopped and unloaded');
+        this.isPlaying = false;
+        
+        console.log('🔔 Alarm stopped and unloaded');
       }
       
-      this.isPlaying = false;
-      console.log('🔔 Alarm stopped');
+      // Stop vibration
+      Vibration.cancel();
+      
+      return true;
       
     } catch (error) {
       console.error('🔔 Error stopping alarm:', error);
-      // Force cleanup even on error
+      
+      // Even on error, clear references
       this.alarmSound = null;
       this.isPlaying = false;
-      this.autoStopTimer = null;
+      
+      return false;
     }
   }
 
   /**
-   * Test the alarm (for settings screen)
+   * Get current alarm status
    * 
-   * Plays a shorter version for testing
-   * User can verify volume/vibration before actual sessions
-   */
-  async testAlarm() {
-    console.log('🔔 Testing alarm...');
-    return await this.playCompletionAlarm({
-      volume: 0.6, // Slightly quieter for testing
-      autoStopAfter: 3 // Shorter duration
-    });
-  }
-
-  /**
-   * Clean up all resources
-   * 
-   * Called when:
-   * - App is shutting down
-   * - Service needs to be reinitialized
-   * - Session screen unmounts
-   */
-  async cleanup() {
-    try {
-      console.log('🔔 Cleaning up alarm service...');
-      await this.stopAlarm();
-      console.log('🔔 Alarm service cleaned up');
-    } catch (error) {
-      console.error('🔔 Cleanup error:', error);
-    }
-  }
-
-  /**
-   * Get current service status
-   * 
-   * Useful for debugging and UI state
+   * Useful for debugging or showing UI state
    */
   getStatus() {
     return {
       isInitialized: this.isInitialized,
       isPlaying: this.isPlaying,
-      hasAlarmSound: !!this.alarmSound,
-      platform: Platform.OS,
-      isDev: __DEV__
+      hasSound: !!this.alarmSound
     };
+  }
+
+  /**
+   * Clean up all resources
+   * 
+   * Called when app is closing or service is being reinitialized
+   */
+  async cleanup() {
+    try {
+      console.log('🔔 Cleaning up alarm service...');
+      await this.stopAlarm();
+      console.log('🔔 Alarm service cleaned up successfully');
+    } catch (error) {
+      console.error('🔔 Cleanup error:', error);
+    }
   }
 }
 
 /**
- * SINGLETON EXPORT
+ * SINGLETON PATTERN
  * 
- * Same pattern as audioService
- * One instance for the entire app
+ * Export a single instance to ensure only one alarm plays at a time
  */
 export const alarmService = new AlarmService();
 
