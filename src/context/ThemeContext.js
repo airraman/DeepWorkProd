@@ -20,7 +20,10 @@ export const themeColors = {
     border: '#e5e7eb',
     primary: '#2563eb',
     buttonText: 'white',
-    divider: '#e5e7eb'
+    divider: '#e5e7eb',
+    warning: '#f59e0b',           // Orange border
+    warningBackground: '#fef3c7', // Light yellow background
+    warningText: '#92400e'        // Dark brown text (good contrast on light bg)
   },
   [THEMES.DARK]: {
     background: '#000000',
@@ -30,7 +33,10 @@ export const themeColors = {
     border: '#333333',
     primary: '#2563eb',
     buttonText: 'white',
-    divider: '#333333'
+    divider: '#333333', 
+    warning: '#f59e0b',           // Orange border (same as light)
+    warningBackground: '#451a03', // Dark brown background
+    warningText: 'white'        // Light yellow text (good contrast on dark bg)
   }
 };
 

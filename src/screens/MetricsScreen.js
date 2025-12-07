@@ -23,6 +23,8 @@ import InsightGenerator from '../services/insights/InsightGenerator';
 import ExpandableInsight from '../components/ExpandableInsight';
 import { useSubscription } from '../context/SubscriptionContext';
 import { PaywallModal } from '../components/PaywallModal';
+// At the top of src/screens/MetricsScreen.js
+import { getStartOfWeek } from '../utils/dateHelpers';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BOX_SIZE = 24;
@@ -35,14 +37,20 @@ const MONTHS = [
 ];
 
 const generateWeeklyChartData = (sessions) => {
-  const today = new Date();
+  // Get the start of this week (Monday at midnight)
+  const mondayTimestamp = getStartOfWeek(Date.now());
   const weekData = [];
   
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - i);
+  // Loop through 7 days starting from Monday
+  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+    // Create a new date for each day of the week
+    const date = new Date(mondayTimestamp);
+    date.setDate(date.getDate() + dayOffset);
+    
+    // Convert to YYYY-MM-DD format for session lookup
     const dateString = date.toISOString().split('T')[0];
     
+    // Get sessions for this specific date
     const daySessions = sessions[dateString] || [];
     const totalMinutes = daySessions.reduce((sum, session) => sum + session.duration, 0);
     const totalHours = parseFloat((totalMinutes / 60).toFixed(1));
@@ -201,15 +209,24 @@ const CompactActivityGrid = ({ sessions }) => {
   
   const monthLabels = [];
   const today = new Date();
+  let lastShownPosition = -4; // Track last shown position to prevent overlap
+  
   for (let i = 0; i < gridData.length; i++) {
     const weekDate = new Date(today);
     weekDate.setDate(today.getDate() - (gridData.length - i - 1) * 7);
     
-    if (weekDate.getDate() <= 7 || i === 0) {
+    // Show month label if:
+    // 1. First week of month (date <= 7) OR first position (i === 0)
+    // 2. At least 4 weeks since last label (prevents overlap)
+    const isNewMonth = weekDate.getDate() <= 7 || i === 0;
+    const hasEnoughSpacing = i - lastShownPosition >= 4;
+    
+    if (isNewMonth && hasEnoughSpacing) {
       monthLabels.push({
         month: MONTHS[weekDate.getMonth()],
         position: i
       });
+      lastShownPosition = i; // Update tracker
     }
   }
   
@@ -791,12 +808,12 @@ const MetricsScreen = () => {
       style={styles.lockedInsightButton}
       onPress={() => setShowPaywall(true)}
     >
-      <Text style={styles.lockIcon}>🔒</Text>
+      <Text style={styles.lockIcon}></Text>
       <Text style={[styles.lockedInsightText, { color: colors.text }]}>
-        Generate AI Insight
+        Summarize Focus Patterns
       </Text>
       <Text style={[styles.lockedInsightSubtext, { color: colors.textSecondary }]}>
-        Tap to unlock premium
+        Tap to analyze
       </Text>
     </TouchableOpacity>
   </View>
@@ -1144,7 +1161,8 @@ const styles = StyleSheet.create({
   chartContainer: {
     padding: 8,
     paddingTop: 4,
-    height: 58,
+    paddingBottom: 4,  // ✅ ADD THIS LINE
+    height: 65,
     justifyContent: 'flex-start',
   },
   chartTitle: {
@@ -1161,7 +1179,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    height: 28,
+    height: 40,
   },
   barWrapper: {
     alignItems: 'center',
@@ -1172,6 +1190,7 @@ const styles = StyleSheet.create({
     width: 8,
     justifyContent: 'flex-end',
     marginBottom: 5,
+    
   },
   bar: {
     width: '100%',
@@ -1183,6 +1202,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontWeight: '500',
     textAlign: 'center',
+    lineHeight: 10,  // ✅ ADD THIS - locks vertical space
+
   },
   totalTimeContainer: {
     padding: 4,
@@ -1198,6 +1219,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 1,
     textAlign: 'center',
+    borderRadius: 100,
   },
   totalTimeValue: {
     fontSize: 16,
