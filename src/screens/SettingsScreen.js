@@ -54,10 +54,38 @@ const SettingsScreen = () => {
   // ✅ NEW: Paywall state
   const [showPaywall, setShowPaywall] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const colorPalette = [
-    '#c8b2d6', '#f1dbbc', '#bcd2f1', '#d6b2c8', 
-    '#b2d6c8', '#dbbcf1', '#bcf1db', '#f1bcdb'
-  ];
+// ✅ UPDATED: Full-spectrum color palette (16 colors)
+const colorPalette = [
+  // Reds/Pinks
+  '#ffb3ba',  // Pastel Red
+  '#ffdfdf',  // Light Pink
+  
+  // Oranges
+  '#ffcc99',  // Pastel Orange
+  '#ffd9b3',  // Peach
+  
+  // Yellows
+  '#ffffba',  // Pastel Yellow
+  '#fff5cc',  // Cream
+  
+  // Greens
+  '#baffc9',  // Pastel Green
+  '#b3f0d4',  // Mint
+  '#d4f0b3',  // Light Lime
+  
+  // Blues
+  '#bae1ff',  // Pastel Blue
+  '#b3d9ff',  // Sky Blue
+  '#c2e0f0',  // Light Cyan
+  
+  // Purples
+  '#d9baff',  // Pastel Purple
+  '#e0b3ff',  // Lavender
+  
+  // Magentas
+  '#ffb3f7',  // Pastel Magenta
+  '#ffc9f0',  // Light Fuchsia
+];
 
   const durations = [5, 10, 15, 20, 30, 45];
 
@@ -152,24 +180,42 @@ const SettingsScreen = () => {
         await notificationService.scheduleNotifications();
         setNotificationsEnabled(true);
         
-        // Get frequency to show in feedback
+        // Get frequency to show helpful feedback
         const frequency = await deepWorkStore.getReminderFrequency();
-        const message = frequency === 'daily' ? 'Daily reminders enabled' : 
-                        frequency === 'weekly' ? 'Weekly reminders enabled' : 
-                        'Reminders enabled';
+        
+        // ✅ PRODUCTION: Clear, informative feedback (no test notification)
+        let message;
+        if (frequency === 'daily') {
+          message = 'Daily reminders enabled (9 AM, 2 PM, 7 PM)';
+        } else if (frequency === 'weekly') {
+          message = 'Weekly reminders enabled (Monday 9 AM)';
+        } else {
+          message = 'Reminders enabled';
+        }
+        
         showFeedback(message);
+        
+        // ❌ REMOVED: No test notification for end users
+        
       } else {
+        // Better instructions for enabling permissions
         Alert.alert(
           'Notifications Disabled',
-          'Please enable notifications in your device Settings to receive reminders.',
-          [{ text: 'OK' }]
+          'Please enable notifications in Settings:\n\n1. Open Settings\n2. Find DeepWork.io\n3. Enable Notifications\n4. Enable Sound & Badges',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Open Settings',
+              onPress: () => Linking.openSettings()
+            }
+          ]
         );
       }
     } else {
       // Disabling - cancel all notifications
       await notificationService.cancelAllNotifications();
       setNotificationsEnabled(false);
-      showFeedback('Reminders disabled');
+      showFeedback('All reminders disabled');
     }
   };
 
@@ -688,6 +734,31 @@ const SettingsScreen = () => {
             ]} />
           </TouchableOpacity>
         </View>
+        {/* Test Notification Button */}
+{notificationsEnabled && (
+  <TouchableOpacity
+    style={[
+      styles.testButton,
+      { 
+        backgroundColor: colors.primary,
+        marginTop: 12,
+        padding: 12,
+        borderRadius: 8,
+        alignItems: 'center'
+      }
+    ]}
+    onPress={async () => {
+      setIsSaving(true);
+      await notificationService.sendTestNotification();
+      showFeedback('Test notification sent!');
+      setIsSaving(false);
+    }}
+  >
+    <Text style={{ color: 'white', fontWeight: '600' }}>
+      Send Test Notification
+    </Text>
+  </TouchableOpacity>
+)}
       </View>
         {/* Save Button */}
         <TouchableOpacity

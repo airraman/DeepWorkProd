@@ -53,7 +53,7 @@ class AudioService {
         // ✅ CRITICAL: These tell iOS to keep audio active when locked
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
-        
+        categoryIOS: Audio.AUDIO_SESSION_CATEGORY_PLAYBACK,
         // ✅ FIXED: Use proper Expo Audio constants for interruption mode
         // DO_NOT_MIX means our audio will play exclusively (better for background music)
         interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,

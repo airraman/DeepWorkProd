@@ -37,26 +37,23 @@ const MONTHS = [
 ];
 
 const generateWeeklyChartData = (sessions) => {
-  // Get the start of this week (Monday at midnight)
-  const mondayTimestamp = getStartOfWeek(Date.now());
+  const today = new Date();
   const weekData = [];
   
-  // Loop through 7 days starting from Monday
-  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-    // Create a new date for each day of the week
-    const date = new Date(mondayTimestamp);
-    date.setDate(date.getDate() + dayOffset);
-    
-    // Convert to YYYY-MM-DD format for session lookup
+  // ✅ Single-letter day names to prevent bunching
+  const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - i);
     const dateString = date.toISOString().split('T')[0];
     
-    // Get sessions for this specific date
     const daySessions = sessions[dateString] || [];
     const totalMinutes = daySessions.reduce((sum, session) => sum + session.duration, 0);
     const totalHours = parseFloat((totalMinutes / 60).toFixed(1));
     
     weekData.push({
-      day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+      day: dayNames[date.getDay()],  // ✅ Single letter (S, M, T, W, T, F, S)
       fullDate: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       hours: totalHours,
       date: dateString,
@@ -66,7 +63,6 @@ const generateWeeklyChartData = (sessions) => {
   
   return weekData;
 };
-
 const WeeklyFocusChart = ({ sessions }) => {
   const { colors } = useTheme();
   const [selectedBar, setSelectedBar] = useState(null);
@@ -541,9 +537,16 @@ for (let d = 1; d <= lastDay.getDate(); d++) {        const date = new Date(year
   );
 };
 
+
+
 const MetricsScreen = () => {
   const { colors, isDarkMode } = useTheme();
-  const { isPremium, canGenerateInsights, isSubscribed } = useSubscription();
+
+  const { 
+    isPremium,           // ← Remove ": actualIsPremium"
+    canGenerateInsights, // ← Remove ": actualCanGenerateInsights"
+  } = useSubscription();
+
   const [sessions, setSessions] = useState({});
   const [activities, setActivities] = useState([]);
   const [selectedSession, setSelectedSession] = useState(null);
@@ -553,6 +556,8 @@ const MetricsScreen = () => {
   const [showPaywall, setShowPaywall] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [selectedActivity, setSelectedActivity] = useState(null);
+
+
 
   useFocusEffect(
     React.useCallback(() => {
@@ -728,14 +733,23 @@ const MetricsScreen = () => {
       setShowPaywall(true);
       return;
     }
-
+  
     setIsGeneratingInsight(true);
     setInsightError(null);
     setCurrentInsight(null);
-
+  
     try {
-      const insight = await InsightGenerator.generateInsight(sessions, activities);
+      console.log('📊 Generating insight for selected month:', selectedMonth);
+      
+      // ✅ FIX: Use correct API - generate(insightType, options)
+      const insight = await InsightGenerator.generate('monthly', {
+        referenceDate: selectedMonth ? new Date(selectedMonth) : new Date(),
+        forceRegenerate: false,
+      });
+      
+      console.log('✅ Insight generated:', insight);
       setCurrentInsight(insight);
+      
     } catch (error) {
       console.error('Error generating insight:', error);
       setInsightError('Unable to generate insight. Please try again.');
@@ -834,48 +848,13 @@ const MetricsScreen = () => {
         >
           <Text style={styles.sparkleEmoji}>✨</Text>
           <Text style={[styles.generateInsightText, { color: colors.text }]}>
-            Generate AI Insight
+            Analzye my focus patterns
           </Text>
         </TouchableOpacity>
       </View>
     )}
 
-    {isGeneratingInsight && (
-      <View style={[
-        styles.insightSection,
-        {
-          backgroundColor: colors.cardBackground,
-          borderColor: colors.border
-        }
-      ]}>
-        <View style={styles.insightLoadingContainer}>
-          <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={[styles.insightLoadingText, { color: colors.textSecondary }]}>
-            Generating insight...
-          </Text>
-        </View>
-      </View>
-    )}
 
-    {insightError && (
-      <View style={[
-        styles.insightSection,
-        {
-          backgroundColor: colors.cardBackground,
-          borderColor: colors.border
-        }
-      ]}>
-        <Text style={[styles.insightError, { color: colors.error }]}>
-          {insightError}
-        </Text>
-      </View>
-    )}
-
-    {currentInsight && (
-      <View style={{ marginHorizontal: 16, marginTop: 8 }}>
-        <ExpandableInsight insight={currentInsight} />
-      </View>
-    )}
   </>
 )}
 
@@ -1184,6 +1163,8 @@ const styles = StyleSheet.create({
   barWrapper: {
     alignItems: 'center',
     flex: 1,
+    // minWidth: 32,  // ✅ Ensures enough space for "Wed"
+
   },
   barContainer: {
     height: 18,
@@ -1219,7 +1200,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 1,
     textAlign: 'center',
-    borderRadius: 100,
+    borderRadius: 1000,
   },
   totalTimeValue: {
     fontSize: 16,

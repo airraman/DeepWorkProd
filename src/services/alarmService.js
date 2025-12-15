@@ -48,7 +48,7 @@ class AlarmService {
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
-        
+        categoryIOS: Audio.AUDIO_SESSION_CATEGORY_PLAYBACK,
         // ✅ FIXED: Use proper Expo Audio constants for interruption mode
         // DO_NOT_MIX means alarm will play at full volume (better for alerts)
         interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,

@@ -196,7 +196,8 @@ const sendCompletionNotification = async () => {
       content: {
         title: '🎉 Deep Work Session Complete!',
         body: `Congratulations! Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has finished.`,
-        
+        sound: 'default',  // ✅ EXPLICIT
+
         /**
          * DATA PAYLOAD
          * 

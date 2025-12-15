@@ -26,11 +26,12 @@ const SessionNotesModal = ({ visible, onSubmit, onClose }) => {
       animationType="fade"
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalOverlay}
-      >
-        <Pressable style={styles.modalOverlay} onPress={onClose}>
+{/* ✅ FIXED: Overlay first, then keyboard handling */}
+<Pressable style={styles.modalOverlay} onPress={onClose}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+        >
           <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
             <Text style={styles.modalTitle}>Session Complete!</Text>
             <Text style={styles.modalSubtitle}>Add notes about your session</Text>
@@ -56,12 +57,12 @@ const SessionNotesModal = ({ visible, onSubmit, onClose }) => {
                 style={[styles.button, styles.saveButton]}
                 onPress={handleSubmit}
               >
-                <Text style={styles.saveButtonText}>Save Notes</Text>
+                <Text style={styles.saveButtonText}>Save Note</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
-        </Pressable>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </Pressable>
     </Modal>
   );
 };
@@ -73,6 +74,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  keyboardView: {
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
   },
   modalContent: {
     backgroundColor: 'white',

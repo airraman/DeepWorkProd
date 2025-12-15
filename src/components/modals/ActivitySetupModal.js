@@ -35,10 +35,29 @@ const ActivitySetupModal = ({
     const [selectedActivityId, setSelectedActivityId] = useState(null);
     
     // Predefined colors for picker
-    const colorOptions = [
-        '#E4D0FF', '#D0FFDB', '#FFE4D0', '#D0E4FF',
-        '#FFD0E4', '#E4FFD0', '#D0FFE4', '#FFE4D0'
-    ];
+// ✅ UPDATED: Full-spectrum color palette (same as SettingsScreen)
+const colorOptions = [
+    // Reds/Pinks
+    '#ffb3ba', '#ffdfdf',
+    
+    // Oranges
+    '#ffcc99', '#ffd9b3',
+    
+    // Yellows
+    '#ffffba', '#fff5cc',
+    
+    // Greens
+    '#baffc9', '#b3f0d4', '#d4f0b3',
+    
+    // Blues
+    '#bae1ff', '#b3d9ff', '#c2e0f0',
+    
+    // Purples
+    '#d9baff', '#e0b3ff',
+    
+    // Magentas
+    '#ffb3f7', '#ffc9f0',
+  ];
 
     const handleActivityChange = (id, text) => {
         setActivities(prevActivities => 

@@ -73,47 +73,53 @@ const DeepWorkSession = ({ route, navigation }) => {
   // SAFE: Load services gradually to prevent memory crashes
   useEffect(() => {
     const loadServices = async () => {
-      console.log('🔍 Loading services safely...');
+      console.log('🔍 Loading services in parallel...');
       
-      // Small delay to let the UI render first
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Load background timer service
       try {
-        const timerModule = await import('../services/backgroundTimer');
-        servicesRef.current.backgroundTimer = timerModule.default;
-        console.log('🔍 Background timer loaded');
+        // ✅ Load ALL services in parallel (no delays!)
+        const [timerModule, alarmModule, audioModule] = await Promise.all([
+          import('../services/backgroundTimer').catch(err => {
+            console.warn('🔍 Background timer not available:', err.message);
+            return null;
+          }),
+          import('../services/alarmService').catch(err => {
+            console.warn('🔔 Alarm service not available:', err.message);
+            return null;
+          }),
+          import('../services/audioService').catch(err => {
+            console.warn('🎵 Audio service not available:', err.message);
+            return null;
+          })
+        ]);
+        
+        // Assign loaded services
+        if (timerModule) {
+          servicesRef.current.backgroundTimer = timerModule.default;
+          console.log('🔍 Background timer loaded');
+        }
+        
+        if (alarmModule) {
+          servicesRef.current.alarmService = alarmModule.alarmService;
+          console.log('🔔 Alarm service loaded');
+        }
+        
+        if (audioModule) {
+          servicesRef.current.audioService = audioModule.audioService;
+          console.log('🎵 Audio service loaded');
+        }
+        
+        setServicesReady(true);
+        console.log('🔍 Services loaded successfully in parallel!');
+        
       } catch (error) {
-        console.warn('🔍 Background timer not available:', error.message);
+        console.error('🔍 Error loading services:', error);
+        // Still mark as ready even if some services failed
+        setServicesReady(true);
       }
-      
-      // Small delay between service loads
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Load alarm service
-      try {
-        const alarmModule = await import('../services/alarmService');
-        servicesRef.current.alarmService = alarmModule.alarmService;
-        console.log('🔔 Alarm service loaded');
-      } catch (error) {
-        console.warn('🔔 Alarm service not available:', error.message);
-      }
-      
-      // ✅ Load audio service
-      try {
-        const audioModule = await import('../services/audioService');
-        servicesRef.current.audioService = audioModule.audioService;
-        console.log('🎵 Audio service loaded');
-      } catch (error) {
-        console.warn('🎵 Audio service not available:', error.message);
-      }
-      
-      setServicesReady(true);
-      console.log('🔍 Services loaded safely');
     };
     
     // Load services after component is mounted and stable
-    const timeoutId = setTimeout(loadServices, isTablet ? 2000 : 1000);
+    const timeoutId = setTimeout(loadServices, 100);
     
     return () => clearTimeout(timeoutId);
   }, []);
@@ -130,50 +136,56 @@ const DeepWorkSession = ({ route, navigation }) => {
     console.log('🔍 Initializing session...');
     
     try {
-      // Start local timer first (always works)
+      // ✅ CRITICAL: Start timer IMMEDIATELY (user sees countdown start)
       startLocalTimer();
       
-      // Try to start background services if available
-      if (servicesRef.current.backgroundTimer) {
-        try {
-          await servicesRef.current.backgroundTimer.startTimerNotification(
-            duration,
-            activity,
-            musicChoice
-          );
-          console.log('🔍 Background timer started');
-        } catch (error) {
-          console.warn('🔍 Background timer failed to start:', error);
-        }
-      }
-      
-      // ✅ START BACKGROUND MUSIC
-      if (servicesRef.current.audioService && musicChoice !== 'none') {
-        try {
-          console.log(`🎵 Starting background music: ${musicChoice}`);
-          await servicesRef.current.audioService.init();
-          await servicesRef.current.audioService.playMusic(musicChoice);
-          console.log('🎵 Background music started successfully');
-        } catch (error) {
-          console.warn('🎵 Music failed to start (non-critical):', error);
-        }
-      } else if (musicChoice === 'none') {
-        console.log('🎵 No background music selected');
-      }
-      
-      // Initialize alarm service if available
-      if (servicesRef.current.alarmService) {
-        try {
-          await servicesRef.current.alarmService.init();
-          console.log('🔔 Alarm service initialized');
-        } catch (error) {
-          console.warn('🔔 Alarm service failed to initialize:', error);
-        }
-      }
+      // ✅ Initialize everything else in parallel (non-blocking)
+      // User already sees timer counting down while this happens in background
+      Promise.all([
+        // Background timer notifications
+        servicesRef.current.backgroundTimer
+          ?.startTimerNotification(duration, activity, musicChoice)
+          .then(() => console.log('🔍 Background timer started'))
+          .catch(err => console.warn('🔍 Background timer failed:', err)),
+        
+        // Music initialization
+        initializeMusic(),
+        
+        // Alarm service initialization  
+        servicesRef.current.alarmService
+          ?.init()
+          .then(() => console.log('🔔 Alarm service initialized'))
+          .catch(err => console.warn('🔔 Alarm init failed:', err))
+      ]).catch(err => {
+        console.warn('🔍 Some services failed to initialize:', err);
+        // Non-critical - timer still works
+      });
       
     } catch (error) {
       console.warn('🔍 Session initialization had issues:', error);
       // Continue anyway - the session can work without all services
+    }
+  };
+  
+  // ✅ Helper function for music initialization
+  const initializeMusic = async () => {
+    if (musicChoice === 'none') {
+      console.log('🎵 No background music selected');
+      return;
+    }
+    
+    if (!servicesRef.current.audioService) {
+      console.warn('🎵 Audio service not available');
+      return;
+    }
+    
+    try {
+      console.log(`🎵 Starting background music: ${musicChoice}`);
+      await servicesRef.current.audioService.init();
+      await servicesRef.current.audioService.playMusic(musicChoice);
+      console.log('🎵 Background music started successfully');
+    } catch (error) {
+      console.warn('🎵 Music failed to start (non-critical):', error);
     }
   };
 
