@@ -50,23 +50,26 @@ class AudioService {
       console.log('🎵 Initializing audio service...');
       
       await Audio.setAudioModeAsync({
-        // ✅ CRITICAL: These tell iOS to keep audio active when locked
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
-        categoryIOS: Audio.AUDIO_SESSION_CATEGORY_PLAYBACK,
-        // ✅ FIXED: Use proper Expo Audio constants for interruption mode
-        // DO_NOT_MIX means our audio will play exclusively (better for background music)
-        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
         
-        // Keep these as they are
+        // ✅ CRITICAL ADDITION #1: Proper category
+        // PLAYBACK category = optimized for playing audio
+        // (vs RECORD category for microphone apps)
+        categoryIOS: Audio.AUDIO_SESSION_CATEGORY_PLAYBACK,
+        
+        // ✅ CRITICAL ADDITION #2: Category options
+        // These are iOS-specific flags that modify category behavior
+        categoryOptionsIOS: [
+          Audio.CATEGORY_OPTIONS_MIXWITHOTHERS,  // Allow other apps to play simultaneously
+        ],
+        
+        // ✅ CRITICAL ADDITION #3: Allow Bluetooth
         allowsRecordingIOS: false,
         
-        // ✅ FIXED: Changed from true to false
-        // shouldDuckAndroid: true reduces volume when other audio plays
-        // false means full volume always (better for focus music)
-        shouldDuckAndroid: false,
-        playThroughEarpieceAndroid: false,
+        // Android equivalents
+        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DUCK_OTHERS,
+        shouldDuckAndroid: true,
       });
       
       this.isInitialized = true;

@@ -735,7 +735,7 @@ const colorPalette = [
           </TouchableOpacity>
         </View>
         {/* Test Notification Button */}
-{notificationsEnabled && (
+{/* {notificationsEnabled && (
   <TouchableOpacity
     style={[
       styles.testButton,
@@ -758,7 +758,7 @@ const colorPalette = [
       Send Test Notification
     </Text>
   </TouchableOpacity>
-)}
+)} */}
       </View>
         {/* Save Button */}
         <TouchableOpacity

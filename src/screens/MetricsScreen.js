@@ -39,6 +39,10 @@ const MONTHS = [
 const generateWeeklyChartData = (sessions) => {
   const today = new Date();
   const weekData = [];
+
+
+
+  
   
   // ✅ Single-letter day names to prevent bunching
   const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -73,6 +77,8 @@ const WeeklyFocusChart = ({ sessions }) => {
   const handleBarPress = (day, index) => {
     setSelectedBar(index === selectedBar ? null : index);
   };
+
+  
 
 
   return (
@@ -436,15 +442,16 @@ const SessionList = ({ sessions, activities, onSessionPress, selectedMonth,  onA
       
       // Count DOWN from last day to 1 (reverse order)
 // Count UP from 1 to last day
-for (let d = 1; d <= lastDay.getDate(); d++) {        const date = new Date(year, month - 1, d);
-        const dateString = date.toISOString().split('T')[0];
-        
-        days.push({
-          date: dateString,
-          dayNumber: d,
-          sessions: sessions[dateString] || []
-        });
-      }
+for (let d = 1; d <= lastDay.getDate(); d++) {
+  const date = new Date(year, month - 1, d);
+  const dateString = date.toISOString().split('T')[0];
+  
+  days.push({
+    date: dateString,
+    dayNumber: d,
+    sessions: sessions[dateString] || []
+  });
+}
     }
     
     return days;
@@ -556,7 +563,21 @@ const MetricsScreen = () => {
   const [showPaywall, setShowPaywall] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [selectedActivity, setSelectedActivity] = useState(null);
+  const [isGeneratingAllInsights, setIsGeneratingAllInsights] = useState(false);
+const [showInsightsModal, setShowInsightsModal] = useState(false);
+const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
 
+  const [insights, setInsights] = useState({
+    daily: null,
+    weekly: null,
+    monthly: null,
+  });
+  
+  const [isGeneratingInsights, setIsGeneratingInsights] = useState({
+    daily: false,
+    weekly: false,
+    monthly: false,
+  });
 
 
   useFocusEffect(
@@ -635,6 +656,48 @@ const MetricsScreen = () => {
           setActivities(settings.activities || []);
           return;
         }
+
+        const hasAnyInsights = () => {
+          return insights.daily || insights.weekly || insights.monthly;
+        };
+        
+        const handleAnalyzeClick = async () => {
+          setIsGeneratingAllInsights(true);
+          await generateAllInsights();
+          setIsGeneratingAllInsights(false);
+          setHasGeneratedInsights(true);
+        };
+        
+        const handleInsightCardClick = () => {
+          setShowInsightsModal(true);
+        };
+        
+        const generateAllInsights = async () => {
+          const insightTypes = ['daily', 'weekly', 'monthly'];
+          
+          // Generate all three in parallel for speed
+          const promises = insightTypes.map(async (type) => {
+            setIsGeneratingInsights(prev => ({ ...prev, [type]: true }));
+            
+            try {
+              const result = await InsightGenerator.generate(type);
+              setInsights(prev => ({ ...prev, [type]: result }));
+            } catch (error) {
+              console.error(`Error generating ${type} insight:`, error);
+              setInsights(prev => ({ 
+                ...prev, 
+                [type]: { 
+                  insightText: 'Unable to generate insight. Please try again.',
+                  metadata: { insightType: type }
+                }
+              }));
+            } finally {
+              setIsGeneratingInsights(prev => ({ ...prev, [type]: false }));
+            }
+          });
+          
+          await Promise.all(promises);
+        };
         
         const dateKeys = Object.keys(parsed);
         console.log(`📊 [MetricsScreen] Found ${dateKeys.length} date keys`);
@@ -811,89 +874,81 @@ const MetricsScreen = () => {
 {/* AI Insights Section - Gate for Premium */}
 {!isPremium ? (
   // FREE USER: Show locked insight button
-  <View style={[
-    styles.insightSection,
-    { 
-      backgroundColor: colors.cardBackground,
-      borderColor: colors.border 
-    }
-  ]}>
-    <TouchableOpacity 
-      style={styles.lockedInsightButton}
-      onPress={() => setShowPaywall(true)}
-    >
-      <Text style={styles.lockIcon}></Text>
-      <Text style={[styles.lockedInsightText, { color: colors.text }]}>
-        Summarize Focus Patterns
-      </Text>
-      <Text style={[styles.lockedInsightSubtext, { color: colors.textSecondary }]}>
-        Tap to analyze
-      </Text>
-    </TouchableOpacity>
-  </View>
+  <TouchableOpacity
+    style={[styles.analyzeButton, { backgroundColor: colors.cardBackground }]}
+    onPress={() => setShowPaywall(true)}
+  >
+    <Text style={[styles.analyzeButtonIcon, { color: colors.primary }]}>
+      ✨
+    </Text>
+    <Text style={[styles.analyzeButtonText, { color: colors.text }]}>
+      Analyze my focus patterns
+    </Text>
+  </TouchableOpacity>
 ) : (
-  // PREMIUM USER: Show generate button or insight
+  // PREMIUM USER: Show button or preview card
   <>
-    {!currentInsight && !isGeneratingInsight && !insightError && (
-      <View style={[
-        styles.insightSection,
-        { 
-          backgroundColor: colors.cardBackground,
-          borderColor: colors.border 
-        }
-      ]}>
-        <TouchableOpacity 
-          style={styles.generateInsightButton}
-          onPress={handleGenerateInsight}
-        >
-          <Text style={styles.sparkleEmoji}>✨</Text>
-          <Text style={[styles.generateInsightText, { color: colors.text }]}>
-            Analzye my focus patterns
+    {!hasGeneratedInsights ? (
+      // BEFORE GENERATION: Show button
+      <TouchableOpacity
+        style={[styles.analyzeButton, { backgroundColor: colors.cardBackground }]}
+        onPress={handleAnalyzeClick}
+        disabled={isGeneratingAllInsights}
+      >
+        {isGeneratingAllInsights ? (
+          <View style={styles.buttonContent}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.analyzeButtonText, { color: colors.text }]}>
+              Generating insights...
+            </Text>
+          </View>
+        ) : (
+          <>
+            <Text style={[styles.analyzeButtonIcon, { color: colors.primary }]}>
+              ✨
+            </Text>
+            <Text style={[styles.analyzeButtonText, { color: colors.text }]}>
+              Analyze my focus patterns
+            </Text>
+          </>
+        )}
+      </TouchableOpacity>
+    ) : (
+      // AFTER GENERATION: Show inline preview card
+      <TouchableOpacity
+        style={[styles.insightPreviewCard, { backgroundColor: colors.cardBackground }]}
+        onPress={handleInsightCardClick}
+        activeOpacity={0.7}
+      >
+        <View style={styles.insightPreviewHeader}>
+          <Text style={[styles.insightPreviewTitle, { color: colors.text }]}>
+            INSIGHT
           </Text>
-        </TouchableOpacity>
-      </View>
+          <View style={styles.insightDateBadge}>
+            <Text style={styles.insightDateIcon}>📦</Text>
+            <Text style={[styles.insightDateText, { color: colors.textSecondary }]}>
+              {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </Text>
+          </View>
+        </View>
+        
+        {/* Show preview of first available insight */}
+        <Text 
+          style={[styles.insightPreviewText, { color: colors.text }]}
+          numberOfLines={3}
+        >
+          {insights.monthly?.insightText || insights.weekly?.insightText || insights.daily?.insightText || 'Tap to view insights'}
+        </Text>
+        
+        <Text style={[styles.tapToSeeMore, { color: colors.primary }]}>
+          Tap to see more
+        </Text>
+      </TouchableOpacity>
     )}
-
-
   </>
 )}
 
-          {isGeneratingInsight && (
-            <View style={[
-              styles.insightSection,
-              {
-                backgroundColor: colors.cardBackground,
-                borderColor: colors.border
-              }
-            ]}>
-              <View style={styles.insightLoadingContainer}>
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={[styles.insightLoadingText, { color: colors.textSecondary }]}>
-                  Generating insight...
-                </Text>
-              </View>
-            </View>
-          )}
 
-          {insightError && (
-            <View style={[
-              styles.insightSection,
-              {
-                backgroundColor: colors.cardBackground,
-                borderColor: colors.border
-              }
-            ]}>
-              <Text style={[styles.insightError, { color: colors.error }]}>
-                {insightError}
-              </Text>
-            </View>
-          )}
-
-          {currentInsight && (
-            <View style={{ marginHorizontal: 16, marginTop: 8 }}>
-              <ExpandableInsight insight={currentInsight} />
-            </View>
-          )}
 
           {/* Metrics Row */}
           <View style={[styles.chartsRow, { borderBottomColor: colors.border }]}>
@@ -935,6 +990,14 @@ const MetricsScreen = () => {
         onClose={handleCloseModal}
       />
 
+           {/* Insights Modal */}
+           <InsightsModal
+        visible={showInsightsModal}
+        onClose={() => setShowInsightsModal(false)}
+        insights={insights}
+        colors={colors}
+      />
+
 {selectedActivity && (
         <ActivitySummaryModal
         visible={!!selectedActivity}
@@ -953,8 +1016,11 @@ const MetricsScreen = () => {
   onClose={() => setShowPaywall(false)}
   feature="previousMonths"
 />
+
     </SafeAreaView>
-  );
+  )
+  
+  ;
 };
 
 const styles = StyleSheet.create({
@@ -1375,7 +1441,245 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 12,
+  },
+  insightBox: {
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 20,
+  },
+  insightTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+  insightSection: {
+    marginBottom: 16,
+  },
+  insightLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  insightText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  divider: {
+    height: 1,
+    marginVertical: 16,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+  }, // ===== AI INSIGHTS STYLES =====
+  
+  // Analyze Button (Before Generation)
+  analyzeButton: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 20,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  analyzeButtonIcon: {
+    fontSize: 24,
+  },
+  analyzeButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  
+  // Inline Preview Card (After Generation)
+  insightPreviewCard: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginVertical: 12,
+  },
+  insightPreviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  insightPreviewTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  insightDateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  insightDateIcon: {
+    fontSize: 14,
+  },
+  insightDateText: {
+    fontSize: 13,
+  },
+  insightPreviewText: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  tapToSeeMore: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  
+  // Modal Styles
+  insightModalContainer: {
+    flex: 1,
+  },
+  insightModalHeader: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  insightModalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  insightModalSubtitle: {
+    fontSize: 14,
+  },
+  closeButton: {
+    padding: 8,
+  },
+  closeButtonText: {
+    fontSize: 24,
+    fontWeight: '300',
+  },
+  insightModalContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  insightSection: {
+    marginBottom: 24,
+  },
+  insightSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    marginBottom: 12,
+  },
+  insightSectionText: {
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  insightDivider: {
+    height: 1,
+    marginBottom: 24,
   }
 });
+
+
+// ===== INSIGHTS MODAL COMPONENT =====
+const InsightsModal = ({ visible, onClose, insights, colors }) => {
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
+      <SafeAreaView style={[styles.insightModalContainer, { backgroundColor: colors.background }]}>
+        {/* Header */}
+        <View style={[styles.insightModalHeader, { borderBottomColor: colors.border }]}>
+          <View>
+            <Text style={[styles.insightModalTitle, { color: colors.text }]}>
+              Insight
+            </Text>
+            <Text style={[styles.insightModalSubtitle, { color: colors.textSecondary }]}>
+              Cached • {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <Text style={[styles.closeButtonText, { color: colors.text }]}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Scrollable Content */}
+        <ScrollView 
+          style={styles.insightModalContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Yesterday Insight */}
+          {insights.daily?.insightText && (
+            <>
+              <View style={styles.insightSection}>
+                <Text style={[styles.insightSectionLabel, { color: colors.primary }]}>
+                  YESTERDAY
+                </Text>
+                <Text style={[styles.insightSectionText, { color: colors.text }]}>
+                  {insights.daily.insightText}
+                </Text>
+              </View>
+              
+              {/* Divider */}
+              <View style={[styles.insightDivider, { backgroundColor: colors.border }]} />
+            </>
+          )}
+
+          {/* Last 7 Days Insight */}
+          {insights.weekly?.insightText && (
+            <>
+              <View style={styles.insightSection}>
+                <Text style={[styles.insightSectionLabel, { color: colors.primary }]}>
+                  LAST 7 DAYS
+                </Text>
+                <Text style={[styles.insightSectionText, { color: colors.text }]}>
+                  {insights.weekly.insightText}
+                </Text>
+              </View>
+              
+              {/* Divider */}
+              <View style={[styles.insightDivider, { backgroundColor: colors.border }]} />
+            </>
+          )}
+
+          {/* Last 30 Days Insight */}
+          {insights.monthly?.insightText && (
+            <View style={styles.insightSection}>
+              <Text style={[styles.insightSectionLabel, { color: colors.primary }]}>
+                LAST 30 DAYS
+              </Text>
+              <Text style={[styles.insightSectionText, { color: colors.text }]}>
+                {insights.monthly.insightText}
+              </Text>
+            </View>
+          )}
+
+          {/* Bottom padding for scroll */}
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+};
 
 export default MetricsScreen;

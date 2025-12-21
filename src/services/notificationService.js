@@ -2,6 +2,7 @@
 import * as Notifications from 'expo-notifications';
 import { deepWorkStore } from './deepWorkStore';
 
+
 // Configure notification handler
 Notifications.setNotificationHandler({
   handleNotification: async () => ({

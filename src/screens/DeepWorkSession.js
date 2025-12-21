@@ -1,4 +1,4 @@
-// src/screens/DeepWorkSession.js - SAFE VERSION with Background Music
+// src/screens/DeepWorkSession.js - COMPLETE VERSION with Enhanced Session Questions
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -130,6 +130,23 @@ const DeepWorkSession = ({ route, navigation }) => {
       initializeSession();
     }
   }, [servicesReady]);
+
+  // Handle back button (Android)
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      confirmEndSession();
+      return true;
+    });
+
+    return () => backHandler.remove();
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanup();
+    };
+  }, []);
 
   // SAFE: Session initialization
   const initializeSession = async () => {
@@ -439,56 +456,83 @@ const DeepWorkSession = ({ route, navigation }) => {
   };
 
   // Handle session completion with notes
-  const handleNotesSubmit = async (notes) => {
+  const handleNotesSubmit = async (sessionData) => {
     setShowNotesModal(false);
     
     try {
-      // Stop alarm if playing
+      // ✅ Stop alarm regardless of save outcome
       if (servicesRef.current.alarmService) {
         await servicesRef.current.alarmService.stopAlarm();
       }
     } catch (error) {
-      console.warn('Error stopping alarm:', error);
+      console.warn('Alarm stop error:', error);
     }
     
-    const success = await handleSessionComplete(notes);
+    // ✅ Attempt to save session
+    const success = await handleSessionComplete(sessionData);
     
     if (success) {
+      // ✅ Success path: celebrate and navigate (Alert is already in handleSessionComplete)
       setIsCompleted(true);
     } else {
-      // If save failed, allow user to continue session
-      setIsPaused(false);
-      startLocalTimer();
+      // ❌ Failure path: inform user but don't panic
+      setIsCompleted(true);  // ✅ Still mark as complete visually
+      
+      Alert.alert(
+        '⚠️ Save Issue',
+        'Your session data couldn\'t be saved. This might be due to storage limits. Your session is complete, but won\'t appear in metrics.',
+        [
+          {
+            text: 'Retry Save',
+            onPress: async () => {
+              const retrySuccess = await handleSessionComplete(sessionData);
+              if (retrySuccess) {
+                Alert.alert('Success', 'Session saved successfully!');
+              } else {
+                Alert.alert('Failed', 'Please contact support if this persists.');
+              }
+            }
+          },
+          {
+            text: 'Continue Anyway',
+            onPress: () => navigation.navigate('MainApp', { screen: 'Home' })
+          }
+        ]
+      );
     }
   };
-
   // Save completed session
-  const handleSessionComplete = async (notes = '') => {
+  const handleSessionComplete = async (sessionData = {}) => {
     if (isSaving) return false;
 
     try {
       setIsSaving(true);
-      
-      // Clean up services
       await cleanup();
 
       // ===== ENHANCED VALIDATION SECTION =====
-      // Log all the data we're about to save
       console.log('📝 ===== SESSION SAVE DEBUG =====');
       console.log('Route params:', { duration, activity, musicChoice });
-      console.log('Notes:', notes);
+      console.log('Session data from modal:', sessionData);
       
-      // Build session data matching deepWorkStore structure
+      // Prepare session data
       const now = Date.now();
       const dateString = new Date().toISOString().split('T')[0];
       
-      const sessionData = {
+      const sessionToSave = {
         id: `${dateString}-${now}`,
         date: dateString,
-        activity: activity,              // ✅ No String() wrapper
-        duration: parseFloat(duration),  // ✅ parseFloat not parseInt
+        activity: activity,
+        duration: parseFloat(duration),
         musicChoice: musicChoice || 'none',
-        notes: notes || '',
+        
+        // CHANGED: Store structured session data instead of just notes string
+        notes: sessionData.notes || '',
+        ratings: {
+          productivity: sessionData.productivityRating,
+          focus: sessionData.focusRating,
+          energy: sessionData.energyLevel,
+        },
+        
         timestamp: now,
         completedAt: new Date().toISOString(),
         syncStatus: 'synced',
@@ -499,31 +543,31 @@ const DeepWorkSession = ({ route, navigation }) => {
         }
       };
       
-      console.log('Prepared session data:', sessionData);
+      console.log('Prepared session data:', sessionToSave);
       
       // Additional validation checks
       console.log('Validation checks:');
-      console.log('- activity type:', typeof sessionData.activity, 'value:', sessionData.activity);
-      console.log('- duration type:', typeof sessionData.duration, 'value:', sessionData.duration);
-      console.log('- musicChoice type:', typeof sessionData.musicChoice, 'value:', sessionData.musicChoice);
-      console.log('- notes type:', typeof sessionData.notes, 'value:', sessionData.notes);
-      console.log('- duration > 0?', sessionData.duration > 0);
-      console.log('- activity not empty?', sessionData.activity.length > 0);
+      console.log('- activity type:', typeof sessionToSave.activity, 'value:', sessionToSave.activity);
+      console.log('- duration type:', typeof sessionToSave.duration, 'value:', sessionToSave.duration);
+      console.log('- notes type:', typeof sessionToSave.notes, 'value:', sessionToSave.notes);
+      console.log('- ratings:', sessionToSave.ratings);
+      console.log('- duration > 0?', sessionToSave.duration > 0);
+      console.log('- activity not empty?', sessionToSave.activity.length > 0);
       
       // Check for potential issues
-      if (!sessionData.activity || sessionData.activity.length === 0) {
+      if (!sessionToSave.activity || sessionToSave.activity.length === 0) {
         throw new Error('Activity is required but was empty');
       }
       
-      if (isNaN(sessionData.duration) || sessionData.duration <= 0) {
-        throw new Error(`Invalid duration: ${sessionData.duration}`);
+      if (isNaN(sessionToSave.duration) || sessionToSave.duration <= 0) {
+        throw new Error(`Invalid duration: ${sessionToSave.duration}`);
       }
       
       console.log('✅ Validation passed, saving session...');
       // ===== END VALIDATION SECTION =====
 
       // Save session to storage
-      const result = await deepWorkStore.addSession(sessionData);
+      const result = await deepWorkStore.addSession(sessionToSave);
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to save session');
@@ -537,11 +581,11 @@ const DeepWorkSession = ({ route, navigation }) => {
         'Congratulations! Your deep work session has been saved.',
         [
           {
-            text: 'View Progress',
+            text: 'View Stats',
             onPress: () => navigation.navigate('MainApp', { screen: 'Metrics' }),
           },
           {
-            text: 'New Session',
+            text: 'Done',
             onPress: () => navigation.navigate('MainApp', { screen: 'Home' }),
           },
         ]
@@ -549,13 +593,11 @@ const DeepWorkSession = ({ route, navigation }) => {
 
       return true;
     } catch (error) {
-      console.error('❌ Error completing session:', error);
-      console.error('Error details:', error.message);
-      console.error('===================================\n');
-      
+      console.error('❌ Error saving session:', error);
       Alert.alert(
-        'Error', 
-        `Failed to save session: ${error.message}\n\nPlease check the console for details.`
+        'Error',
+        'Failed to save your session. Please try again.',
+        [{ text: 'OK' }]
       );
       return false;
     } finally {
@@ -563,119 +605,122 @@ const DeepWorkSession = ({ route, navigation }) => {
     }
   };
 
-  // Handle back button
-  useEffect(() => {
-    const backHandler = BackHandler.addEventListener(
-      'hardwareBackPress',
-      () => {
-        confirmEndSession();
-        return true;
-      }
-    );
-
-    return () => backHandler.remove();
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      cleanup();
-    };
-  }, []);
-
   // Format time display
-  const formatTime = (ms) => {
-    const minutes = Math.floor(ms / 60000);
-    const seconds = Math.floor((ms % 60000) / 1000);
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  const formatTime = (milliseconds) => {
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
+  const formatTotalTime = (milliseconds) => {
+    const totalMinutes = Math.floor(milliseconds / 60000);
+    return `${totalMinutes} min`;
+  };
+
+  // Show loading while services initialize
+  if (!servicesReady || !activityDetails) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={[styles.innerContainer, { justifyContent: 'center', alignItems: 'center' }]}>
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text style={styles.statusText}>Preparing your session...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show completion state
+  if (isCompleted) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={[styles.innerContainer, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+          <Text style={{ fontSize: 48, marginBottom: 16 }}>🎉</Text>
+          <Text style={[styles.timeText, { marginBottom: 8 }]}>Session Complete!</Text>
+          <Text style={styles.totalTimeText}>
+            {formatTotalTime(totalDuration)} of focused work
+          </Text>
+          {isSaving && (
+            <ActivityIndicator size="small" color="#2563eb" style={styles.savingIndicator} />
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Main session UI
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          transform: [{ translateX: swipeAnim }]
-        }
-      ]}
-      {...panResponder.panHandlers}
-    >
-      <SafeAreaView style={styles.innerContainer}>
+    <SafeAreaView style={styles.container}>
+      <Animated.View 
+        style={[
+          styles.innerContainer,
+          {
+            transform: [{ translateX: swipeAnim }]
+          }
+        ]}
+        {...panResponder.panHandlers}
+      >
+        {/* Swipe indicator */}
         <View style={styles.swipeIndicator}>
-          <ChevronLeft size={24} color="#6b7280" />
-          <Text style={styles.swipeText}>Swipe right to end session</Text>
+          <ChevronLeft size={20} color="#6b7280" />
+          <Text style={styles.swipeText}>Swipe right to end session early</Text>
         </View>
 
         <View style={styles.content}>
+          {/* Timer Display */}
           <View style={styles.timerSection}>
             <Text style={styles.timeText}>{formatTime(timeLeft)}</Text>
-            <Text style={styles.totalTimeText}>
-              of {duration}:00 minutes
-            </Text>
-            
-            {/* Show services status for debugging */}
-            {__DEV__ && (
-              <Text style={styles.statusText}>
-                Services: {servicesReady ? '✅ Ready' : '⏳ Loading...'}
-                {musicChoice !== 'none' && ' | 🎵 Music: ' + musicChoice}
-              </Text>
-            )}
-            
-            {isSaving && (
-              <ActivityIndicator
-                size="small"
-                color="#2563eb"
-                style={styles.savingIndicator}
-              />
-            )}
+            <Text style={styles.totalTimeText}>of {formatTotalTime(totalDuration)}</Text>
+            {isPaused && <Text style={styles.statusText}>PAUSED</Text>}
           </View>
 
+          {/* Visual timer (column) */}
           <View style={styles.timerVisualContainer}>
             <View style={styles.columnContainer}>
               <Animated.View
                 style={[
                   styles.column,
                   {
-                    backgroundColor: activityDetails ? 
-                      activityDetails.color : 
-                      '#2563eb',
+                    backgroundColor: activityDetails.color,
+                    bottom: 0,
                     height: animatedHeight.interpolate({
                       inputRange: [0, 1],
-                      outputRange: ['0%', '100%']
+                      outputRange: ['0%', '100%'],
                     }),
-                    bottom: 0
-                  }
+                  },
                 ]}
               />
             </View>
           </View>
 
+          {/* Activity info and controls */}
           <View style={styles.activityInfoContainer}>
-            <Text style={styles.activityText}>
-              {activityDetails ? activityDetails.name : 'Focus Session'}
-            </Text>
-
+            <Text style={styles.activityText}>{activityDetails.name}</Text>
+            
             <TouchableOpacity
               style={styles.pauseButton}
               onPress={togglePause}
-              disabled={isCompleted}
             >
               {isPaused ? (
-                <Play size={28} color="#2563eb" />
+                <Play size={24} color="#1f2937" fill="#1f2937" />
               ) : (
-                <Pause size={28} color="#2563eb" />
+                <Pause size={24} color="#1f2937" fill="#1f2937" />
               )}
             </TouchableOpacity>
           </View>
-
-          <SessionNotesModal
-            visible={showNotesModal}
-            onSubmit={handleNotesSubmit}
-            onClose={() => handleNotesSubmit('')}
-          />
         </View>
-      </SafeAreaView>
-    </Animated.View>
+      </Animated.View>
+
+      {/* Session Notes Modal */}
+      <SessionNotesModal
+        visible={showNotesModal}
+        onSubmit={handleNotesSubmit}
+        onClose={() => {
+          setShowNotesModal(false);
+          navigation.navigate('MainApp', { screen: 'Home' });
+        }}
+      />
+    </SafeAreaView>
   );
 };
 

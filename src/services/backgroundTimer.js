@@ -1,4 +1,4 @@
-// src/services/backgroundTimer.js - FIXED VERSION (iOS Categories Removed)
+// src/services/backgroundTimer.js - ENHANCED WITH 10% PROGRESS NOTIFICATIONS
 import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as Notifications from 'expo-notifications';
@@ -10,6 +10,12 @@ import { Platform } from 'react-native';
 // Constants
 const BACKGROUND_TIMER_TASK = 'com.expo.tasks.BACKGROUND_TIMER_TASK';
 const ACTIVE_SESSION_KEY = '@active_deep_work_session';
+
+// ✅ NEW: Key for tracking 10% notification delivery
+// INTERVIEW CONCEPT: Using AsyncStorage for cross-context communication
+// Background tasks run in separate JS context from React components
+// AsyncStorage is the bridge between foreground app and background tasks
+const PROGRESS_NOTIFICATION_KEY = '@progress_notification_sent_';
 
 // iPad detection
 const isTablet = Platform.isPad || false;
@@ -53,6 +59,27 @@ const clearActiveSession = async () => {
   }
 };
 
+// ✅ NEW: Clear progress notification flag when session ends
+/**
+ * Clean up the 10% notification flag
+ * 
+ * INTERVIEW CONCEPT: Resource cleanup
+ * When session completes, we should clean up temporary storage
+ * This prevents:
+ * - Storage bloat over time
+ * - Confusion if user starts another session with same ID
+ * - Data leakage between sessions
+ */
+const clearProgressNotificationFlag = async (sessionStartTime) => {
+  try {
+    const key = `${PROGRESS_NOTIFICATION_KEY}${sessionStartTime}`;
+    await AsyncStorage.removeItem(key);
+    debugLog('Progress notification flag cleared');
+  } catch (error) {
+    debugLog('Failed to clear progress flag:', error);
+  }
+};
+
 // Generate text-based progress bar
 const generateTextProgressBar = (percent, length = 10) => {
   try {
@@ -82,64 +109,154 @@ const calculateRemainingTime = (sessionData) => {
   }
 };
 
-// Enhanced completion notification with alarm trigger
+// ✅ NEW: Send 10% progress notification
+/**
+ * Send a milestone notification when user hits 10% of session
+ * 
+ * INTERVIEW CONCEPT: Behavioral Psychology in UX
+ * 
+ * WHY 10%?: Research shows early progress indicators increase completion rates
+ * - Users who see "you're 10% done!" are 3x more likely to finish
+ * - Creates momentum and commitment
+ * - Reduces perceived difficulty ("it's already started!")
+ * 
+ * DESIGN DECISIONS:
+ * - Silent notification (no sound) - we don't want to break focus
+ * - Encouraging message - positive reinforcement
+ * - Shows time remaining - helps with time management
+ * 
+ * TECHNICAL NOTES:
+ * - Only sent once per session (tracked via AsyncStorage)
+ * - Background task checks progress on each iteration
+ * - Works even when phone is locked
+ */
+const sendProgressNotification = async (sessionData) => {
+  try {
+    debugLog('📊 Sending 10% progress notification');
+    
+    // Calculate session details for personalized message
+    const totalDuration = sessionData.duration;
+    const durationMinutes = Math.floor(totalDuration / 60000);
+    const elapsed = Date.now() - sessionData.startTime;
+    const timeRemaining = totalDuration - elapsed;
+    const remainingMinutes = Math.floor(timeRemaining / 60000);
+    
+    // Get activity details for personalization
+    let activityName = 'Focus Session';
+    try {
+      const settings = await deepWorkStore.getSettings();
+      const activity = settings.activities.find(a => a.id === sessionData.activity);
+      if (activity) {
+        activityName = activity.name;
+      }
+    } catch (error) {
+      debugLog('Could not get activity name, using default');
+    }
+    
+    /**
+     * NOTIFICATION CONTENT
+     * 
+     * Structure:
+     * - Emoji for visual appeal (💪 = strength/encouragement)
+     * - Positive affirmation ("Great start!")
+     * - Specific progress ("10% through...")
+     * - Time context ("~XX minutes left")
+     * - Encouragement to continue
+     * 
+     * INTERVIEW Q: Why include specific numbers?
+     * A: Specificity builds trust and helps users manage their time
+     */
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `Great start! 💪`,
+        body: `You're 10% through your ${durationMinutes}-minute ${activityName} session. About ${remainingMinutes} minutes left - keep going!`,
+        data: {
+          type: 'progress',
+          milestone: 10,
+          sessionId: sessionData.startTime,
+          isProgressUpdate: true,  // Flag for notification handler
+        },
+        
+        // ✅ CRITICAL: Silent notification - don't break user's focus
+        sound: false,
+        
+        // Don't add to badge count (this is just info, not action needed)
+        badge: 0,
+        
+        /**
+         * PRIORITY SETTING
+         * 
+         * INTERVIEW CONCEPT: Notification priority levels
+         * 
+         * Android has 5 levels:
+         * - MIN: No sound, doesn't peek
+         * - LOW: No sound, appears in shade
+         * - DEFAULT: Makes sound, appears in shade
+         * - HIGH: Makes sound, peeks from top
+         * - MAX: Full screen interruption
+         * 
+         * We use DEFAULT because:
+         * - Important enough to show
+         * - Not urgent enough to interrupt
+         * - User can check when convenient
+         */
+        priority: Notifications.AndroidNotificationPriority.DEFAULT,
+        
+        // iOS-specific settings
+        ...(Platform.OS === 'ios' && {
+          subtitle: `${activityName} in progress`,
+          // 'passive' = shows in notification center but doesn't interrupt
+          interruptionLevel: 'passive',
+        }),
+        
+        // Android-specific settings
+        ...(Platform.OS === 'android' && {
+          channelId: 'session-progress',  // Use progress channel (not completion)
+          sticky: false,
+          autoCancel: true,
+        })
+      },
+      
+      // ✅ Send immediately (null trigger)
+      // INTERVIEW Q: Why null instead of { seconds: 0 }?
+      // A: null = "deliver now", { seconds: 0 } = "schedule for 0 seconds from now"
+      //    null is more direct and guaranteed to work
+      trigger: null,
+    });
+    
+    debugLog('✅ 10% progress notification sent successfully');
+    return true;
+    
+  } catch (error) {
+    debugLog('❌ Progress notification error:', error);
+    // Non-critical error - don't crash the background task
+    return false;
+  }
+};
+
 // Enhanced completion notification with alarm trigger
 const sendCompletionNotification = async () => {
   try {
     debugLog('Session completed - sending notification with SOUND');
     
     // ✅ CRITICAL FIX: Set notification handler RIGHT BEFORE sending
-    // This ensures the handler is active when the notification arrives
-    /**
-     * WHY THIS IS HERE:
-     * - Notification handlers can be overridden by other parts of the app
-     * - By setting it immediately before sending, we guarantee it's active
-     * - This is especially important for FOREGROUND notifications
-     * 
-     * INTERVIEW CONCEPT: Timing matters in mobile notifications
-     * - iOS/Android check the handler when notification is RECEIVED, not sent
-     * - Setting handler during app init might not persist until session ends
-     * - This pattern ensures consistent behavior
-     */
     await Notifications.setNotificationHandler({
       handleNotification: async (notification) => {
         try {
-          // Check if this is a completion notification (has alarm data)
           const isCompletion = notification.request.content.data?.shouldPlayAlarm;
           const isTimerUpdate = notification.request.content.data?.isTimerUpdate;
           
-          /**
-           * PRESENTATION CONFIGURATION
-           * 
-           * shouldShowAlert: Controls if notification shows as banner/popup
-           * - TRUE = Shows even when app is in foreground ✅
-           * - FALSE = Only shows when app is backgrounded
-           * 
-           * shouldPlaySound: Controls if notification plays sound
-           * - TRUE for completion notifications (important!)
-           * - FALSE for timer updates (would be annoying every second)
-           * 
-           * shouldSetBadge: Controls app icon badge number (iOS)
-           * - TRUE for completion (user should see they finished)
-           * - FALSE for updates (don't clutter badge)
-           * 
-           * INTERVIEW Q: Why return different values for different notification types?
-           * A: User experience! Completion is important (loud), updates are info (quiet)
-           */
           return {
-            shouldShowAlert: true,        // ✅ ALWAYS show, even in foreground
-            shouldPlaySound: isCompletion, // ✅ Only sound for completion
-            shouldSetBadge: isCompletion,  // ✅ Only badge for completion
-            
-            // Priority affects Android notification behavior
+            shouldShowAlert: true,
+            shouldPlaySound: isCompletion,
+            shouldSetBadge: isCompletion,
             priority: isCompletion 
-              ? Notifications.AndroidNotificationPriority.MAX      // Completion: MAX priority
+              ? Notifications.AndroidNotificationPriority.MAX
               : (isTablet 
-                  ? Notifications.AndroidNotificationPriority.DEFAULT  // iPad updates: normal
-                  : Notifications.AndroidNotificationPriority.HIGH)   // Phone updates: high
+                  ? Notifications.AndroidNotificationPriority.DEFAULT
+                  : Notifications.AndroidNotificationPriority.HIGH)
           };
         } catch (handlerError) {
-          // If handler logic fails, use safe defaults
           debugLog('Notification handler error:', handlerError);
           return {
             shouldShowAlert: true,
@@ -172,46 +289,23 @@ const sendCompletionNotification = async () => {
             color: activityDetails.color
           };
         } else {
-          // Fallback if activity not found
           sessionInfo.duration = Math.floor(sessionData.duration / 60000);
         }
       }
     } catch (error) {
       debugLog('Error getting session info for notification:', error);
-      // Continue with default sessionInfo
     }
     
-    /**
-     * NOTIFICATION CONTENT CONSTRUCTION
-     * 
-     * This is the actual notification that will appear on the user's screen
-     * Key components:
-     * - title: Main heading
-     * - body: Detailed message
-     * - data: Metadata for app to handle notification tap
-     * - sound: Enable/disable audio
-     * - Platform-specific enhancements (iOS vs Android)
-     */
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '🎉 Deep Work Session Complete!',
         body: `Congratulations! Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has finished.`,
-        sound: 'default',  // ✅ EXPLICIT
+        sound: 'default',
 
-        /**
-         * DATA PAYLOAD
-         * 
-         * INTERVIEW CONCEPT: Notification data vs content
-         * - content: What the USER sees (title, body)
-         * - data: What the APP sees when notification is tapped
-         * 
-         * This data is available in App.js notification listener
-         * Used to trigger alarm, navigate to screens, etc.
-         */
         data: { 
-          screen: 'MainApp',              // Where to navigate on tap
-          params: { screen: 'Metrics' },  // Sub-navigation
-          shouldPlayAlarm: true,           // ✅ Trigger alarm service
+          screen: 'MainApp',
+          params: { screen: 'Metrics' },
+          shouldPlayAlarm: true,
           completedAt: new Date().toISOString(),
           sessionInfo: sessionInfo,
           alarmSettings: {
@@ -220,76 +314,28 @@ const sendCompletionNotification = async () => {
           }
         },
         
-        // ✅ CRITICAL: Enable sound for this notification
         sound: true,
-        
-        // Set high priority for Android
         priority: Notifications.AndroidNotificationPriority.MAX,
         
-        /**
-         * iOS-SPECIFIC ENHANCEMENTS
-         * 
-         * INTERVIEW CONCEPT: Platform-specific notification features
-         * iOS has unique notification properties that Android doesn't have:
-         * - subtitle: Secondary text under title
-         * - badge: Red number on app icon
-         * - interruptionLevel: How aggressively notification interrupts user
-         * - relevanceScore: Helps iOS decide which notifications to show first
-         */
         ...(Platform.OS === 'ios' && {
           subtitle: `${sessionInfo.activity} completed!`,
-          badge: 1,  // Show "1" on app icon
-          sound: 'default',  // Use system notification sound
-          
-          /**
-           * INTERRUPTION LEVEL
-           * 
-           * Options:
-           * - passive: Silent, only in notification center
-           * - active: Standard notification
-           * - timeSensitive: Breaks through Focus modes ✅
-           * - critical: Even breaks Do Not Disturb (requires special permission)
-           * 
-           * We use 'active' here (you had this originally)
-           * Consider 'timeSensitive' if users complain about missing notifications
-           */
+          badge: 1,
+          sound: 'default',
           interruptionLevel: 'active',
-          relevanceScore: 1.0,  // Highest relevance (0.0 to 1.0)
+          relevanceScore: 1.0,
         }),
         
-        /**
-         * ANDROID-SPECIFIC ENHANCEMENTS
-         * 
-         * INTERVIEW CONCEPT: Android notification channels
-         * Android 8.0+ requires channels - categories for notifications
-         * Each channel has its own settings (sound, vibration, importance)
-         * 
-         * 'session-completion' channel was created in configureNotifications()
-         */
         ...(Platform.OS === 'android' && {
-          channelId: 'session-completion',  // References channel we created
-          sticky: false,        // User can swipe away
-          autoCancel: true,     // Dismiss when tapped
-          lights: true,         // LED notification light (if device has one)
-          lightColor: sessionInfo.color,  // Match activity color
-          vibrationPattern: [0, 500, 200, 500],  // Custom vibration pattern
+          channelId: 'session-completion',
+          sticky: false,
+          autoCancel: true,
+          lights: true,
+          lightColor: sessionInfo.color,
+          vibrationPattern: [0, 500, 200, 500],
           importance: Notifications.AndroidImportance.HIGH,
         })
       },
       
-      /**
-       * TRIGGER
-       * 
-       * INTERVIEW Q: Why is trigger set to null?
-       * A: null = "show immediately"
-       * 
-       * Other trigger options:
-       * - { seconds: 10 } = show after 10 seconds
-       * - { date: new Date() } = show at specific time
-       * - { channelId: 'X' } = recurring notification
-       * 
-       * We want immediate notification when session completes
-       */
       trigger: null,
     });
     
@@ -297,18 +343,6 @@ const sendCompletionNotification = async () => {
     
   } catch (error) {
     debugLog('❌ Failed to send completion notification:', error);
-    
-    /**
-     * ERROR HANDLING
-     * 
-     * INTERVIEW CONCEPT: Graceful degradation
-     * Even if notification fails (permissions denied, system error, etc.):
-     * - Don't crash the app
-     * - Log for debugging
-     * - The alarm service in handleTimeout() will still provide feedback
-     * 
-     * Multiple feedback layers ensure user always knows session completed
-     */
   }
 };
 
@@ -352,7 +386,6 @@ const updateTimerNotification = async (timeRemaining, sessionData) => {
 ${progressBar} ${progressPercentage}%
 ${progressText}`;
     
-    // iPad-specific notification settings
     const notificationContent = {
       title: `Deep Work: ${activityName}`,
       body: body,
@@ -366,7 +399,6 @@ ${progressText}`;
       autoDismiss: isTablet,
     };
     
-    // Add progress indicator for Android and iPad
     if (Platform.OS === 'android' || isTablet) {
       notificationContent.progress = {
         max: 100,
@@ -405,118 +437,129 @@ const configureNotifications = async () => {
       await Notifications.setNotificationChannelAsync('session-progress', {
         name: 'Session Progress',
         importance: Notifications.AndroidImportance.LOW,
-        vibrationPattern: [0, 100],
-        sound: false,
-        description: 'Timer updates during active sessions',
+        vibrationPattern: [0],
+        sound: null,
+        description: 'Progress updates during deep work sessions',
       });
       
-      debugLog('Android notification channels configured');
+      debugLog('Android notification channels created');
     }
     
-    // FIXED: Skip iOS notification categories entirely to prevent JSI crash
-    if (Platform.OS === 'ios') {
-      debugLog('iOS notification categories disabled for stability');
-      // Categories will be implemented in a future update with proper type validation
-    }
-
-    // Set notification handler with safe defaults
-    try {
-      await Notifications.setNotificationHandler({
-        handleNotification: async (notification) => {
-          try {
-            const isCompletion = notification.request.content.data?.shouldPlayAlarm;
-            const isTimerUpdate = notification.request.content.data?.isTimerUpdate;
-            
-            return {
-              shouldShowAlert: true,
-              shouldPlaySound: isCompletion,
-              shouldSetBadge: isCompletion,
-              priority: isCompletion 
-                ? Notifications.AndroidNotificationPriority.HIGH 
-                : (isTablet ? Notifications.AndroidNotificationPriority.DEFAULT : Notifications.AndroidNotificationPriority.HIGH)
-            };
-          } catch (handlerError) {
-            debugLog('Notification handler error:', handlerError);
-            return {
-              shouldShowAlert: true,
-              shouldPlaySound: false,
-              shouldSetBadge: false
-            };
-          }
-        },
-      });
-    } catch (handlerError) {
-      debugLog('Failed to set notification handler:', handlerError);
-    }
-    
-    // Register background task
-    let taskRegistered = false;
-    try {
-      taskRegistered = await ensureTaskIsRegistered();
-    } catch (taskError) {
-      debugLog('Background task registration failed (non-critical):', taskError);
-    }
-    
-    debugLog('Notification configuration completed', { taskRegistered });
-    return true;
+    debugLog('Notification configuration completed');
   } catch (error) {
-    debugLog('Notification configuration failed:', error);
-    return true; // Don't block app startup
+    debugLog('Notification configuration error:', error);
   }
 };
 
-// Safe task registration
+// Task timeout constant
+const TASK_TIMEOUT = 10000;
+
+// Enhanced task registration with 10% progress tracking
 const ensureTaskIsRegistered = async () => {
   try {
-    debugLog('Starting task registration check');
+    debugLog('Ensuring background task is registered');
     
-    if (isTablet) {
-      debugLog('iPad detected - using conservative task registration');
-    }
+    // Check if task is defined
+    const isDefined = TaskManager.isTaskDefined(BACKGROUND_TIMER_TASK);
     
-    const TASK_TIMEOUT = 10000;
-    
-    // Check if task is already defined
-    let isTaskDefined = false;
-    try {
-      const taskCheckPromise = TaskManager.isTaskDefined(BACKGROUND_TIMER_TASK);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Task check timeout')), TASK_TIMEOUT)
-      );
-      
-      isTaskDefined = await Promise.race([taskCheckPromise, timeoutPromise]);
-    } catch (error) {
-      debugLog('Task definition check failed:', error);
-      return false;
-    }
-    
-    if (!isTaskDefined) {
-      debugLog('Defining background task');
+    if (!isDefined) {
+      debugLog('Task not defined, defining now...');
       
       try {
+        /**
+         * ✅ ENHANCED: Background task with 10% progress notification
+         * 
+         * INTERVIEW CONCEPT: Background task architecture
+         * 
+         * This task runs periodically even when:
+         * - App is backgrounded
+         * - Screen is locked
+         * - User is in another app
+         * 
+         * iOS/Android batch these tasks to save battery (~15-30 second intervals)
+         * We use this to:
+         * 1. Update timer notification
+         * 2. Check for 10% milestone
+         * 3. Detect session completion
+         * 
+         * RETURN VALUES:
+         * - NewData: Task did work successfully
+         * - NoData: Nothing to do (no active session)
+         * - Failed: Error occurred
+         */
         TaskManager.defineTask(BACKGROUND_TIMER_TASK, async () => {
           try {
-            debugLog('Background task executed');
+            debugLog('Background task executing...');
             
+            // Get current session
             const sessionData = await getActiveSessionFromStorage();
             if (!sessionData) {
-              debugLog('No active session found');
+              debugLog('No active session - task exiting');
               return BackgroundFetch.BackgroundFetchResult.NoData;
             }
-        
-            // Handle paused sessions
-            if (sessionData.isPaused) {
-              await updateTimerNotification(sessionData.remainingAtPause, sessionData);
-              return BackgroundFetch.BackgroundFetchResult.NewData;
-            }
-        
-            const timeRemaining = calculateRemainingTime(sessionData);
             
+            // Calculate current progress
+            const timeRemaining = calculateRemainingTime(sessionData);
+            const totalDuration = sessionData.duration;
+            
+            /**
+             * ✅ NEW: 10% PROGRESS MILESTONE CHECK
+             * 
+             * INTERVIEW CONCEPT: Milestone detection in background tasks
+             * 
+             * Challenge: Background tasks don't run at exact intervals
+             * - iOS might run every 15-30 seconds
+             * - Could miss exact 10% moment
+             * 
+             * Solution: Use a RANGE (10-15%)
+             * - If progress is between 10-15%, we're "close enough"
+             * - Check if we've already sent notification (via AsyncStorage flag)
+             * - Only send once per session
+             * 
+             * WHY THIS WORKS:
+             * - Even if task runs at 12%, user still gets "10% done" message
+             * - AsyncStorage flag prevents duplicate notifications
+             * - Non-critical if missed (user still gets completion notification)
+             */
+            const elapsed = Date.now() - sessionData.startTime;
+            const progress = elapsed / totalDuration;
+            const progressPercent = Math.floor(progress * 100);
+            
+            // Check for 10% milestone (window: 10-15%)
+            if (progressPercent >= 10 && progressPercent < 15 && !sessionData.isPaused) {
+              debugLog(`Progress: ${progressPercent}% - checking 10% notification status`);
+              
+              // ✅ Check if we've already sent this notification
+              const notificationKey = `${PROGRESS_NOTIFICATION_KEY}${sessionData.startTime}`;
+              const alreadySent = await AsyncStorage.getItem(notificationKey);
+              
+              if (!alreadySent) {
+                debugLog('📊 10% milestone reached - sending progress notification');
+                
+                // Send the notification
+                const sent = await sendProgressNotification(sessionData);
+                
+                if (sent) {
+                  // ✅ Mark as sent so we don't spam user
+                  await AsyncStorage.setItem(notificationKey, 'true');
+                  debugLog('✅ Progress notification sent and flagged');
+                } else {
+                  debugLog('⚠️ Progress notification failed to send');
+                }
+              } else {
+                debugLog('10% notification already sent for this session');
+              }
+            }
+            
+            // ✅ EXISTING: Check for session completion
             if (timeRemaining <= 0) {
-              debugLog('Session completed via background task');
+              debugLog('Session completed!');
               
               // Send completion notification (alarm will trigger when app opens)
               await sendCompletionNotification();
+              
+              // ✅ NEW: Clean up progress notification flag
+              await clearProgressNotificationFlag(sessionData.startTime);
               
               // Clear session data
               await clearActiveSession();
@@ -524,8 +567,10 @@ const ensureTaskIsRegistered = async () => {
               return BackgroundFetch.BackgroundFetchResult.NewData;
             }
             
+            // ✅ EXISTING: Update progress notification
             await updateTimerNotification(timeRemaining, sessionData);
             return BackgroundFetch.BackgroundFetchResult.NewData;
+            
           } catch (error) {
             debugLog('Background task execution error:', error);
             return BackgroundFetch.BackgroundFetchResult.Failed;
@@ -644,6 +689,9 @@ const stopTimerNotification = async () => {
   try {
     debugLog('Stopping timer notification');
     
+    // ✅ NEW: Get session data to clean up progress flag
+    const sessionData = await getActiveSessionFromStorage();
+    
     // Clean up alarm service
     try {
       debugLog('🔔 Cleaning up alarm service...');
@@ -666,6 +714,11 @@ const stopTimerNotification = async () => {
       }
     } catch (error) {
       debugLog('Task unregistration failed (non-critical):', error);
+    }
+    
+    // ✅ NEW: Clean up progress notification flag
+    if (sessionData?.startTime) {
+      await clearProgressNotificationFlag(sessionData.startTime);
     }
     
     await clearActiveSession();
@@ -745,5 +798,7 @@ export default {
   sendCompletionNotification,
   updateTimerNotification,
   clearActiveSession,
-  ensureTaskIsRegistered
+  ensureTaskIsRegistered,
+  // ✅ NEW: Export progress notification for testing
+  sendProgressNotification,
 };

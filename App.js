@@ -176,26 +176,26 @@ const initializeBackgroundServices = async () => {
     }
     
     // STEP 4: Test notification system if permissions are granted
-    if (permissionsGranted && notificationsConfigured) {
-      try {
-        console.log('📱 Testing notification system...');
+    // if (permissionsGranted && notificationsConfigured) {
+    //   try {
+    //     console.log('📱 Testing notification system...');
         
-        // Send a silent test notification to verify the system works
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'DeepWork Ready',
-            body: 'Notification system initialized successfully',
-            data: { test: true },
-            sound: false, // Silent test
-          },
-          trigger: null,
-        });
+    //     // Send a silent test notification to verify the system works
+    //     await Notifications.scheduleNotificationAsync({
+    //       content: {
+    //         title: 'DeepWork Ready',
+    //         body: 'Notification system initialized successfully',
+    //         data: { test: true },
+    //         sound: false, // Silent test
+    //       },
+    //       trigger: null,
+    //     });
         
-        console.log('📱 Notification system test completed');
-      } catch (testError) {
-        console.warn('📱 Notification test failed (non-critical):', testError);
-      }
-    }
+    //     console.log('📱 Notification system test completed');
+    //   } catch (testError) {
+    //     console.warn('📱 Notification test failed (non-critical):', testError);
+    //   }
+    // }
     
     console.log('🚀 Background services initialization completed:', {
       permissions: permissionsGranted,
