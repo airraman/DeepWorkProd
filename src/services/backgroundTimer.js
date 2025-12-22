@@ -300,7 +300,7 @@ const sendCompletionNotification = async () => {
       content: {
         title: '🎉 Deep Work Session Complete!',
         body: `Congratulations! Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has finished.`,
-        sound: 'alarm.mp3',
+        sound: 'completion-alarm.mp3',  // ✅ CORRECT - 3 places
 
         data: { 
           screen: 'MainApp',
@@ -319,14 +319,14 @@ const sendCompletionNotification = async () => {
         ...(Platform.OS === 'ios' && {
           subtitle: `${sessionInfo.activity} completed!`,
           badge: 1,
-          sound: 'alarm.mp3',
+          sound: 'completion-alarm.mp3',  // ✅ CORRECT - 3 places
           interruptionLevel: 'active',
           relevanceScore: 1.0,
         }),
         
         ...(Platform.OS === 'android' && {
           channelId: 'session-completion',
-          sound: 'alarm.mp3',
+          sound: 'completion-alarm.mp3',  // ✅ CORRECT - 3 places
           sticky: false,
           autoCancel: true,
           lights: true,

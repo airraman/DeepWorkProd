@@ -18,7 +18,7 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#2563EB",
-          "sounds": ["./assets/alarm.mp3"]  
+          "sounds": ["./assets/sounds/completion-alarm.mp3"]
         }
       ],
       "./ios-background-tasks-plugin.js",
@@ -35,9 +35,9 @@
       "expo-asset"
     ],
     "assets": [
-      "./assets/alarm.mp3",
-      "./assets/lofi.mp3",
-      "./assets/whitenoise.mp3"
+      "./assets/sounds/completion-alarm.mp3",
+      "./assets/sounds/lofi.mp3",
+      "./assets/sounds/white-noise.mp3"
     ],
     "assetBundlePatterns": [
       "**/*",
