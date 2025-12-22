@@ -221,6 +221,38 @@ export const deepWorkStore = {
     }
   },
 
+  deleteSessionsByActivity: async (activityName) => {
+    try {
+      log('Deleting sessions for activity:', activityName);
+      
+      const allSessions = await deepWorkStore.getSessions();
+      let deletedCount = 0;
+      const cleanedSessions = {};
+      
+      Object.entries(allSessions).forEach(([date, sessions]) => {
+        const filteredSessions = sessions.filter(session => {
+          if (session.activity === activityName) {
+            deletedCount++;
+            return false;
+          }
+          return true;
+        });
+        
+        if (filteredSessions.length > 0) {
+          cleanedSessions[date] = filteredSessions;
+        }
+      });
+      
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(cleanedSessions));
+      log(`Deleted ${deletedCount} sessions for: ${activityName}`);
+      return { success: true, deletedCount };
+      
+    } catch (error) {
+      log('Error deleting sessions:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
   /**
    * Update just the durations list
    * @param {Array} durations - New durations array

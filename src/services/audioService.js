@@ -54,17 +54,17 @@ class AudioService {
         staysActiveInBackground: true,
         
         // ✅ CRITICAL ADDITION #1: Proper category
-        // PLAYBACK category = optimized for playing audio
-        // (vs RECORD category for microphone apps)
         categoryIOS: Audio.AUDIO_SESSION_CATEGORY_PLAYBACK,
         
         // ✅ CRITICAL ADDITION #2: Category options
-        // These are iOS-specific flags that modify category behavior
         categoryOptionsIOS: [
-          Audio.CATEGORY_OPTIONS_MIXWITHOTHERS,  // Allow other apps to play simultaneously
+          Audio.CATEGORY_OPTIONS_MIXWITHOTHERS,
         ],
         
-        // ✅ CRITICAL ADDITION #3: Allow Bluetooth
+        // ✅ CRITICAL ADDITION #3: Interruption mode for background playback
+        interruptionModeIOS: 2, // DO_NOT_MIX - won't pause when backgrounded
+        
+        // ✅ Allow Bluetooth
         allowsRecordingIOS: false,
         
         // Android equivalents

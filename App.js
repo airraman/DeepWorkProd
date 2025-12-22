@@ -9,7 +9,7 @@ import * as Notifications from 'expo-notifications';
 import * as Updates from 'expo-updates';
 import { Alert, View, Text, Platform, Dimensions, StatusBar, Linking } from 'react-native';import { navigationRef, safeNavigate } from './src/services/navigationService';
 import { versionCheckService } from './src/services/versionCheckService.js';
-
+import { notificationBackgroundTask } from './src/services/notificationBackgroundTask';
 import backgroundTimer from './src/services/backgroundTimer';
 import ErrorBoundary from './src/components/ErrorBoundary';
 const DevToolsScreen = __DEV__ 
@@ -202,6 +202,31 @@ const initializeBackgroundServices = async () => {
       alarmService: alarmInitialized,
       notifications: notificationsConfigured
     });
+
+        // STEP 3.5: Register notification background task
+        if (permissionsGranted) {
+          try {
+            console.log('🔄 Registering notification background task...');
+            
+            const registered = await notificationBackgroundTask.register();
+            
+            if (registered) {
+              console.log('✅ Background task registered successfully');
+              
+              // Get and log status for debugging
+              const status = await notificationBackgroundTask.getStatus();
+              console.log('📊 Background task status:', status);
+            } else {
+              console.warn('⚠️ Background task registration returned false');
+            }
+            
+          } catch (bgTaskError) {
+            console.error('❌ Background task registration failed:', bgTaskError);
+            // Non-critical - notifications still work without background refresh
+            // Just won't be as reliable when app is force-quit
+          }
+        }
+        
     
     // Return true even if some services failed - app should still work
     return true;
@@ -273,6 +298,29 @@ function MainApp() {
     } else {
       console.log('⚠️ Notification permissions not granted - reminders not scheduled');
     }
+    // STEP 3.5: Register notification background task
+  if (hasPermission) {
+    try {
+      console.log('🔄 Registering notification background task...');
+      
+      const registered = await notificationBackgroundTask.register();
+      
+      if (registered) {
+        console.log('✅ Background task registered successfully');
+        
+        // Get and log status for debugging
+        const status = await notificationBackgroundTask.getStatus();
+        console.log('📊 Background task status:', status);
+      } else {
+        console.warn('⚠️ Background task registration returned false');
+      }
+      
+    } catch (bgTaskError) {
+      console.error('❌ Background task registration failed:', bgTaskError);
+      // Non-critical - notifications still work without background refresh
+      // Just won't be as reliable when app is force-quit
+    }
+  }
   } catch (notifError) {
     console.error('❌ Error scheduling reminders:', notifError);
     // Non-critical - continue app initialization

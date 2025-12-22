@@ -208,7 +208,7 @@ const HomeScreen = () => {
         contentContainerStyle={styles.contentContainer}
       >
         {/* ✅ NEW: RevenueCat Test Section - TEMPORARY FOR TESTING */}
-        {__DEV__ && (
+        {/* {__DEV__ && (
           <View style={[
             styles.testSection,
             { 
@@ -258,7 +258,7 @@ const HomeScreen = () => {
               </View>
             )}
           </View>
-        )}
+        )} */}
         {/* ✅ END TEST SECTION */}
 
         <View style={styles.header}>

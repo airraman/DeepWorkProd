@@ -549,10 +549,14 @@ for (let d = 1; d <= lastDay.getDate(); d++) {
 const MetricsScreen = () => {
   const { colors, isDarkMode } = useTheme();
 
-  const { 
-    isPremium,           // ← Remove ": actualIsPremium"
-    canGenerateInsights, // ← Remove ": actualCanGenerateInsights"
-  } = useSubscription();
+  // const { 
+  //   isPremium,           // ← Remove ": actualIsPremium"
+  //   canGenerateInsights, // ← Remove ": actualCanGenerateInsights"
+  // } = useSubscription();
+
+  const { isPremium: _orig, canGenerateInsights: _origCan } = useSubscription();
+const isPremium = true; // 🧪 TEST MODE
+const canGenerateInsights = true; // 🧪 TEST MODE
 
   const [sessions, setSessions] = useState({});
   const [activities, setActivities] = useState([]);
@@ -572,6 +576,44 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
     weekly: null,
     monthly: null,
   });
+
+  const handleAnalyzeClick = async () => {
+    setIsGeneratingAllInsights(true);
+    await generateAllInsights();
+    setIsGeneratingAllInsights(false);
+    setHasGeneratedInsights(true);
+  };
+  
+  const handleInsightCardClick = () => {
+    setShowInsightsModal(true);
+  };
+  
+  const generateAllInsights = async () => {
+    const insightTypes = ['daily', 'weekly', 'monthly'];
+    
+    // Generate all three in parallel for speed
+    const promises = insightTypes.map(async (type) => {
+      setIsGeneratingInsights(prev => ({ ...prev, [type]: true }));
+      
+      try {
+        const result = await InsightGenerator.generate(type);
+        setInsights(prev => ({ ...prev, [type]: result }));
+      } catch (error) {
+        console.error(`Error generating ${type} insight:`, error);
+        setInsights(prev => ({ 
+          ...prev, 
+          [type]: { 
+            insightText: 'Unable to generate insight. Please try again.',
+            metadata: { insightType: type }
+          }
+        }));
+      } finally {
+        setIsGeneratingInsights(prev => ({ ...prev, [type]: false }));
+      }
+    });
+    
+    await Promise.all(promises);
+  };
   
   const [isGeneratingInsights, setIsGeneratingInsights] = useState({
     daily: false,
@@ -661,43 +703,7 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
           return insights.daily || insights.weekly || insights.monthly;
         };
         
-        const handleAnalyzeClick = async () => {
-          setIsGeneratingAllInsights(true);
-          await generateAllInsights();
-          setIsGeneratingAllInsights(false);
-          setHasGeneratedInsights(true);
-        };
-        
-        const handleInsightCardClick = () => {
-          setShowInsightsModal(true);
-        };
-        
-        const generateAllInsights = async () => {
-          const insightTypes = ['daily', 'weekly', 'monthly'];
-          
-          // Generate all three in parallel for speed
-          const promises = insightTypes.map(async (type) => {
-            setIsGeneratingInsights(prev => ({ ...prev, [type]: true }));
-            
-            try {
-              const result = await InsightGenerator.generate(type);
-              setInsights(prev => ({ ...prev, [type]: result }));
-            } catch (error) {
-              console.error(`Error generating ${type} insight:`, error);
-              setInsights(prev => ({ 
-                ...prev, 
-                [type]: { 
-                  insightText: 'Unable to generate insight. Please try again.',
-                  metadata: { insightType: type }
-                }
-              }));
-            } finally {
-              setIsGeneratingInsights(prev => ({ ...prev, [type]: false }));
-            }
-          });
-          
-          await Promise.all(promises);
-        };
+
         
         const dateKeys = Object.keys(parsed);
         console.log(`📊 [MetricsScreen] Found ${dateKeys.length} date keys`);

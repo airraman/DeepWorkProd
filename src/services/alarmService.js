@@ -30,8 +30,8 @@ class AlarmService {
         ],
         
         // ✅ DO_NOT_MIX for alarms = full volume, don't duck
-        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+        interruptionModeIOS: 2, // DO_NOT_MIX
+        interruptionModeAndroid: 2, // DO_NOT_MIX
         
         shouldDuckAndroid: false,  // Alarms at full volume
       });

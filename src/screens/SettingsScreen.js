@@ -24,6 +24,8 @@ import { useSubscription } from '../context/SubscriptionContext';  // ✅ NEW IM
 import { PaywallModal } from '../components/PaywallModal';  // ✅ NEW IMPORT
 import { notificationService } from '../services/notificationService';
 import { Bell } from 'lucide-react-native';
+import { notificationBackgroundTask } from '../services/notificationBackgroundTask';
+
 
 const HEADER_HEIGHT = Platform.OS === 'ios' ? 60 : 50;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -178,6 +180,15 @@ const colorPalette = [
       if (granted) {
         // Schedule notifications based on user's frequency preference
         await notificationService.scheduleNotifications();
+        // Register background task to keep notifications fresh
+  try {
+    console.log('🔄 Registering background task for notifications...');
+    await notificationBackgroundTask.register();
+    console.log('✅ Background task registered');
+  } catch (bgError) {
+    console.warn('⚠️ Background task registration failed:', bgError);
+    // Non-critical - user can still use notifications
+  }
         setNotificationsEnabled(true);
         
         // Get frequency to show helpful feedback
@@ -212,34 +223,75 @@ const colorPalette = [
         );
       }
     } else {
-      // Disabling - cancel all notifications
-      await notificationService.cancelAllNotifications();
-      setNotificationsEnabled(false);
-      showFeedback('All reminders disabled');
+      // Disabling - cancel all notifications and unregister background task
+      try {
+        await notificationService.cancelAllNotifications();
+        
+        // Unregister background task
+        console.log('🗑️  Unregistering background task...');
+        await notificationBackgroundTask.unregister();
+        console.log('✅ Background task unregistered');
+        
+        setNotificationsEnabled(false);
+        showFeedback('All reminders disabled');
+        
+      } catch (error) {
+        console.error('❌ Error disabling notifications:', error);
+        showFeedback('Error disabling notifications');
+      }
     }
   };
 
   const handleDeleteActivity = async (idToDelete) => {
-    try {
-      setIsSaving(true);
-      const updatedActivities = activities.filter(
-        activity => activity.id !== idToDelete
-      );
-      
-      const success = await deepWorkStore.updateActivities(updatedActivities);
-      
-      if (success) {
-        setActivities(updatedActivities);
-        showFeedback('Activity deleted');
-      } else {
-        throw new Error('Failed to delete activity');
-      }
-    } catch (error) {
-      showFeedback('Error deleting activity');
-      console.error('Failed to delete activity:', error);
-    } finally {
-      setIsSaving(false);
+    const activityToDelete = activities.find(a => a.id === idToDelete);
+    
+    if (!activityToDelete) {
+      showFeedback('Activity not found');
+      return;
     }
+    
+    Alert.alert(
+      'Delete Activity?',
+      `This will delete "${activityToDelete.name}" and ALL sessions. This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsSaving(true);
+              
+              // Delete sessions
+              const { success, deletedCount } = await deepWorkStore.deleteSessionsByActivity(
+                activityToDelete.name
+              );
+              
+              if (!success) throw new Error('Failed to delete sessions');
+              
+              // Remove from settings
+              const updatedActivities = activities.filter(a => a.id !== idToDelete);
+              const settingsSuccess = await deepWorkStore.updateActivities(updatedActivities);
+              
+              if (settingsSuccess) {
+                setActivities(updatedActivities);
+                const message = deletedCount > 0 
+                  ? `Deleted "${activityToDelete.name}" and ${deletedCount} session${deletedCount === 1 ? '' : 's'}`
+                  : `Deleted "${activityToDelete.name}"`;
+                showFeedback(message);
+              } else {
+                throw new Error('Failed to delete activity');
+              }
+            } catch (error) {
+              showFeedback('Error deleting activity');
+              console.error('Failed to delete:', error);
+            } finally {
+              setIsSaving(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleDurationClick = async (duration) => {

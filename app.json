@@ -48,11 +48,12 @@
       "bundleIdentifier": "com.airraman.deepwork",
       "buildNumber": "23",
       "infoPlist": {
-        "UIBackgroundModes": [
-          "fetch",
-          "processing",
-          "audio"
-        ],
+      "UIBackgroundModes": [
+        "fetch",
+        "processing",
+        "audio",
+        "remote-notification"
+      ],
         "BGTaskSchedulerPermittedIdentifiers": [
           "com.expo.tasks.BACKGROUND_TIMER_TASK"
         ],
