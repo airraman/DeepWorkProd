@@ -18,7 +18,7 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#2563EB",
-          "sounds": []
+          "sounds": ["./assets/alarm.mp3"]  
         }
       ],
       "./ios-background-tasks-plugin.js",
@@ -46,14 +46,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.airraman.deepwork",
-      "buildNumber": "24",
+      "buildNumber": "25",
       "infoPlist": {
-      "UIBackgroundModes": [
-        "fetch",
-        "processing",
-        "audio",
-        "remote-notification"
-      ],
+        "UIBackgroundModes": [
+          "fetch",
+          "processing",
+          "audio",
+          "remote-notification"
+        ],
         "BGTaskSchedulerPermittedIdentifiers": [
           "com.expo.tasks.BACKGROUND_TIMER_TASK"
         ],

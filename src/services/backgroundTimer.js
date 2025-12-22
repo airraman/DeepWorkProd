@@ -240,32 +240,32 @@ const sendCompletionNotification = async () => {
     debugLog('Session completed - sending notification with SOUND');
     
     // ✅ CRITICAL FIX: Set notification handler RIGHT BEFORE sending
-    await Notifications.setNotificationHandler({
-      handleNotification: async (notification) => {
-        try {
-          const isCompletion = notification.request.content.data?.shouldPlayAlarm;
-          const isTimerUpdate = notification.request.content.data?.isTimerUpdate;
+    // await Notifications.setNotificationHandler({
+    //   handleNotification: async (notification) => {
+    //     try {
+    //       const isCompletion = notification.request.content.data?.shouldPlayAlarm;
+    //       const isTimerUpdate = notification.request.content.data?.isTimerUpdate;
           
-          return {
-            shouldShowAlert: true,
-            shouldPlaySound: isCompletion,
-            shouldSetBadge: isCompletion,
-            priority: isCompletion 
-              ? Notifications.AndroidNotificationPriority.MAX
-              : (isTablet 
-                  ? Notifications.AndroidNotificationPriority.DEFAULT
-                  : Notifications.AndroidNotificationPriority.HIGH)
-          };
-        } catch (handlerError) {
-          debugLog('Notification handler error:', handlerError);
-          return {
-            shouldShowAlert: true,
-            shouldPlaySound: false,
-            shouldSetBadge: false
-          };
-        }
-      },
-    });
+    //       return {
+    //         shouldShowAlert: true,
+    //         shouldPlaySound: isCompletion,
+    //         shouldSetBadge: isCompletion,
+    //         priority: isCompletion 
+    //           ? Notifications.AndroidNotificationPriority.MAX
+    //           : (isTablet 
+    //               ? Notifications.AndroidNotificationPriority.DEFAULT
+    //               : Notifications.AndroidNotificationPriority.HIGH)
+    //       };
+    //     } catch (handlerError) {
+    //       debugLog('Notification handler error:', handlerError);
+    //       return {
+    //         shouldShowAlert: true,
+    //         shouldPlaySound: false,
+    //         shouldSetBadge: false
+    //       };
+    //     }
+    //   },
+    // });
     
     debugLog('✅ Notification handler configured for completion notification');
     
@@ -300,7 +300,7 @@ const sendCompletionNotification = async () => {
       content: {
         title: '🎉 Deep Work Session Complete!',
         body: `Congratulations! Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has finished.`,
-        sound: 'default',
+        sound: 'alarm.mp3',
 
         data: { 
           screen: 'MainApp',
@@ -314,19 +314,19 @@ const sendCompletionNotification = async () => {
           }
         },
         
-        sound: true,
         priority: Notifications.AndroidNotificationPriority.MAX,
         
         ...(Platform.OS === 'ios' && {
           subtitle: `${sessionInfo.activity} completed!`,
           badge: 1,
-          sound: 'default',
+          sound: 'alarm.mp3',
           interruptionLevel: 'active',
           relevanceScore: 1.0,
         }),
         
         ...(Platform.OS === 'android' && {
           channelId: 'session-completion',
+          sound: 'alarm.mp3',
           sticky: false,
           autoCancel: true,
           lights: true,

@@ -4,13 +4,13 @@ import { deepWorkStore } from './deepWorkStore';
 
 
 // Configure notification handler
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Notifications.setNotificationHandler({
+//   handleNotification: async () => ({
+//     shouldShowAlert: true,
+//     shouldPlaySound: true,
+//     shouldSetBadge: true,
+//   }),
+// });
 
 // ✨ ENHANCED: Time-based message variations
 const NOTIFICATION_MESSAGES = {

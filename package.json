@@ -27,6 +27,7 @@
     "expo-status-bar": "~3.0.8",
     "expo-task-manager": "~14.0.9",
     "expo-updates": "~29.0.12",
+    "getenv": "^2.0.0",
     "lucide-react-native": "^0.510.0",
     "minipass": "^7.1.2",
     "openai": "^6.3.0",

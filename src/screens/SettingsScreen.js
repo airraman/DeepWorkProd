@@ -371,8 +371,11 @@ const colorPalette = [
       setIsSaving(true);
       showFeedback('Testing alarm...');
       
-      const alarmPlayed = await alarmService.testAlarm();
-      
+      const alarmPlayed = await alarmService.playCompletionAlarm({
+        volume: alarmVolume,  // ← Use user's selected volume
+        autoStopAfter: 3      // ← Short test duration
+      });
+            
       if (alarmPlayed) {
         setTimeout(() => {
           showFeedback('Alarm test complete! 🔔');

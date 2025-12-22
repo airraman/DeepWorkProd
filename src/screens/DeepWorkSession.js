@@ -236,7 +236,7 @@ const DeepWorkSession = ({ route, navigation }) => {
   };
 
   const handleTimeout = async () => {
-    console.log('🎉 Session completed!');
+    console.log('⏰ Session completed - handling timeout with lock-screen support...');
     
     try {
       // Stop local timer
@@ -246,7 +246,18 @@ const DeepWorkSession = ({ route, navigation }) => {
       
       setIsPaused(true);
       
-      // ✅ STOP BACKGROUND MUSIC
+      // ✅ NEW: Pre-initialize alarm service FIRST
+      if (servicesRef.current.alarmService) {
+        try {
+          console.log('🔔 Pre-initializing alarm for lock-screen...');
+          await servicesRef.current.alarmService.init();
+          console.log('🔔 Alarm audio session ready');
+        } catch (error) {
+          console.warn('🔔 Alarm pre-init failed:', error);
+        }
+      }
+      
+      // ✅ STOP BACKGROUND MUSIC (alarm session still active)
       if (servicesRef.current.audioService) {
         try {
           await servicesRef.current.audioService.stopMusic();
@@ -256,28 +267,26 @@ const DeepWorkSession = ({ route, navigation }) => {
         }
       }
       
-      // ADDED: Send completion notification with sound
-      try {
-        await backgroundTimer.sendCompletionNotification();
-        console.log('📱 Completion notification with sound sent');
-      } catch (notificationError) {
-        console.warn('📱 Notification failed:', notificationError);
-      }
-      
-      // Try to play alarm if service is available (visual feedback)
+      // ✅ PLAY ALARM IMMEDIATELY (no notification dependency)
       if (servicesRef.current.alarmService) {
         try {
           await servicesRef.current.alarmService.playCompletionAlarm({
             volume: 0.8,
             autoStopAfter: 8
           });
-          console.log('🔔 Completion alarm played');
+          console.log('🔔 Completion alarm played directly');
         } catch (error) {
-          console.warn('🔔 Alarm failed to play:', error);
+          console.warn('🔔 Alarm play error:', error);
           showFallbackCelebration();
         }
-      } else {
-        showFallbackCelebration();
+      }
+      
+      // ✅ SEND NOTIFICATION (for display, not alarm trigger)
+      try {
+        await backgroundTimer.sendCompletionNotification();
+        console.log('📱 Completion notification sent');
+      } catch (notificationError) {
+        console.warn('📱 Notification send error:', notificationError);
       }
       
       // Show notes modal

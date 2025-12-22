@@ -11,6 +11,7 @@ import { Alert, View, Text, Platform, Dimensions, StatusBar, Linking } from 'rea
 import { versionCheckService } from './src/services/versionCheckService.js';
 import { notificationBackgroundTask } from './src/services/notificationBackgroundTask';
 import backgroundTimer from './src/services/backgroundTimer';
+import { setupNotificationHandler } from './src/services/notificationHandler';
 import ErrorBoundary from './src/components/ErrorBoundary';
 const DevToolsScreen = __DEV__ 
   ? require('./src/screens/DevToolsScreen').default 
@@ -251,6 +252,9 @@ function MainApp() {
 
   useEffect(() => {
     console.log('🚀 App.js: useEffect starting...');
+
+    setupNotificationHandler();
+
     
     const initApp = async () => {
       try {
@@ -413,31 +417,63 @@ function MainApp() {
     
     const setupNotifications = async () => {
       try {
-        const subscription = Notifications.addNotificationResponseReceivedListener(async response => {
-          try {
-            const data = response.notification.request.content.data;
-            
-            if (data.action === 'pauseResume') {
-              handlePauseResumeAction();
-            } else if (data.action === 'endSession') {
-              handleEndSession();
-            } else if (data.type === 'sessionComplete') {
-              await handleCompletionAlarmFromNotification(data);
-            } else if (data.action === 'navigateToSession') {
-              safeNavigate('DeepWorkSession');
-            } else if (data.type === 'timerUpdate') {
-              // Just update - no action needed
-            } else if (data.type === 'pauseResume') {
-              handlePauseResumeAction();
-            } else if (data.type === 'endSession') {
-              handleEndSession();
-            }
-          } catch (error) {
-            console.error('🚀 Notification response error:', error);
-          }
-        });
+        console.log('🔔 Setting up notification listeners...');
         
-        setNotificationSubscription(subscription);
+        // LISTENER 1: Response listener (when user TAPS notification)
+        const responseSubscription = Notifications.addNotificationResponseReceivedListener(
+          async response => {
+            try {
+              const data = response.notification.request.content.data;
+              
+              console.log('📱 User tapped notification:', data);
+              
+              if (data.action === 'pauseResume') {
+                handlePauseResumeAction();
+              } else if (data.action === 'endSession') {
+                handleEndSession();
+              } else if (data.type === 'sessionComplete') {
+                await handleCompletionAlarmFromNotification(data);
+              } else if (data.action === 'navigateToSession') {
+                safeNavigate('DeepWorkSession');
+              } else if (data.type === 'timerUpdate') {
+                // Just update - no action needed
+              } else if (data.type === 'pauseResume') {
+                handlePauseResumeAction();
+              } else if (data.type === 'endSession') {
+                handleEndSession();
+              }
+            } catch (error) {
+              console.error('🚀 Notification response error:', error);
+            }
+          }
+        );
+        
+        // LISTENER 2: Received listener (when notification ARRIVES - auto-trigger)
+        const receivedSubscription = Notifications.addNotificationReceivedListener(
+          async notification => {
+            try {
+              const data = notification.request.content.data;
+              
+              console.log('📬 Notification received (auto):', data);
+              
+              // Check if this is a completion notification that should play alarm
+              if (data?.shouldPlayAlarm || data?.type === 'sessionComplete') {
+                console.log('🔔 Completion notification received - auto-playing alarm...');
+                
+                // ⚠️ CRITICAL: This is the auto-trigger for the alarm
+                await handleCompletionAlarmFromNotification(data);
+              }
+            } catch (error) {
+              console.error('🔔 Received listener error:', error);
+            }
+          }
+        );
+        
+        // Store BOTH subscriptions as an array for cleanup
+        setNotificationSubscription([responseSubscription, receivedSubscription]);
+        
+        console.log('✅ Notification listeners configured successfully');
+        
         setInitializationStatus(prev => ({
           ...prev,
           notifications: 'success'
@@ -510,7 +546,20 @@ function MainApp() {
       console.log('🚀 App.js: Cleaning up...');
       if (notificationSubscription) {
         try {
-          notificationSubscription.remove();
+          // Check if it's an array (multiple subscriptions) or single subscription
+          if (Array.isArray(notificationSubscription)) {
+            // Loop through and remove each subscription
+            notificationSubscription.forEach(sub => {
+              if (sub && typeof sub.remove === 'function') {
+                sub.remove();
+              }
+            });
+            console.log('✅ All notification subscriptions removed');
+          } else {
+            // Single subscription (backwards compatibility)
+            notificationSubscription.remove();
+            console.log('✅ Notification subscription removed');
+          }
         } catch (error) {
           console.error('🚀 Error removing notification subscription:', error);
         }
