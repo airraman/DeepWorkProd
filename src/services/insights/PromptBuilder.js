@@ -24,21 +24,38 @@ class PromptBuilder {
 
     // Build activity breakdown WITH descriptions
     const activityText = Object.entries(activitiesBreakdown || {})
-      .map(([activity, stats]) => {
-        let text = `- ${activity}: ${stats.sessionCount} sessions, ${stats.totalHours.toFixed(1)}h total (avg ${stats.avgMinutes} min/session)`;
+    .map(([activity, stats]) => {
+      let text = `- ${activity}: ${stats.sessionCount} sessions, ${stats.totalHours.toFixed(1)}h total (avg ${stats.avgMinutes} min/session)`;
+      
+      // ✅ FIXED: Sanitize descriptions to prevent prompt corruption
+      if (stats.sampleDescriptions && stats.sampleDescriptions.length > 0) {
+        const descriptions = stats.sampleDescriptions
+          .slice(0, 3)
+          .map(desc => {
+            // Sanitize: remove problematic characters
+            const cleaned = String(desc)
+              .replace(/"/g, "'")           // Replace double quotes
+              .replace(/\n/g, " ")          // Remove newlines
+              .replace(/\r/g, " ")          // Remove carriage returns
+              .replace(/\t/g, " ")          // Remove tabs
+              .replace(/\\/g, "")           // Remove backslashes
+              .substring(0, 100)            // Limit length
+              .trim();
+            
+            return cleaned;
+          })
+          .filter(desc => desc.length > 0)  // Remove empty strings
+          .map(desc => `"${desc}"`)
+          .join(', ');
         
-        // ✅ NEW: Include sample descriptions if available
-        if (stats.sampleDescriptions && stats.sampleDescriptions.length > 0) {
-          const descriptions = stats.sampleDescriptions
-            .slice(0, 3)  // Max 3 to control token usage
-            .map(desc => `"${desc}"`)
-            .join(', ');
+        if (descriptions) {
           text += `\n  Notes: ${descriptions}`;
         }
-        
-        return text;
-      })
-      .join('\n\n');
+      }
+      
+      return text;
+    })
+    .join('\n\n');
 
     // ✅ IMPROVED PROMPT STRUCTURE
     return `Analyze this week's focus work patterns:
@@ -94,16 +111,32 @@ Use an analytical tone - you're a data analyst reviewing metrics, not a motivati
     }
 
     const activityText = Object.entries(activitiesBreakdown || {})
-      .map(([activity, stats]) => {
-        let text = `- ${activity}: ${stats.sessionCount} sessions, ${stats.totalHours.toFixed(1)}h`;
+    .map(([activity, stats]) => {
+      let text = `- ${activity}: ${stats.sessionCount} sessions, ${stats.totalHours.toFixed(1)}h`;
+      
+      // ✅ FIXED: Sanitize descriptions
+      if (stats.sampleDescriptions && stats.sampleDescriptions.length > 0) {
+        const sanitized = stats.sampleDescriptions
+          .map(desc => String(desc)
+            .replace(/"/g, "'")
+            .replace(/\n/g, " ")
+            .replace(/\r/g, " ")
+            .replace(/\t/g, " ")
+            .replace(/\\/g, "")
+            .substring(0, 100)
+            .trim()
+          )
+          .filter(desc => desc.length > 0)
+          .join(', ');
         
-        if (stats.sampleDescriptions && stats.sampleDescriptions.length > 0) {
-          text += `\n  Worked on: ${stats.sampleDescriptions.join(', ')}`;
+        if (sanitized) {
+          text += `\n  Worked on: ${sanitized}`;
         }
-        
-        return text;
-      })
-      .join('\n');
+      }
+      
+      return text;
+    })
+    .join('\n');
 
     return `Review yesterday's focus sessions:
 
@@ -131,17 +164,33 @@ Provide a brief analytical summary (2 sentences max): one quantitative observati
     }
 
     const activityText = Object.entries(activitiesBreakdown || {})
-      .map(([activity, stats]) => {
-        let text = `- ${activity}: ${stats.sessionCount} sessions (${stats.totalHours.toFixed(1)}h total)`;
+    .map(([activity, stats]) => {
+      let text = `- ${activity}: ${stats.sessionCount} sessions (${stats.totalHours.toFixed(1)}h total)`;
+      
+      // ✅ FIXED: Sanitize descriptions
+      if (stats.sampleDescriptions && stats.sampleDescriptions.length > 0) {
+        const topWork = stats.sampleDescriptions
+          .slice(0, 2)
+          .map(desc => String(desc)
+            .replace(/"/g, "'")
+            .replace(/\n/g, " ")
+            .replace(/\r/g, " ")
+            .replace(/\t/g, " ")
+            .replace(/\\/g, "")
+            .substring(0, 100)
+            .trim()
+          )
+          .filter(desc => desc.length > 0)
+          .join('; ');
         
-        if (stats.sampleDescriptions && stats.sampleDescriptions.length > 0) {
-          const topWork = stats.sampleDescriptions.slice(0, 2).join('; ');
+        if (topWork) {
           text += `\n  Examples: ${topWork}`;
         }
-        
-        return text;
-      })
-      .join('\n');
+      }
+      
+      return text;
+    })
+    .join('\n');
 
     return `Analyze this month's focus patterns:
 

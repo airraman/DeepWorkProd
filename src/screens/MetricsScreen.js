@@ -629,20 +629,28 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
       
       if (!hasAnySuccess) {
         // All failed - show specific error
-        const firstError = 
-          dailyInsight.reason?.message || 
-          weeklyInsight.reason?.message || 
-          monthlyInsight.reason?.message ||
-          'Unknown error';
+        const errors = [
+          dailyInsight.status === 'rejected' ? `Daily: ${dailyInsight.reason?.message}` : null,
+          weeklyInsight.status === 'rejected' ? `Weekly: ${weeklyInsight.reason?.message}` : null,
+          monthlyInsight.status === 'rejected' ? `Monthly: ${monthlyInsight.reason?.message}` : null,
+        ].filter(Boolean);
         
-        setInsightError(`Unable to generate insights: ${firstError}`);
+        const errorMessage = errors.length > 0 
+          ? errors.join('\n') 
+          : 'Unknown error generating insights';
         
-        // Log for debugging
         console.error('🤖 [Metrics] All insights failed:', {
           daily: dailyInsight.reason,
           weekly: weeklyInsight.reason,
           monthly: monthlyInsight.reason
         });
+        
+        // ✅ IMPROVED: More helpful error message
+        setInsightError(
+          __DEV__ 
+            ? `Debug Errors:\n${errorMessage}` 
+            : 'Unable to generate insights. Please try again in a few moments.'
+        );
         
         return;
       }

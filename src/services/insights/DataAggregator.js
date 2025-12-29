@@ -79,13 +79,15 @@ class DataAggregator {
       
       // Collect unique descriptions (up to maxSamples)
       if (session.description && 
-          session.description.trim().length > 0 &&
-          grouped[activity].descriptions.length < maxSamples) {
-        const desc = session.description.trim();
-        if (!grouped[activity].descriptions.includes(desc)) {
-          grouped[activity].descriptions.push(desc);
-        }
+        typeof session.description === 'string' &&     // ✅ ADDED: Type check
+        session.description.trim().length > 0 &&
+        grouped[activity].descriptions.length < maxSamples) {
+      const desc = session.description.trim();
+      // ✅ ADDED: Additional validation
+      if (desc.length > 0 && !grouped[activity].descriptions.includes(desc)) {
+        grouped[activity].descriptions.push(desc);
       }
+    }
     });
     
     // Convert to final format

@@ -450,36 +450,41 @@ function MainApp() {
         
         // LISTENER 2: Received listener (when notification ARRIVES - auto-trigger)
 // LISTENER 2: Received listener (when notification ARRIVES - auto-trigger)
-    const receivedSubscription = Notifications.addNotificationReceivedListener(
-      async notification => {
+const receivedSubscription = Notifications.addNotificationReceivedListener(
+  async notification => {
+    try {
+      const data = notification.request.content.data;
+      
+      console.log('📬 Notification received:', {
+        title: notification.request.content.title,
+        shouldPlayAlarm: data?.shouldPlayAlarm,
+      });
+      
+      // ✅ FIX: Actually play the alarm when notification arrives
+      if (data?.shouldPlayAlarm || data?.type === 'sessionComplete') {
+        console.log('🔔 Playing completion alarm...');
+        
         try {
-          const data = notification.request.content.data;
-          
-          // ✅ ADD: Enhanced logging for all received notifications
-          console.log('📬 Notification received:', {
-            title: notification.request.content.title,
-            type: data?.type,
-            shouldPlayAlarm: data?.shouldPlayAlarm,
-            timestamp: new Date().toISOString(),
-            identifier: notification.request.identifier
+          // Play alarm at full volume
+          await alarmService.playCompletionAlarm({
+            volume: 0.9,
+            autoStopAfter: 10
           });
           
-          // Check if this is a completion notification
-          if (data?.shouldPlayAlarm || data?.type === 'sessionComplete') {
-            console.log('🔔 Completion notification received');
-            
-            // ✅ IMPORTANT: The notification sound ALREADY plays automatically
-            // This listener is just for logging/debugging
-            // We removed handleCompletionAlarmFromNotification because
-            // the alarm is now the notification sound itself (Fix #1)
-            
-            console.log('🎵 Alarm sound playing via notification system');
-          }
-        } catch (error) {
-          console.error('🔔 Received listener error:', error);
+          // Vibrate for additional feedback
+          Vibration.vibrate([0, 500, 200, 500]);
+          
+        } catch (alarmError) {
+          console.error('🔔 Alarm playback failed:', alarmError);
+          // Fallback: At least show an alert
+          Alert.alert('🎉 Session Complete!', 'Your focus session has finished.');
         }
       }
-    );
+    } catch (error) {
+      console.error('🔔 Received listener error:', error);
+    }
+  }
+);
         
         // Store BOTH subscriptions as an array for cleanup
         setNotificationSubscription([responseSubscription, receivedSubscription]);

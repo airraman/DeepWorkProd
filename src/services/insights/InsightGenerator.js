@@ -267,41 +267,28 @@ async _generateInsightText(aggregatedData, insightType, activityType) {
 
   } catch (error) {
     console.error('[InsightGenerator] Error generating insight text:', error);
-    console.error('[InsightGenerator] Error stack:', error.stack);
-    console.log('[InsightGenerator] Using fallback insight');
+    console.error('[InsightGenerator] Error message:', error.message);
+    console.error('[InsightGenerator] Error code:', error.code || 'N/A');
     
-    // DEFENSIVE FALLBACK - Extract data from ANY possible structure
-    let totalSessions = 0;
-    let totalMinutes = 0;
+    // ✅ ENHANCED: Log more details for debugging
+    console.log('[InsightGenerator] Insight type:', insightType);
+    console.log('[InsightGenerator] Aggregated data keys:', Object.keys(aggregatedData || {}));
     
-    // Try multiple possible structures
-    if (aggregatedData?.summary) {
-      totalSessions = aggregatedData.summary.totalSessions || 0;
-      totalMinutes = aggregatedData.summary.totalMinutes || 0;
-    } else if (aggregatedData?.totals) {
-      totalSessions = aggregatedData.totals.sessions || 0;
-      totalMinutes = aggregatedData.totals.minutes || 0;
-    } else if (aggregatedData?.sessionCount !== undefined) {
-      totalSessions = aggregatedData.sessionCount;
-      totalMinutes = aggregatedData.totalDuration || 0;
-    } else {
-      // Last resort: log what we got and use generic message
-      console.error('[InsightGenerator] Could not extract stats from aggregatedData:', 
-        JSON.stringify(aggregatedData, null, 2).substring(0, 500));
+    // ✅ FIXED: Use correct property names from DataAggregator
+    if (aggregatedData && typeof aggregatedData === 'object') {
+      const { totalSessions, totalHours } = aggregatedData;
       
-      return `Keep up the great work on your focus sessions! Your consistent effort is building strong deep work habits.`;
+      if (totalSessions !== undefined && totalSessions > 0) {
+        console.log(`[InsightGenerator] Using fallback: ${totalSessions} sessions, ${totalHours}h`);
+        
+        const hoursText = totalHours ? totalHours.toFixed(1) : '0.0';
+        return `You completed ${totalSessions} focus session${totalSessions === 1 ? '' : 's'} totaling ${hoursText} hours. Keep up the great work building your deep work habit!`;
+      }
     }
     
-    // Convert minutes to hours
-    const totalHours = (totalMinutes / 60).toFixed(1);
-    
-    console.log(`[InsightGenerator] Fallback stats: ${totalSessions} sessions, ${totalMinutes} minutes (${totalHours}h)`);
-    
-    if (totalSessions > 0) {
-      return `You completed ${totalSessions} focus sessions totaling ${totalHours} hours. Keep up the great work building your deep work habit!`;
-    } else {
-      return `Keep building your deep work habit! Consistent focus sessions lead to remarkable productivity gains.`;
-    }
+    // Last resort fallback
+    console.error('[InsightGenerator] Could not extract stats, using generic message');
+    return `Keep building your deep work habit! Consistent focus sessions lead to remarkable productivity gains.`;
   }
 }
 
