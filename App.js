@@ -449,25 +449,37 @@ function MainApp() {
         );
         
         // LISTENER 2: Received listener (when notification ARRIVES - auto-trigger)
-        const receivedSubscription = Notifications.addNotificationReceivedListener(
-          async notification => {
-            try {
-              const data = notification.request.content.data;
-              
-              console.log('📬 Notification received (auto):', data);
-              
-              // Check if this is a completion notification that should play alarm
-              if (data?.shouldPlayAlarm || data?.type === 'sessionComplete') {
-                console.log('🔔 Completion notification received - auto-playing alarm...');
-                
-                // ⚠️ CRITICAL: This is the auto-trigger for the alarm
-                await handleCompletionAlarmFromNotification(data);
-              }
-            } catch (error) {
-              console.error('🔔 Received listener error:', error);
-            }
+// LISTENER 2: Received listener (when notification ARRIVES - auto-trigger)
+    const receivedSubscription = Notifications.addNotificationReceivedListener(
+      async notification => {
+        try {
+          const data = notification.request.content.data;
+          
+          // ✅ ADD: Enhanced logging for all received notifications
+          console.log('📬 Notification received:', {
+            title: notification.request.content.title,
+            type: data?.type,
+            shouldPlayAlarm: data?.shouldPlayAlarm,
+            timestamp: new Date().toISOString(),
+            identifier: notification.request.identifier
+          });
+          
+          // Check if this is a completion notification
+          if (data?.shouldPlayAlarm || data?.type === 'sessionComplete') {
+            console.log('🔔 Completion notification received');
+            
+            // ✅ IMPORTANT: The notification sound ALREADY plays automatically
+            // This listener is just for logging/debugging
+            // We removed handleCompletionAlarmFromNotification because
+            // the alarm is now the notification sound itself (Fix #1)
+            
+            console.log('🎵 Alarm sound playing via notification system');
           }
-        );
+        } catch (error) {
+          console.error('🔔 Received listener error:', error);
+        }
+      }
+    );
         
         // Store BOTH subscriptions as an array for cleanup
         setNotificationSubscription([responseSubscription, receivedSubscription]);

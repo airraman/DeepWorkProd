@@ -53,16 +53,37 @@ export class InsightGenerator {
         forceRegenerate = false 
       } = options;
 
+      if (!(referenceDate instanceof Date) || isNaN(referenceDate.getTime())) {
+        throw new Error(`Invalid referenceDate: ${referenceDate}`);
+      }
+
       console.log(`[InsightGenerator] Generating ${insightType} insight...`);
 
       // Step 1: Calculate time period
       const timePeriod = this._getTimePeriod(insightType, referenceDate, activityType);
+
+
+      console.log(`📅 [InsightGenerator] Time period calculated:`, {
+        insightType,
+        start: new Date(timePeriod.start).toISOString(),
+        end: new Date(timePeriod.end).toISOString(),
+        label: timePeriod.label
+      });
+      
+
 
       // Step 2: Load sessions for this time period
       const sessions = await this.sessionRepo.getSessionsByDateRange(
         timePeriod.start,
         timePeriod.end
       );
+
+            // ✅ ADD THIS LOGGING
+      console.log(`📊 [InsightGenerator] Sessions loaded:`, {
+        count: sessions.length,
+        firstSession: sessions[0] ? new Date(sessions[0].start_time).toISOString() : 'none',
+        lastSession: sessions[sessions.length-1] ? new Date(sessions[sessions.length-1].start_time).toISOString() : 'none'
+      });
 
       // Handle empty data case
       if (sessions.length === 0) {

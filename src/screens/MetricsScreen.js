@@ -589,30 +589,81 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
   };
   
   const generateAllInsights = async () => {
-    const insightTypes = ['daily', 'weekly', 'monthly'];
-    
-    // Generate all three in parallel for speed
-    const promises = insightTypes.map(async (type) => {
-      setIsGeneratingInsights(prev => ({ ...prev, [type]: true }));
+    try {
+      setInsightError(null); // Clear previous errors
       
-      try {
-        const result = await InsightGenerator.generate(type);
-        setInsights(prev => ({ ...prev, [type]: result }));
-      } catch (error) {
-        console.error(`Error generating ${type} insight:`, error);
-        setInsights(prev => ({ 
-          ...prev, 
-          [type]: { 
-            insightText: 'Unable to generate insight. Please try again.',
-            metadata: { insightType: type }
-          }
-        }));
-      } finally {
-        setIsGeneratingInsights(prev => ({ ...prev, [type]: false }));
+      // ✅ FIX 1: Always use current date for insights
+      // "Monthly" means "last 30 days from today", not "selected month"
+      const now = new Date();
+      
+      console.log('🤖 [Metrics] Starting insight generation:', {
+        timestamp: now.toISOString(),
+        selectedMonth: selectedMonth ? new Date(selectedMonth).toISOString() : 'current'
+      });
+      
+      // ✅ Generate all three insights in parallel for better UX
+      const [dailyInsight, weeklyInsight, monthlyInsight] = await Promise.allSettled([
+        InsightGenerator.generate('daily', {
+          referenceDate: now,
+          forceRegenerate: false,
+        }),
+        InsightGenerator.generate('weekly', {
+          referenceDate: now,
+          forceRegenerate: false,
+        }),
+        InsightGenerator.generate('monthly', {
+          referenceDate: now,  // ← Always use now, not selectedMonth
+          forceRegenerate: false,
+        })
+      ]);
+      
+      // ✅ FIX 2: Better error handling with specific messages
+      const newInsights = {
+        daily: dailyInsight.status === 'fulfilled' ? dailyInsight.value : null,
+        weekly: weeklyInsight.status === 'fulfilled' ? weeklyInsight.value : null,
+        monthly: monthlyInsight.status === 'fulfilled' ? monthlyInsight.value : null,
+      };
+      
+      // Check if any succeeded
+      const hasAnySuccess = newInsights.daily || newInsights.weekly || newInsights.monthly;
+      
+      if (!hasAnySuccess) {
+        // All failed - show specific error
+        const firstError = 
+          dailyInsight.reason?.message || 
+          weeklyInsight.reason?.message || 
+          monthlyInsight.reason?.message ||
+          'Unknown error';
+        
+        setInsightError(`Unable to generate insights: ${firstError}`);
+        
+        // Log for debugging
+        console.error('🤖 [Metrics] All insights failed:', {
+          daily: dailyInsight.reason,
+          weekly: weeklyInsight.reason,
+          monthly: monthlyInsight.reason
+        });
+        
+        return;
       }
-    });
-    
-    await Promise.all(promises);
+      
+      // At least one succeeded
+      setInsights(newInsights);
+      
+      console.log('✅ [Metrics] Insights generated:', {
+        daily: !!newInsights.daily,
+        weekly: !!newInsights.weekly,
+        monthly: !!newInsights.monthly
+      });
+      
+    } catch (error) {
+      console.error('🤖 [Metrics] Error generating insights:', error);
+      setInsightError(
+        __DEV__ 
+          ? `Debug: ${error.message}` 
+          : 'Unable to generate insights. Please check your OpenAI API key in settings.'
+      );
+    }
   };
   
   const [isGeneratingInsights, setIsGeneratingInsights] = useState({

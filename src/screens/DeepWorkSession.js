@@ -236,7 +236,7 @@ const DeepWorkSession = ({ route, navigation }) => {
   };
 
   const handleTimeout = async () => {
-    console.log('⏰ Session completed - handling timeout with lock-screen support...');
+    console.log('⏰ Session completed - handling timeout with notification-based alarm...');
     
     try {
       // Stop local timer
@@ -246,18 +246,7 @@ const DeepWorkSession = ({ route, navigation }) => {
       
       setIsPaused(true);
       
-      // ✅ NEW: Pre-initialize alarm service FIRST
-      if (servicesRef.current.alarmService) {
-        try {
-          console.log('🔔 Pre-initializing alarm for lock-screen...');
-          await servicesRef.current.alarmService.init();
-          console.log('🔔 Alarm audio session ready');
-        } catch (error) {
-          console.warn('🔔 Alarm pre-init failed:', error);
-        }
-      }
-      
-      // ✅ STOP BACKGROUND MUSIC (alarm session still active)
+      // ✅ STOP BACKGROUND MUSIC
       if (servicesRef.current.audioService) {
         try {
           await servicesRef.current.audioService.stopMusic();
@@ -267,26 +256,15 @@ const DeepWorkSession = ({ route, navigation }) => {
         }
       }
       
-      // ✅ PLAY ALARM IMMEDIATELY (no notification dependency)
-      if (servicesRef.current.alarmService) {
-        try {
-          await servicesRef.current.alarmService.playCompletionAlarm({
-            volume: 0.8,
-            autoStopAfter: 8
-          });
-          console.log('🔔 Completion alarm played directly');
-        } catch (error) {
-          console.warn('🔔 Alarm play error:', error);
-          showFallbackCelebration();
-        }
-      }
-      
-      // ✅ SEND NOTIFICATION (for display, not alarm trigger)
+      // ✅ PRIMARY ALARM: Send notification with sound
+      // INTERVIEW CONCEPT: System-level notifications bypass app audio restrictions
+      // Notification sounds work while locked, without background audio session
       try {
         await backgroundTimer.sendCompletionNotification();
-        console.log('📱 Completion notification sent');
+        console.log('📱 Completion notification sent (includes alarm sound)');
       } catch (notificationError) {
         console.warn('📱 Notification send error:', notificationError);
+        // Fallback: Show modal anyway so user knows session completed
       }
       
       // Show notes modal

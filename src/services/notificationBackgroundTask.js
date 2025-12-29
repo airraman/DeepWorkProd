@@ -32,7 +32,7 @@ TaskManager.defineTask(NOTIFICATION_REFRESH_TASK, async () => {
     
     // Re-schedule all notifications
     // This is the KEY action that keeps notifications working
-    await notificationService.scheduleNotifications();
+    await notificationService.scheduleNextNotification();
     
     console.log('✅ Background task: Notifications refreshed successfully');
     
@@ -77,13 +77,12 @@ export const notificationBackgroundTask = {
       
       // Register the task with iOS
       await BackgroundFetch.registerTaskAsync(NOTIFICATION_REFRESH_TASK, {
-        // How often iOS should run this task (minimum 12 hours)
-        minimumInterval: 60 * 60 * 12, // 12 hours in seconds
+        // ✅ 15 minutes = iOS minimum for aggressive refresh
+        // INTERVIEW CONCEPT: Battery vs Reliability tradeoff
+        // More frequent = better delivery but more battery drain
+        minimumInterval: 60 * 15, // 15 minutes in seconds
         
-        // Continue running even if app is terminated
         stopOnTerminate: false,
-        
-        // Start task after device reboots
         startOnBoot: true,
       });
       

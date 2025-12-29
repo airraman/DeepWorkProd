@@ -1,5 +1,6 @@
 // src/services/notificationService.js - ENHANCED VERSION
 import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deepWorkStore } from './deepWorkStore';
 
 
@@ -16,7 +17,7 @@ import { deepWorkStore } from './deepWorkStore';
 const NOTIFICATION_MESSAGES = {
   morning: [
     {
-      title: "Start your day with focus 🌅",
+      title: "Start your day with some focus 🌅",
       body: "Morning is the best time for deep work"
     },
     {
@@ -352,6 +353,172 @@ class NotificationService {
       return false;
     }
   }
+  async logNotificationDelivery(notificationId, delivered) {
+    try {
+      const log = await AsyncStorage.getItem('@notification_delivery_log') || '[]';
+      const logs = JSON.parse(log);
+      
+      logs.push({
+        id: notificationId,
+        delivered,
+        timestamp: new Date().toISOString(),
+        appState: 'unknown' // Will update when app opens
+      });
+      
+      // Keep only last 50 logs to prevent storage bloat
+      const trimmed = logs.slice(-50);
+      await AsyncStorage.setItem('@notification_delivery_log', JSON.stringify(trimmed));
+      
+      console.log('📊 Notification delivery logged:', { 
+        delivered, 
+        total: trimmed.length,
+        recentDeliveryRate: this._calculateRecentRate(trimmed)
+      });
+    } catch (error) {
+      console.error('❌ Error logging notification delivery:', error);
+    }
+  }
+
+  /**
+   * ✨ NEW: Calculate recent delivery rate from logs
+   * @private
+   */
+  _calculateRecentRate(logs) {
+    if (logs.length === 0) return '0%';
+    
+    const delivered = logs.filter(l => l.delivered).length;
+    const rate = (delivered / logs.length * 100).toFixed(1);
+    return `${rate}%`;
+  }
+
+  /**
+   * ✨ NEW: Get delivery statistics
+   * 
+   * INTERVIEW CONCEPT: Data-Driven Decision Making
+   * - Quantify the problem before solving it
+   * - Track improvement over time
+   * - A/B test different strategies
+   */
+  async getDeliveryStats() {
+    try {
+      const log = await AsyncStorage.getItem('@notification_delivery_log') || '[]';
+      const logs = JSON.parse(log);
+      
+      const total = logs.length;
+      const delivered = logs.filter(l => l.delivered).length;
+      const rate = total > 0 ? (delivered / total * 100).toFixed(1) : 0;
+      
+      const stats = { 
+        total, 
+        delivered, 
+        rate: `${rate}%`,
+        rawRate: parseFloat(rate)
+      };
+      
+      console.log(`📊 Notification Delivery Rate: ${stats.rate} (${delivered}/${total})`);
+      return stats;
+    } catch (error) {
+      console.error('❌ Error getting delivery stats:', error);
+      return { total: 0, delivered: 0, rate: '0%', rawRate: 0 };
+    }
+  }
+
+  async scheduleNextNotification() {
+    try {
+      const frequency = await deepWorkStore.getReminderFrequency();
+      
+      if (frequency === 'none') {
+        console.log('⏭️ Reminders disabled - skipping scheduling');
+        return null;
+      }
+      
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      // ✅ SMART LOGIC: Determine next notification time
+      let nextHour, nextLabel, daysToAdd = 0;
+      
+      if (frequency === 'daily') {
+        // Daily reminders: 9 AM, 2 PM, 7 PM
+        if (currentHour < 9) {
+          nextHour = 9;
+          nextLabel = 'morning';
+        } else if (currentHour < 14) {
+          nextHour = 14;
+          nextLabel = 'afternoon';
+        } else if (currentHour < 19) {
+          nextHour = 19;
+          nextLabel = 'evening';
+        } else {
+          // After 7 PM, schedule tomorrow's 9 AM
+          nextHour = 9;
+          nextLabel = 'morning';
+          daysToAdd = 1;
+        }
+      } else if (frequency === 'weekly') {
+        // Weekly: Next Monday at 9 AM
+        const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const daysUntilMonday = currentDay === 0 ? 1 : (8 - currentDay) % 7;
+        
+        nextHour = 9;
+        nextLabel = 'morning';
+        daysToAdd = daysUntilMonday;
+        
+        // If today is Monday and before 9 AM, schedule for today
+        if (currentDay === 1 && currentHour < 9) {
+          daysToAdd = 0;
+        }
+      } else {
+        console.warn('⚠️ Unknown frequency:', frequency);
+        return null;
+      }
+      
+      // ✅ Calculate exact trigger time
+      const nextTrigger = new Date();
+      nextTrigger.setHours(nextHour, 0, 0, 0);
+      nextTrigger.setDate(nextTrigger.getDate() + daysToAdd);
+      
+      // Get smart message for this notification
+      const message = await this.getSmartMessage();
+      
+      // ✅ CRITICAL: Use DATE trigger instead of CALENDAR trigger
+      // DATE triggers are more reliable for iOS when app is backgrounded
+      const identifier = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: message.title,
+          body: message.body,
+          data: { 
+            type: 'reminder',
+            timeLabel: nextLabel,
+            scheduledFor: nextTrigger.toISOString(),
+            frequency: frequency
+          },
+          sound: true,
+          badge: 1,
+        },
+        trigger: {
+          date: nextTrigger, // ← DATE trigger (not calendar with repeats)
+        }
+      });
+      
+      // Log for debugging
+      const hoursUntil = (nextTrigger - now) / (1000 * 60 * 60);
+      console.log(`✅ Next notification scheduled:`, {
+        time: nextTrigger.toLocaleString(),
+        label: nextLabel,
+        hoursUntil: hoursUntil.toFixed(1),
+        identifier: identifier
+      });
+      
+      return identifier;
+      
+    } catch (error) {
+      console.error('❌ Error scheduling next notification:', error);
+      return null;
+    }
+  }
+
+
 }
 
 export const notificationService = new NotificationService();

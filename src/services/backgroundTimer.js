@@ -239,35 +239,13 @@ const sendCompletionNotification = async () => {
   try {
     debugLog('Session completed - sending notification with SOUND');
     
-    // ✅ CRITICAL FIX: Set notification handler RIGHT BEFORE sending
-    // await Notifications.setNotificationHandler({
-    //   handleNotification: async (notification) => {
-    //     try {
-    //       const isCompletion = notification.request.content.data?.shouldPlayAlarm;
-    //       const isTimerUpdate = notification.request.content.data?.isTimerUpdate;
-          
-    //       return {
-    //         shouldShowAlert: true,
-    //         shouldPlaySound: isCompletion,
-    //         shouldSetBadge: isCompletion,
-    //         priority: isCompletion 
-    //           ? Notifications.AndroidNotificationPriority.MAX
-    //           : (isTablet 
-    //               ? Notifications.AndroidNotificationPriority.DEFAULT
-    //               : Notifications.AndroidNotificationPriority.HIGH)
-    //       };
-    //     } catch (handlerError) {
-    //       debugLog('Notification handler error:', handlerError);
-    //       return {
-    //         shouldShowAlert: true,
-    //         shouldPlaySound: false,
-    //         shouldSetBadge: false
-    //       };
-    //     }
-    //   },
-    // });
-    
-    debugLog('✅ Notification handler configured for completion notification');
+    // ✅ ADD: Permission check before sending
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      debugLog('⚠️ Notification permissions not granted - cannot send alert');
+      console.warn('Notifications not permitted. Session completed but no alert sent.');
+      return false;
+    }
     
     // Get session data for personalized notification
     let sessionInfo = { 
@@ -296,12 +274,12 @@ const sendCompletionNotification = async () => {
       debugLog('Error getting session info for notification:', error);
     }
     
-    await Notifications.scheduleNotificationAsync({
+    // ✅ ENHANCED: Add notification ID tracking
+    const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: '🎉 Deep Work Session Complete!',
         body: `Congratulations! Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has finished.`,
-        sound: 'completion-alarm.mp3',  // ✅ CORRECT - 3 places
-
+        sound: 'completion-alarm.mp3',
         data: { 
           screen: 'MainApp',
           params: { screen: 'Metrics' },
@@ -313,20 +291,19 @@ const sendCompletionNotification = async () => {
             autoStopAfter: 10
           }
         },
-        
         priority: Notifications.AndroidNotificationPriority.MAX,
         
         ...(Platform.OS === 'ios' && {
           subtitle: `${sessionInfo.activity} completed!`,
           badge: 1,
-          sound: 'completion-alarm.mp3',  // ✅ CORRECT - 3 places
+          sound: 'completion-alarm.mp3',
           interruptionLevel: 'active',
           relevanceScore: 1.0,
         }),
         
         ...(Platform.OS === 'android' && {
           channelId: 'session-completion',
-          sound: 'completion-alarm.mp3',  // ✅ CORRECT - 3 places
+          sound: 'completion-alarm.mp3',
           sticky: false,
           autoCancel: true,
           lights: true,
@@ -335,14 +312,27 @@ const sendCompletionNotification = async () => {
           importance: Notifications.AndroidImportance.HIGH,
         })
       },
-      
       trigger: null,
     });
     
-    debugLog('✅ Enhanced completion notification sent successfully');
+    // ✅ NEW: Log successful notification for debugging
+    debugLog(`✅ Completion notification scheduled successfully: ${notificationId}`);
+    console.log('📱 Notification details:', {
+      id: notificationId,
+      activity: sessionInfo.activity,
+      duration: sessionInfo.duration,
+      timestamp: new Date().toISOString()
+    });
+    
+    return true;
     
   } catch (error) {
     debugLog('❌ Failed to send completion notification:', error);
+    console.error('Notification error details:', {
+      message: error.message,
+      stack: error.stack
+    });
+    return false;
   }
 };
 
