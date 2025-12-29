@@ -237,101 +237,49 @@ const sendProgressNotification = async (sessionData) => {
 // Enhanced completion notification with alarm trigger
 const sendCompletionNotification = async () => {
   try {
-    debugLog('Session completed - sending notification with SOUND');
-    
-    // ✅ ADD: Permission check before sending
-    const { status } = await Notifications.getPermissionsAsync();
-    if (status !== 'granted') {
-      debugLog('⚠️ Notification permissions not granted - cannot send alert');
-      console.warn('Notifications not permitted. Session completed but no alert sent.');
-      return false;
-    }
-    
-    // Get session data for personalized notification
-    let sessionInfo = { 
-      activity: 'Focus Session', 
-      duration: 'Unknown',
-      color: '#4ADE80'
+    // Get session info
+    const sessionData = await getActiveSessionFromStorage();
+    const sessionInfo = {
+      duration: Math.round((sessionData?.duration || 0) / 60000),
+      activity: sessionData?.activity || 'Focus Session',
     };
     
-    try {
-      const sessionData = await getActiveSessionFromStorage();
-      if (sessionData) {
-        const settings = await deepWorkStore.getSettings();
-        const activityDetails = settings.activities.find(a => a.id === sessionData.activity);
-        
-        if (activityDetails) {
-          sessionInfo = {
-            activity: activityDetails.name,
-            duration: Math.floor(sessionData.duration / 60000),
-            color: activityDetails.color
-          };
-        } else {
-          sessionInfo.duration = Math.floor(sessionData.duration / 60000);
-        }
-      }
-    } catch (error) {
-      debugLog('Error getting session info for notification:', error);
-    }
-    
-    // ✅ ENHANCED: Add notification ID tracking
-    const notificationId = await Notifications.scheduleNotificationAsync({
+    await Notifications.scheduleNotificationAsync({
       content: {
-        title: '🎉 Deep Work Session Complete!',
-        body: `Congratulations! Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has finished.`,
-        sound: 'completion-alarm.mp3',
-        data: { 
-          screen: 'MainApp',
-          params: { screen: 'Metrics' },
-          shouldPlayAlarm: true,
-          completedAt: new Date().toISOString(),
-          sessionInfo: sessionInfo,
-          alarmSettings: {
-            volume: 0.8,
-            autoStopAfter: 10
-          }
-        },
-        priority: Notifications.AndroidNotificationPriority.MAX,
+        title: '🎉 Session Complete!',
+        body: `Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has finished.`,
         
+        // ✅ CRITICAL: Sound configuration
+        sound: 'completion-alarm.mp3',
+        
+        // ✅ iOS specific - make notification high priority
         ...(Platform.OS === 'ios' && {
-          subtitle: `${sessionInfo.activity} completed!`,
-          badge: 1,
           sound: 'completion-alarm.mp3',
-          interruptionLevel: 'active',
-          relevanceScore: 1.0,
+          badge: 1,
+          interruptionLevel: 'timeSensitive',  // ← Makes it break through Focus modes
         }),
         
+        data: { 
+          shouldPlayAlarm: true,
+          type: 'sessionComplete',
+        },
+        
+        // ✅ Android specific
         ...(Platform.OS === 'android' && {
-          channelId: 'session-completion',
           sound: 'completion-alarm.mp3',
-          sticky: false,
-          autoCancel: true,
-          lights: true,
-          lightColor: sessionInfo.color,
-          vibrationPattern: [0, 500, 200, 500],
-          importance: Notifications.AndroidImportance.HIGH,
-        })
+          channelId: 'session-completion',
+          priority: Notifications.AndroidNotificationPriority.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+        }),
       },
       trigger: null,
     });
     
-    // ✅ NEW: Log successful notification for debugging
-    debugLog(`✅ Completion notification scheduled successfully: ${notificationId}`);
-    console.log('📱 Notification details:', {
-      id: notificationId,
-      activity: sessionInfo.activity,
-      duration: sessionInfo.duration,
-      timestamp: new Date().toISOString()
-    });
-    
+    console.log('✅ Completion notification sent with alarm sound');
     return true;
     
   } catch (error) {
-    debugLog('❌ Failed to send completion notification:', error);
-    console.error('Notification error details:', {
-      message: error.message,
-      stack: error.stack
-    });
+    console.error('❌ Failed to send completion notification:', error);
     return false;
   }
 };
@@ -411,33 +359,34 @@ ${progressText}`;
 // FIXED: Safe notification configuration (iOS categories removed)
 const configureNotifications = async () => {
   try {
-    debugLog('Configuring notifications system');
-    
-    // Create Android notification channels ONLY
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('session-completion', {
         name: 'Session Completion',
-        importance: Notifications.AndroidImportance.HIGH,
+        importance: Notifications.AndroidImportance.MAX,
+        sound: 'completion-alarm.mp3',
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#4ADE80',
-        sound: 'default',
-        description: 'Notifications for completed deep work sessions',
+        enableLights: true,
+        enableVibrate: true,
       });
-      
-      await Notifications.setNotificationChannelAsync('session-progress', {
-        name: 'Session Progress',
-        importance: Notifications.AndroidImportance.LOW,
-        vibrationPattern: [0],
-        sound: null,
-        description: 'Progress updates during deep work sessions',
-      });
-      
-      debugLog('Android notification channels created');
     }
     
-    debugLog('Notification configuration completed');
+    // ✅ iOS notification categories for better handling
+    if (Platform.OS === 'ios') {
+      await Notifications.setNotificationCategoryAsync('session-complete', [
+        {
+          identifier: 'view-metrics',
+          buttonTitle: 'View Metrics',
+          options: {
+            opensAppToForeground: true,
+          },
+        },
+      ]);
+    }
+    
+    return true;
   } catch (error) {
-    debugLog('Notification configuration error:', error);
+    console.error('❌ Notification configuration error:', error);
+    return false;
   }
 };
 
