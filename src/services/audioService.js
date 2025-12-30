@@ -1,6 +1,8 @@
 // src/services/audioService.js - Full Implementation with Background Music
 import { Audio } from 'expo-av';
 import { Platform } from 'react-native';
+import { audioSessionManager } from './audioSessionManager';  // Add at top of file
+
 
 console.log('🎵 Loading audio service...');
 
@@ -49,28 +51,10 @@ class AudioService {
     try {
       console.log('🎵 Initializing audio service...');
       
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-        
-        // ✅ CRITICAL ADDITION #1: Proper category
-        categoryIOS: Audio.AUDIO_SESSION_CATEGORY_PLAYBACK,
-        
-        // ✅ CRITICAL ADDITION #2: Category options
-        categoryOptionsIOS: [
-          Audio.CATEGORY_OPTIONS_MIXWITHOTHERS,
-        ],
-        
-        // ✅ CRITICAL ADDITION #3: Interruption mode for background playback
-        interruptionModeIOS: 2, // DO_NOT_MIX - won't pause when backgrounded
-        
-        // ✅ Allow Bluetooth
-        allowsRecordingIOS: false,
-        
-        // Android equivalents
-        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DUCK_OTHERS,
-        shouldDuckAndroid: true,
-      });
+      // Use the shared session manager instead of setting our own mode
+      if (!audioSessionManager.isReady()) {
+        await audioSessionManager.initialize();
+      }
       
       this.isInitialized = true;
       console.log('🎵 Audio service initialized successfully');

@@ -1,5 +1,7 @@
 import { Audio } from 'expo-av';
 import { Vibration, Platform } from 'react-native';
+import { audioSessionManager } from './audioSessionManager';  // Add at top of file
+
 
 class AlarmService {
 
@@ -10,36 +12,23 @@ class AlarmService {
     this.autoStopTimer = null;
     console.log('🔔 Alarm service instance created');
   }
+
   async init() {
     try {
-      console.log('🔔 Initializing alarm service for lock-screen support...');
+      console.log('🔔 Initializing alarm service...');
       
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-        
-        // ✅ CRITICAL: Use PLAYBACK category for alarms
-        categoryIOS: Audio.AUDIO_SESSION_CATEGORY_PLAYBACK,
-        
-        // ✅ ADVANCED: Category options for lock screen
-        categoryOptionsIOS: [
-          Audio.CATEGORY_OPTIONS_MIXWITHOTHERS,
-          // ⚡ NEW: Allow lock screen controls
-          Audio.CATEGORY_OPTIONS_ALLOWBLUETOOTH,
-          Audio.CATEGORY_OPTIONS_DEFAULTTOSPEAKER,
-        ],
-        
-        // ✅ DO_NOT_MIX for alarms = full volume, don't duck
-        interruptionModeIOS: 2, // DO_NOT_MIX
-        interruptionModeAndroid: 2, // DO_NOT_MIX
-        
-        shouldDuckAndroid: false,  // Alarms at full volume
-      });
+      // Use the shared session manager
+      if (!audioSessionManager.isReady()) {
+        await audioSessionManager.initialize();
+      }
       
       this.isInitialized = true;
+      console.log('🔔 Alarm service initialized successfully');
       return true;
+      
     } catch (error) {
       console.error('🔔 Alarm init error:', error);
+      this.isInitialized = false;
       return false;
     }
   }
@@ -55,7 +44,7 @@ class AlarmService {
       // ✅ Load and play alarm sound
       console.log('🔔 Loading alarm sound...');
       const { sound } = await Audio.Sound.createAsync(
-        require('../../assets/sounds/completion-alarm.mp3'),  // ✅ CORRECT FILE
+        require('../../assets/sounds/completion-alarm.wav'),  // ✅ CORRECT FILE
         { 
           shouldPlay: true, 
           volume,

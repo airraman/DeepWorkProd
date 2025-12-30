@@ -1,5 +1,4 @@
 // src/screens/MetricsScreen.js - COMPLETE UPDATED VERSION
-
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,

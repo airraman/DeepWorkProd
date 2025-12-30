@@ -614,59 +614,6 @@ const colorPalette = [
           )}
         </View>
 
-        {/* Duration Selection Section */}
-        {/* <View style={[
-          styles.section, 
-          { 
-            backgroundColor: isDark ? '#1f1f1f' : colors.card,
-            borderColor: colors.border,
-            borderWidth: 1,
-            borderRadius: 12,
-          }
-        ]}>
-          <View style={styles.sectionHeader}>
-            <Clock stroke={colors.textSecondary} size={20} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Available Durations
-            </Text>
-          </View>
-          
-          <Text style={[styles.helpText, { color: colors.textSecondary }]}>
-            Select exactly 3 durations
-          </Text>
-          
-          <View style={styles.durationButtons}>
-            {durations.map(duration => {
-              const isSelected = selectedDurations.includes(duration);
-              const isDisabled = selectedDurations.length === 3 && !isSelected;
-              
-              return (
-                <TouchableOpacity
-                  key={duration}
-                  style={[
-                    styles.durationButton,
-                    { 
-                      backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6',
-                      borderColor: isSelected ? colors.primary : colors.border,
-                      borderWidth: isSelected ? 2 : 1,
-                    },
-                    isDisabled && styles.disabledDuration
-                  ]}
-                  onPress={() => handleDurationClick(duration)}
-                  disabled={isDisabled || isSaving}
-                >
-                  <Text style={[
-                    styles.durationButtonText,
-                    { color: isSelected ? colors.primary : colors.text }
-                  ]}>
-                    {duration} min
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View> */}
-
         {/* Alarm Settings Section */}
         <View style={[
           styles.section, 
@@ -790,30 +737,6 @@ const colorPalette = [
           </TouchableOpacity>
         </View>
         {/* Test Notification Button */}
-{/* {notificationsEnabled && (
-  <TouchableOpacity
-    style={[
-      styles.testButton,
-      { 
-        backgroundColor: colors.primary,
-        marginTop: 12,
-        padding: 12,
-        borderRadius: 8,
-        alignItems: 'center'
-      }
-    ]}
-    onPress={async () => {
-      setIsSaving(true);
-      await notificationService.sendTestNotification();
-      showFeedback('Test notification sent!');
-      setIsSaving(false);
-    }}
-  >
-    <Text style={{ color: 'white', fontWeight: '600' }}>
-      Send Test Notification
-    </Text>
-  </TouchableOpacity>
-)} */}
       </View>
         {/* Save Button */}
         <TouchableOpacity

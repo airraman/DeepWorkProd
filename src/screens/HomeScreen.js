@@ -207,60 +207,6 @@ const HomeScreen = () => {
         style={[styles.content, { paddingTop: CONTENT_PADDING_TOP }]}
         contentContainerStyle={styles.contentContainer}
       >
-        {/* ✅ NEW: RevenueCat Test Section - TEMPORARY FOR TESTING */}
-        {/* {__DEV__ && (
-          <View style={[
-            styles.testSection,
-            { 
-              backgroundColor: isDark ? '#2a2a2a' : '#f0f9ff',
-              borderColor: isDark ? '#404040' : '#bae6fd'
-            }
-          ]}>
-            <Text style={[styles.testSectionTitle, { color: colors.text }]}>
-              🧪 RevenueCat Test
-            </Text>
-            
-            {isSubscriptionLoading ? (
-              <View style={styles.testLoadingContainer}>
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={[styles.testLoadingText, { color: colors.textSecondary }]}>
-                  Loading subscription...
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.testContent}>
-                <View style={styles.testStatusRow}>
-                  <Text style={[styles.testLabel, { color: colors.textSecondary }]}>
-                    Status:
-                  </Text>
-                  <View style={[
-                    styles.testStatusBadge,
-                    { backgroundColor: isPremium ? '#22c55e' : '#f59e0b' }
-                  ]}>
-                    <Text style={styles.testStatusText}>
-                      {isPremium ? '✅ Premium' : '🔒 Free'}
-                    </Text>
-                  </View>
-                </View>
-                
-                {!isPremium && (
-                  <TouchableOpacity
-                    style={[styles.testButton, { backgroundColor: colors.primary }]}
-                    onPress={() => setShowPaywall(true)}
-                  >
-                    <Text style={styles.testButtonText}>Test Paywall Modal</Text>
-                  </TouchableOpacity>
-                )}
-                
-                <Text style={[styles.testHint, { color: colors.textSecondary }]}>
-                  This test section only appears in DEV mode
-                </Text>
-              </View>
-            )}
-          </View>
-        )} */}
-        {/* ✅ END TEST SECTION */}
-
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Prepare Deep Work Session</Text>
         </View>

@@ -7,12 +7,15 @@ import { ThemeProvider } from './src/context/ThemeContext';
 import { SubscriptionProvider } from './src/context/SubscriptionContext';  // ✅ NEW IMPORT
 import * as Notifications from 'expo-notifications';
 import * as Updates from 'expo-updates';
-import { Alert, View, Text, Platform, Dimensions, StatusBar, Linking } from 'react-native';import { navigationRef, safeNavigate } from './src/services/navigationService';
+import { Alert, View, Text, Platform, Dimensions, StatusBar, Linking, AppState, Vibration } from 'react-native';
+import { navigationRef, safeNavigate } from './src/services/navigationService';
 import { versionCheckService } from './src/services/versionCheckService.js';
 import { notificationBackgroundTask } from './src/services/notificationBackgroundTask';
 import backgroundTimer from './src/services/backgroundTimer';
 import { setupNotificationHandler } from './src/services/notificationHandler';
 import ErrorBoundary from './src/components/ErrorBoundary';
+import { audioSessionManager } from './src/services/audioSessionManager';
+
 const DevToolsScreen = __DEV__ 
   ? require('./src/screens/DevToolsScreen').default 
   : () => null; // Return empty component in production
@@ -88,6 +91,15 @@ function TabNavigator() {
 const initializeBackgroundServices = async () => {
   try {
     console.log('🚀 Starting safe background services initialization...');
+
+    try {
+      console.log('🎵 Initializing unified audio session...');
+      await audioSessionManager.initialize();
+      console.log('✅ Audio session ready for all services');
+    } catch (audioError) {
+      console.warn('⚠️ Audio session initialization failed:', audioError);
+      // Continue anyway - services will try to initialize it themselves
+    }
     
     if (Platform.OS === 'ios' && isTablet) {
       console.log('📱 iPad detected - using conservative background task setup');
@@ -450,6 +462,7 @@ function MainApp() {
         
         // LISTENER 2: Received listener (when notification ARRIVES - auto-trigger)
 // LISTENER 2: Received listener (when notification ARRIVES - auto-trigger)
+// ✅ FIXED: Only play alarm if app is ACTIVE (notification sound handles locked case)
 const receivedSubscription = Notifications.addNotificationReceivedListener(
   async notification => {
     try {
@@ -457,29 +470,38 @@ const receivedSubscription = Notifications.addNotificationReceivedListener(
       
       console.log('📬 Notification received:', {
         title: notification.request.content.title,
-        shouldPlayAlarm: data?.shouldPlayAlarm,
+        type: data?.type,
+        appState: AppState.currentState,
       });
       
-      // ✅ FIX: Actually play the alarm when notification arrives
+      // ✅ CRITICAL FIX: Only try to play alarm if app is currently ACTIVE
+      // When locked/backgrounded, the notification's native sound plays instead
       if (data?.shouldPlayAlarm || data?.type === 'sessionComplete') {
-        console.log('🔔 Playing completion alarm...');
+        const appState = AppState.currentState;
         
-        try {
-          // Play alarm at full volume
-          await alarmService.playCompletionAlarm({
-            volume: 0.9,
-            autoStopAfter: 10
-          });
+        if (appState === 'active') {
+          console.log('🔔 App is active - playing enhanced in-app alarm');
           
-          // Vibrate for additional feedback
-          Vibration.vibrate([0, 500, 200, 500]);
-          
-        } catch (alarmError) {
-          console.error('🔔 Alarm playback failed:', alarmError);
-          // Fallback: At least show an alert
-          Alert.alert('🎉 Session Complete!', 'Your focus session has finished.');
+          try {
+            // Enhanced experience when app is open
+            await alarmService.playCompletionAlarm({
+              volume: 0.9,
+              autoStopAfter: 10
+            });
+            
+            // Vibrate for additional feedback
+            Vibration.vibrate([0, 500, 200, 500]);
+            
+          } catch (alarmError) {
+            console.warn('🔔 In-app alarm failed (non-critical):', alarmError);
+            // Notification sound will still play
+          }
+        } else {
+          console.log('🔔 App is backgrounded/locked - notification sound will handle alarm');
+          // Do nothing - the notification's native sound plays automatically
         }
       }
+      
     } catch (error) {
       console.error('🔔 Received listener error:', error);
     }
