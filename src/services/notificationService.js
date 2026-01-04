@@ -246,39 +246,62 @@ class NotificationService {
   }
 
   /**
-   * ✨ NEW: Schedule single notification with smart content
+   * ✅ FIXED: Schedule single notification with smart content
+   * Only schedules for FUTURE times to prevent immediate firing
    */
   async scheduleNotificationAtTime(time, frequency) {
     try {
       const message = await this.getSmartMessage();
       
-      const trigger = {
-        hour: time.hour,
-        minute: time.minute,
-        repeats: true
-      };
+      // ✅ Calculate next occurrence of this time
+      const now = new Date();
+      const scheduledTime = new Date();
+      scheduledTime.setHours(time.hour, time.minute, 0, 0);
       
-      // Add weekday for weekly reminders
-      if (time.weekday) {
-        trigger.weekday = time.weekday;
+      // ✅ CRITICAL: If time has passed today, schedule for tomorrow
+      if (scheduledTime <= now) {
+        scheduledTime.setDate(scheduledTime.getDate() + 1);
+        console.log(`⏭️ ${time.label} time (${time.hour}:00) has passed, scheduling for tomorrow`);
       }
       
+      // ✅ For weekly reminders, adjust to correct weekday
+      if (time.weekday) {
+        const currentDay = scheduledTime.getDay();
+        const daysUntilTarget = (time.weekday - currentDay + 7) % 7;
+        
+        if (daysUntilTarget > 0 || (daysUntilTarget === 0 && scheduledTime <= now)) {
+          scheduledTime.setDate(scheduledTime.getDate() + (daysUntilTarget || 7));
+        }
+      }
+      
+      // ✅ CRITICAL: Use DATE trigger instead of calendar trigger
+      // Date triggers won't fire immediately if time has passed
       const identifier = await Notifications.scheduleNotificationAsync({
         content: {
           title: message.title,
           body: message.body,
           data: { 
             type: 'reminder',
-            timeLabel: time.label
+            timeLabel: time.label,
+            scheduledFor: scheduledTime.toISOString()
           },
           sound: true,
           badge: 1,
         },
-        trigger
+        trigger: {
+          date: scheduledTime,  // ✅ Use date trigger
+          repeats: false        // ✅ Background task will re-schedule
+        }
       });
       
       this.notificationIdentifiers.push(identifier);
-      console.log(`✅ Scheduled ${time.label} notification at ${time.hour}:${time.minute}`);
+      
+      const hoursUntil = (scheduledTime - now) / (1000 * 60 * 60);
+      console.log(`✅ Scheduled ${time.label} notification:`, {
+        time: scheduledTime.toLocaleTimeString(),
+        date: scheduledTime.toLocaleDateString(),
+        hoursUntil: hoursUntil.toFixed(1)
+      });
       
     } catch (error) {
       console.error(`❌ Error scheduling ${time.label} notification:`, error);

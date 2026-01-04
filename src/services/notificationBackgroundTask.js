@@ -30,9 +30,9 @@ TaskManager.defineTask(NOTIFICATION_REFRESH_TASK, async () => {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
     
-    // Re-schedule all notifications
-    // This is the KEY action that keeps notifications working
-    await notificationService.scheduleNextNotification();
+    // Re-schedule all notifications (not just next one)
+    // This ensures all 3 daily reminders stay active
+    await notificationService.scheduleNotifications();
     
     console.log('✅ Background task: Notifications refreshed successfully');
     

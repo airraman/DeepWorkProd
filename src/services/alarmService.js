@@ -44,7 +44,7 @@ class AlarmService {
       // ✅ Load and play alarm sound
       console.log('🔔 Loading alarm sound...');
       const { sound } = await Audio.Sound.createAsync(
-        require('../../assets/sounds/completion-alarm.wav'),  // ✅ CORRECT FILE
+        require('../../assets/sounds/completion_alarm.wav'),  // ✅ CORRECT FILE
         { 
           shouldPlay: true, 
           volume,

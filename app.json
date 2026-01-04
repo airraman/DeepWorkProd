@@ -19,7 +19,7 @@
           "icon": "./assets/notification-icon.png",
           "color": "#2563EB",
           "sounds": [
-            "./assets/sounds/completion-alarm.wav"
+            "./assets/sounds/completion_alarm.wav"
           ]
         }
       ],
@@ -37,7 +37,7 @@
       "expo-asset"
     ],
     "assets": [
-      "./assets/sounds/completion-alarm.wav",
+      "./assets/sounds/completion_alarm.wav",
       "./assets/sounds/lofi.mp3",
       "./assets/sounds/white-noise.mp3"
     ],
@@ -48,7 +48,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.airraman.deepwork",
-      "buildNumber": "26",
+      "buildNumber": "27",
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch",

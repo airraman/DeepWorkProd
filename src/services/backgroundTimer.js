@@ -250,11 +250,11 @@ const sendCompletionNotification = async () => {
         body: `Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has finished.`,
         
         // ✅ CRITICAL: Sound configuration
-        sound: 'completion-alarm.wav',  // ← CHANGED to .wav
+        sound: 'completion_alarm.wav',  // ← CHANGED to .wav
         
         // ✅ iOS specific - make notification high priority
         ...(Platform.OS === 'ios' && {
-          sound: 'completion-alarm.wav',  // ← CHANGED to .wav
+          sound: 'completion_alarm.wav',  // ← CHANGED to .wav
           badge: 1,
           interruptionLevel: 'critical',  // ← ALSO changed to 'critical' for better reliability
         }),
@@ -266,7 +266,7 @@ const sendCompletionNotification = async () => {
         
         // ✅ Android specific
         ...(Platform.OS === 'android' && {
-          sound: 'completion-alarm.wav',  // ← CHANGED to .wav
+          sound: 'completion_alarm.wav',  // ← CHANGED to .wav
           channelId: 'session-completion',
           priority: Notifications.AndroidNotificationPriority.MAX,
           vibrationPattern: [0, 250, 250, 250],
@@ -363,7 +363,7 @@ const configureNotifications = async () => {
       await Notifications.setNotificationChannelAsync('session-completion', {
         name: 'Session Completion',
         importance: Notifications.AndroidImportance.MAX,
-        sound: 'completion-alarm.mp3',
+        sound: 'completion_alarm.wav',
         vibrationPattern: [0, 250, 250, 250],
         enableLights: true,
         enableVibrate: true,
