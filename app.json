@@ -34,7 +34,16 @@
         }
       ],
       "expo-sqlite",
-      "expo-asset"
+      "expo-asset",
+      "@react-native-firebase/app",
+      [
+        "@react-native-firebase/messaging",
+        {
+          "ios": {
+            "useFramework": "static"
+          }
+        }
+      ]
     ],
     "assets": [
       "./assets/sounds/completion_alarm.wav",
@@ -47,14 +56,15 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.airraman.deepwork",
-      "buildNumber": "29",
+      "bundleIdentifier": "com.airraman.deepwork", 
+      "buildNumber": "30",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch",
           "processing",
           "audio",
-          "remote-notification"
+          "remote-notification"  
         ],
         "BGTaskSchedulerPermittedIdentifiers": [
           "com.expo.tasks.BACKGROUND_TIMER_TASK"
@@ -79,7 +89,9 @@
         "VIBRATE",
         "FOREGROUND_SERVICE",
         "WAKE_LOCK"
-      ]
+      ],
+      "googleServicesFile": "./google-services.json"
+     
     },
     "web": {
       "favicon": "./assets/favicon.png"

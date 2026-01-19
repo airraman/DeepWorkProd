@@ -3,6 +3,7 @@ import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import functions from '@react-native-firebase/functions';
 import { deepWorkStore } from './deepWorkStore';
 import { alarmService } from './alarmService';
 import { Platform } from 'react-native';
@@ -234,7 +235,6 @@ const sendProgressNotification = async (sessionData) => {
   }
 };
 
-// Enhanced completion notification with alarm trigger
 const sendCompletionNotification = async () => {
   try {
     // Get session info
@@ -244,42 +244,33 @@ const sendCompletionNotification = async () => {
       activity: sessionData?.activity || 'Focus Session',
     };
     
+    debugLog('🔔 Triggering FCM session-end notification...');
+    
+    // Call Firebase Cloud Function
+    const triggerNotification = functions().httpsCallable('triggerSessionEndNotification');
+    
+    await triggerNotification({
+      userId: 'test_user_fcm', // Placeholder for now
+      sessionDuration: sessionInfo.duration,
+      activityName: sessionInfo.activity,
+    });
+    
+    debugLog('✅ FCM notification triggered');
+    
+    // BACKUP: Keep local notification too (remove after testing)
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '🎉 Session Complete!',
         body: `Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has finished.`,
-        
-        // ✅ CRITICAL: Sound configuration
-        sound: 'completion_alarm.wav',  // ← CHANGED to .wav
-        
-        // ✅ iOS specific - make notification high priority
-        ...(Platform.OS === 'ios' && {
-          sound: 'completion_alarm.wav',  // ← CHANGED to .wav
-          badge: 1,
-          interruptionLevel: 'critical',  // ← ALSO changed to 'critical' for better reliability
-        }),
-        
-        data: { 
-          shouldPlayAlarm: true,
-          type: 'sessionComplete',
-        },
-        
-        // ✅ Android specific
-        ...(Platform.OS === 'android' && {
-          sound: 'completion_alarm.wav',  // ← CHANGED to .wav
-          channelId: 'session-completion',
-          priority: Notifications.AndroidNotificationPriority.MAX,
-          vibrationPattern: [0, 250, 250, 250],
-        }),
+        sound: 'completion_alarm.wav',
+        badge: 1,
       },
       trigger: null,
     });
     
-    console.log('✅ Completion notification sent with alarm sound');
     return true;
-    
   } catch (error) {
-    console.error('❌ Failed to send completion notification:', error);
+    debugLog('❌ Failed to send notification:', error);
     return false;
   }
 };

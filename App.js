@@ -1,4 +1,6 @@
 // App.js - Production Version with iOS Notification Fix + Database + RevenueCat
+import messaging from '@react-native-firebase/messaging';
+import { Vibration } from 'react-native';
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -15,6 +17,16 @@ import backgroundTimer from './src/services/backgroundTimer';
 import { setupNotificationHandler } from './src/services/notificationHandler';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { audioSessionManager } from './src/services/audioSessionManager';
+import { useNotificationSetup } from './src/hooks/useNotificationSetup';
+import { useNotificationHandlers } from './src/hooks/useNotificationHandlers';
+
+messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+  console.log('📱 [FCM Background] Notification received:', remoteMessage);
+  Vibration.vibrate([0, 250, 250, 250]);
+  const { title, body } = remoteMessage.notification || {};
+  console.log(`📱 Background notification: ${title} - ${body}`);
+  return Promise.resolve();
+});
 
 const DevToolsScreen = __DEV__ 
   ? require('./src/screens/DevToolsScreen').default 
@@ -262,6 +274,20 @@ function MainApp() {
     updates: 'pending'
   });
 
+  const { fcmToken, permissionGranted } = useNotificationSetup();
+  useNotificationHandlers();
+  // ===== END ADD =====
+
+  // Optional: Log FCM status for debugging
+  useEffect(() => {
+    if (fcmToken) {
+      console.log('✅ [FCM] Token available:', fcmToken.substring(0, 20) + '...');
+    }
+    if (permissionGranted) {
+      console.log('✅ [FCM] Permission granted');
+    }
+  }, [fcmToken, permissionGranted]);
+
   useEffect(() => {
     console.log('🚀 App.js: useEffect starting...');
 
@@ -305,42 +331,25 @@ function MainApp() {
           }));
 
           // STEP 1A: Schedule reminder notifications
-  try {
-    console.log('🔔 Scheduling reminder notifications...');
-    const hasPermission = await notificationService.areNotificationsEnabled();
-    if (hasPermission) {
-      await notificationService.scheduleNotifications();
-      console.log('✅ Reminder notifications scheduled');
-    } else {
-      console.log('⚠️ Notification permissions not granted - reminders not scheduled');
-    }
-    // STEP 3.5: Register notification background task
-  if (hasPermission) {
-    try {
-      console.log('🔄 Registering notification background task...');
-      
-      const registered = await notificationBackgroundTask.register();
-      
-      if (registered) {
-        console.log('✅ Background task registered successfully');
-        
-        // Get and log status for debugging
-        const status = await notificationBackgroundTask.getStatus();
-        console.log('📊 Background task status:', status);
-      } else {
-        console.warn('⚠️ Background task registration returned false');
-      }
-      
-    } catch (bgTaskError) {
-      console.error('❌ Background task registration failed:', bgTaskError);
-      // Non-critical - notifications still work without background refresh
-      // Just won't be as reliable when app is force-quit
-    }
+// STEP 1A: Local notification scheduling (DEPRECATED - now using Firebase)
+// Re-engagement notifications are now handled by Firebase Cloud Functions
+// We still request notification permissions for session-end notifications
+try {
+  console.log('🔔 Checking notification permissions...');
+  const hasPermission = await notificationService.areNotificationsEnabled();
+  
+  if (!hasPermission) {
+    console.log('⚠️ Notification permissions not granted');
+  } else {
+    console.log('✅ Notification permissions granted');
+    console.log('ℹ️ Re-engagement reminders handled by Firebase Cloud Scheduler');
   }
-  } catch (notifError) {
-    console.error('❌ Error scheduling reminders:', notifError);
-    // Non-critical - continue app initialization
-  }
+  
+  // Note: Background task registration removed - no longer needed with FCM
+  
+} catch (error) {
+  console.error('❌ Error checking notification permissions:', error);
+}
   
         } catch (dbError) {
           console.error('❌ Database initialization failed:', dbError);

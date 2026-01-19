@@ -197,31 +197,16 @@ class NotificationService {
    * ✨ ENHANCED: Schedule multiple notifications throughout the day
    */
   async scheduleNotifications() {
-    try {
-      const frequency = await deepWorkStore.getReminderFrequency();
-      console.log('📅 Scheduling notifications with frequency:', frequency);
-      
-      // Cancel existing notifications
-      await this.cancelAllNotifications();
-      
-      if (frequency === 'none') {
-        console.log('✅ User chose no reminders');
-        return true;
-      }
-      
-      // ✨ ENHANCED: Multiple notification times
-      const notificationTimes = this.getNotificationTimes(frequency);
-      
-      for (const time of notificationTimes) {
-        await this.scheduleNotificationAtTime(time, frequency);
-      }
-      
-      console.log(`✅ Scheduled ${notificationTimes.length} notifications`);
-      return true;
-    } catch (error) {
-      console.error('❌ Error scheduling notifications:', error);
-      return false;
-    }
+    // ⚠️ DEPRECATED: Re-engagement notifications now handled by Firebase Cloud Functions
+    // See: functions/index.js → morningReEngagement, afternoonReEngagement, eveningReEngagement
+    // 
+    // This function is kept for backward compatibility but does nothing
+    // Local notifications are no longer used for re-engagement reminders
+    
+    console.log('ℹ️ [NotificationService] Local re-engagement scheduling is deprecated');
+    console.log('ℹ️ [NotificationService] Using Firebase Cloud Scheduler instead');
+    
+    return true;
   }
 
   /**
