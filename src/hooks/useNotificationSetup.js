@@ -2,24 +2,12 @@
 import { useEffect, useState } from 'react';
 import messaging from '@react-native-firebase/messaging';
 import { Platform, Alert, Linking } from 'react-native';
+import deviceIdService from '../services/deviceIdService'; // ✅ ADD THIS
 
-/**
- * Hook to handle FCM token generation and registration
- * 
- * WHAT THIS DOES:
- * 1. Requests notification permission from iOS
- * 2. Generates FCM token (unique device identifier)
- * 3. Sends token to backend for storage
- * 4. Listens for token refresh (when iOS rotates it)
- * 
- * WHY WE NEED THIS:
- * - FCM tokens are how Firebase knows which device to send notifications to
- * - Tokens can change, so we must listen for refreshes
- * - Without this, your backend has no way to reach this device
- */
 export function useNotificationSetup() {
   const [fcmToken, setFcmToken] = useState(null);
   const [permissionGranted, setPermissionGranted] = useState(false);
+  const [deviceId, setDeviceId] = useState(null); // ✅ ADD THIS
 
   useEffect(() => {
     setupNotifications();
@@ -29,7 +17,12 @@ export function useNotificationSetup() {
     try {
       console.log('🔔 [FCM] Starting notification setup...');
 
-      // Step 1: Request permission (iOS requires explicit user permission)
+      // ✅ STEP 0: Get stable device ID FIRST
+      const devId = await deviceIdService.getDeviceId();
+      setDeviceId(devId);
+      console.log('🔔 [FCM] Using device ID:', devId.substring(0, 20) + '...');
+
+      // Step 1: Request permission
       const authStatus = await messaging().requestPermission();
       const enabled =
         authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
@@ -37,8 +30,6 @@ export function useNotificationSetup() {
 
       if (!enabled) {
         console.log('🔔 [FCM] Permission denied');
-        
-        // Show user how to enable in Settings
         Alert.alert(
           'Enable Notifications',
           'DeepWork needs notification permission to alert you when sessions complete.\n\nTo enable:\n1. Open Settings\n2. Find DeepWork\n3. Enable Notifications',
@@ -56,19 +47,19 @@ export function useNotificationSetup() {
       console.log('✅ [FCM] Permission granted');
       setPermissionGranted(true);
 
-      // Step 2: Get FCM token (this is the device-specific identifier)
+      // Step 2: Get FCM token
       const token = await messaging().getToken();
       console.log('🔔 [FCM] Token generated:', token.substring(0, 20) + '...');
       setFcmToken(token);
 
-      // Step 3: Send token to your backend
-      await sendTokenToBackend(token);
+      // Step 3: Send token to backend with STABLE device ID
+      await sendTokenToBackend(token, devId); // ✅ PASS DEVICE ID
 
-      // Step 4: Listen for token refresh (critical for reliability!)
+      // Step 4: Listen for token refresh
       const unsubscribe = messaging().onTokenRefresh(async (newToken) => {
         console.log('🔄 [FCM] Token refreshed:', newToken.substring(0, 20) + '...');
         setFcmToken(newToken);
-        await sendTokenToBackend(newToken);
+        await sendTokenToBackend(newToken, devId); // ✅ PASS DEVICE ID
       });
 
       return unsubscribe;
@@ -77,10 +68,8 @@ export function useNotificationSetup() {
     }
   }
 
-  async function sendTokenToBackend(token) {
+  async function sendTokenToBackend(token, devId) { // ✅ ADD devId PARAMETER
     try {
-      // TODO: Replace with your Firebase Cloud Function URL after deploying
-      // For now, this will fail gracefully
       const BACKEND_URL = 'https://us-central1-deepwork-8416f.cloudfunctions.net/registerToken';
       
       const response = await fetch(BACKEND_URL, {
@@ -89,22 +78,19 @@ export function useNotificationSetup() {
         body: JSON.stringify({
           fcmToken: token,
           platform: Platform.OS,
-          // For now, use a placeholder user ID
-          // Later we'll replace this with Firebase Auth UID
-          userId: 'temp_user_' + Math.random().toString(36).substring(7),
+          userId: devId, // ✅ USE STABLE DEVICE ID
         }),
       });
 
       if (response.ok) {
-        console.log('✅ [FCM] Token sent to backend');
+        console.log('✅ [FCM] Token sent to backend for device:', devId.substring(0, 15) + '...');
       } else {
         console.error('❌ [FCM] Failed to send token:', response.status);
       }
     } catch (error) {
       console.error('❌ [FCM] Error sending token to backend:', error);
-      // Non-critical - we'll retry on next app launch
     }
   }
 
-  return { fcmToken, permissionGranted };
+  return { fcmToken, permissionGranted, deviceId }; // ✅ RETURN DEVICE ID
 }

@@ -20,6 +20,7 @@ import { audioSessionManager } from './src/services/audioSessionManager';
 import { useNotificationSetup } from './src/hooks/useNotificationSetup';
 import { useNotificationHandlers } from './src/hooks/useNotificationHandlers';
 
+
 messaging().setBackgroundMessageHandler(async (remoteMessage) => {
   console.log('📱 [FCM Background] Notification received:', remoteMessage);
   Vibration.vibrate([0, 250, 250, 250]);

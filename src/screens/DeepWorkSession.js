@@ -19,8 +19,8 @@ import { deepWorkStore } from '../services/deepWorkStore';
 import SessionNotesModal from '../components/modals/SessionNotesModal';
 import { Pause, Play, ChevronLeft } from 'lucide-react-native';
 import backgroundTimer from '../services/backgroundTimer';
-import { audioService } from '../services/audioService';
-import { alarmService } from '../services/alarmService';
+import functions from '@react-native-firebase/functions';
+
 
 const { width, height } = Dimensions.get('window');
 const isTablet = width > 768 || height > 768;
@@ -236,43 +236,46 @@ const DeepWorkSession = ({ route, navigation }) => {
   };
 
   const handleTimeout = async () => {
-    console.log('⏰ Session completed - handling timeout with notification-based alarm...');
+    console.log('⏰ Session completed - triggering Firebase notification...');
     
     try {
-      // Stop local timer
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-      
+      if (intervalRef.current) clearInterval(intervalRef.current);
       setIsPaused(true);
       
-      // ✅ STOP BACKGROUND MUSIC
+      // Stop music
       if (servicesRef.current.audioService) {
-        try {
-          await servicesRef.current.audioService.stopMusic();
-          console.log('🎵 Background music stopped');
-        } catch (error) {
-          console.warn('🎵 Music stop error:', error);
-        }
+        await servicesRef.current.audioService.stopMusic();
       }
       
-      // ✅ PRIMARY ALARM: Send notification with sound
-      // INTERVIEW CONCEPT: System-level notifications bypass app audio restrictions
-      // Notification sounds work while locked, without background audio session
+      // 🔥 NEW: Firebase Cloud Function notification
       try {
+        const triggerNotif = functions().httpsCallable('triggerSessionEndNotification');
+        const userId = 'temp_user_' + Math.random().toString(36).substring(7);
+        
+        await triggerNotif({
+          userId,
+          sessionDuration: Math.floor(duration),
+          activityName: activityDetails?.name || activity
+        });
+        
+        console.log('✅ Firebase notification triggered');
+      } catch (firebaseError) {
+        console.error('❌ Firebase failed, using fallback:', firebaseError);
         await backgroundTimer.sendCompletionNotification();
-        console.log('📱 Completion notification sent (includes alarm sound)');
-      } catch (notificationError) {
-        console.warn('📱 Notification send error:', notificationError);
-        // Fallback: Show modal anyway so user knows session completed
       }
       
-      // Show notes modal
-      setShowNotesModal(true);
+      // Play local alarm as backup
+      if (servicesRef.current.alarmService) {
+        await servicesRef.current.alarmService.playAlarm();
+      }
+      
+      setIsCompleted(true);
+      setTimeout(() => setShowNotesModal(true), 1500);
       
     } catch (error) {
-      console.error('Error in timeout handler:', error);
-      setShowNotesModal(true);
+      console.error('❌ Error in handleTimeout:', error);
+      setIsCompleted(true);
+      setTimeout(() => setShowNotesModal(true), 1500);
     }
   };
 

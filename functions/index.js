@@ -143,207 +143,207 @@ exports.triggerSessionEndNotification = functions.https.onCall(
 
 // Constants
 const NOTIFICATION_LIMITS = {
-    MIN_HOURS_BETWEEN_REMINDERS: 8,
-    MAX_PER_WEEK: 3,
-    RANDOM_SEND_PROBABILITY: 0.5,
-  };
-  
-  // Scheduled functions
-  exports.morningReEngagement = functions.pubsub
-      .schedule("0 9 * * *")
-      .timeZone("America/New_York")
-      .onRun(async (context) => {
-        await sendSmartReminders("morning");
-        return null;
-      });
-  
-  exports.afternoonReEngagement = functions.pubsub
-      .schedule("0 14 * * *")
-      .timeZone("America/New_York")
-      .onRun(async (context) => {
-        await sendSmartReminders("afternoon");
-        return null;
-      });
-  
-  exports.eveningReEngagement = functions.pubsub
-      .schedule("0 19 * * *")
-      .timeZone("America/New_York")
-      .onRun(async (context) => {
-        await sendSmartReminders("evening");
-        return null;
-      });
-  
-  // Main reminder function
-  async function sendSmartReminders(timeWindow) {
-    const tokensSnapshot = await admin.firestore()
-        .collection("fcm_tokens")
-        .get();
-  
-    let sentCount = 0;
-    let skippedCount = 0;
-  
-    const sendPromises = tokensSnapshot.docs.map(async (doc) => {
-      const userId = doc.id;
-      const fcmToken = doc.data().token;
-  
-      try {
-        const shouldSend = await shouldSendReminder(userId, timeWindow);
-        if (!shouldSend) {
-          skippedCount++;
-          return;
-        }
-  
-        const message = await buildPersonalizedMessage(userId, timeWindow);
-  
-        await admin.messaging().send({
-          token: fcmToken,
-          notification: {
-            title: message.title,
-            body: message.body,
-          },
-          data: {
-            type: "re_engagement",
-            timeWindow,
-            strategy: message.strategy,
-          },
-          apns: {payload: {aps: {sound: "default"}}},
-        });
-  
-        await recordNotificationSent(userId);
-        sentCount++;
-      } catch (error) {
-        console.error(`Error for user ${userId}:`, error);
-      }
+  MIN_HOURS_BETWEEN_REMINDERS: 8,
+  MAX_PER_WEEK: 3,
+  RANDOM_SEND_PROBABILITY: 0.5,
+};
+
+// Scheduled functions
+exports.morningReEngagement = functions.pubsub
+    .schedule("0 9 * * *")
+    .timeZone("America/New_York")
+    .onRun(async (context) => {
+      await sendSmartReminders("morning");
+      return null;
     });
-  
-    await Promise.all(sendPromises);
-    console.log(`${timeWindow}: ${sentCount} sent, ${skippedCount} skipped`);
-  }
-  
-  // Decision logic
-  async function shouldSendReminder(userId, timeWindow) {
-    // Rule 1: Already focused today
-    const hasSessionToday = await checkSessionToday(userId);
-    if (hasSessionToday) return false;
-  
-    // Rule 2: Got notification recently
-    const lastNotif = await getLastNotificationTime(userId);
-    const hoursSince = (Date.now() - lastNotif) / (1000 * 60 * 60);
-    if (hoursSince < NOTIFICATION_LIMITS.MIN_HOURS_BETWEEN_REMINDERS) {
-      return false;
+
+exports.afternoonReEngagement = functions.pubsub
+    .schedule("0 14 * * *")
+    .timeZone("America/New_York")
+    .onRun(async (context) => {
+      await sendSmartReminders("afternoon");
+      return null;
+    });
+
+exports.eveningReEngagement = functions.pubsub
+    .schedule("0 19 * * *")
+    .timeZone("America/New_York")
+    .onRun(async (context) => {
+      await sendSmartReminders("evening");
+      return null;
+    });
+
+// Main reminder function
+async function sendSmartReminders(timeWindow) {
+  const tokensSnapshot = await admin.firestore()
+      .collection("fcm_tokens")
+      .get();
+
+  let sentCount = 0;
+  let skippedCount = 0;
+
+  const sendPromises = tokensSnapshot.docs.map(async (doc) => {
+    const userId = doc.id;
+    const fcmToken = doc.data().token;
+
+    try {
+      const shouldSend = await shouldSendReminder(userId, timeWindow);
+      if (!shouldSend) {
+        skippedCount++;
+        return;
+      }
+
+      const message = await buildPersonalizedMessage(userId, timeWindow);
+
+      await admin.messaging().send({
+        token: fcmToken,
+        notification: {
+          title: message.title,
+          body: message.body,
+        },
+        data: {
+          type: "re_engagement",
+          timeWindow,
+          strategy: message.strategy,
+        },
+        apns: {payload: {aps: {sound: "default"}}},
+      });
+
+      await recordNotificationSent(userId);
+      sentCount++;
+    } catch (error) {
+      console.error(`Error for user ${userId}:`, error);
     }
-  
-    // Rule 3: Weekly limit
-    const remindersThisWeek = await getRemindersThisWeek(userId);
-    if (remindersThisWeek >= NOTIFICATION_LIMITS.MAX_PER_WEEK) {
-      return false;
-    }
-  
-    // Rule 4: Streak at risk (high priority)
-    const streak = await getCurrentStreak(userId);
-    if (streak >= 3) return true;
-  
-    // Rule 5: Random 50%
-    return Math.random() > 0.5;
+  });
+
+  await Promise.all(sendPromises);
+  console.log(`${timeWindow}: ${sentCount} sent, ${skippedCount} skipped`);
+}
+
+// Decision logic
+async function shouldSendReminder(userId, timeWindow) {
+  // Rule 1: Already focused today
+  const hasSessionToday = await checkSessionToday(userId);
+  if (hasSessionToday) return false;
+
+  // Rule 2: Got notification recently
+  const lastNotif = await getLastNotificationTime(userId);
+  const hoursSince = (Date.now() - lastNotif) / (1000 * 60 * 60);
+  if (hoursSince < NOTIFICATION_LIMITS.MIN_HOURS_BETWEEN_REMINDERS) {
+    return false;
   }
-  
-  // Helper functions
-  async function checkSessionToday(userId) {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-  
-    const snapshot = await admin.firestore()
-        .collection("users")
-        .doc(userId)
-        .collection("sessions")
-        .where("createdAt", ">=", todayStart)
-        .limit(1)
-        .get();
-  
-    return !snapshot.empty;
+
+  // Rule 3: Weekly limit
+  const remindersThisWeek = await getRemindersThisWeek(userId);
+  if (remindersThisWeek >= NOTIFICATION_LIMITS.MAX_PER_WEEK) {
+    return false;
   }
-  
-  async function getLastNotificationTime(userId) {
-    const doc = await admin.firestore()
-        .collection("users")
-        .doc(userId)
-        .collection("metadata")
-        .doc("notifications")
-        .get();
-  
-    return doc.data()?.lastReminderSentAt?.toMillis() || 0;
-  }
-  
-  async function getRemindersThisWeek(userId) {
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-  
-    const doc = await admin.firestore()
-        .collection("users")
-        .doc(userId)
-        .collection("metadata")
-        .doc("notifications")
-        .get();
-  
-    const reminders = doc.data()?.weeklyReminders || [];
-    return reminders.filter((t) => t.toDate() >= weekAgo).length;
-  }
-  
-  async function getCurrentStreak(userId) {
-    const doc = await admin.firestore()
-        .collection("users")
-        .doc(userId)
-        .get();
-  
-    return doc.data()?.currentStreak || 0;
-  }
-  
-  async function recordNotificationSent(userId) {
-    await admin.firestore()
-        .collection("users")
-        .doc(userId)
-        .collection("metadata")
-        .doc("notifications")
-        .set({
-          lastReminderSentAt: admin.firestore.FieldValue.serverTimestamp(),
-          weeklyReminders: admin.firestore.FieldValue.arrayUnion(
-              admin.firestore.Timestamp.now(),
-          ),
-        }, {merge: true});
-  }
-  
-  async function buildPersonalizedMessage(userId, timeWindow) {
-    const streak = await getCurrentStreak(userId);
-  
-    // Strategy 1: Streak-based
-    if (streak >= 3) {
-      return {
-        title: `${streak}-day streak! 🔥`,
-        body: "Keep it going with a quick focus session",
-        strategy: "streak",
-      };
-    }
-  
-    // Strategy 2: Time-based default
-    const messages = {
-      morning: {
-        title: "Good morning! ☀️",
-        body: "Start your day with focused work",
-      },
-      afternoon: {
-        title: "Afternoon focus time 🎯",
-        body: "Beat the slump with a quick session",
-      },
-      evening: {
-        title: "Wind down with focus 🌙",
-        body: "One more session before the day ends?",
-      },
-    };
-  
+
+  // Rule 4: Streak at risk (high priority)
+  const streak = await getCurrentStreak(userId);
+  if (streak >= 3) return true;
+
+  // Rule 5: Random 50%
+  return Math.random() > 0.5;
+}
+
+// Helper functions
+async function checkSessionToday(userId) {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const snapshot = await admin.firestore()
+      .collection("users")
+      .doc(userId)
+      .collection("sessions")
+      .where("createdAt", ">=", todayStart)
+      .limit(1)
+      .get();
+
+  return !snapshot.empty;
+}
+
+async function getLastNotificationTime(userId) {
+  const doc = await admin.firestore()
+      .collection("users")
+      .doc(userId)
+      .collection("metadata")
+      .doc("notifications")
+      .get();
+
+  return doc.data()?.lastReminderSentAt?.toMillis() || 0;
+}
+
+async function getRemindersThisWeek(userId) {
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+
+  const doc = await admin.firestore()
+      .collection("users")
+      .doc(userId)
+      .collection("metadata")
+      .doc("notifications")
+      .get();
+
+  const reminders = doc.data()?.weeklyReminders || [];
+  return reminders.filter((t) => t.toDate() >= weekAgo).length;
+}
+
+async function getCurrentStreak(userId) {
+  const doc = await admin.firestore()
+      .collection("users")
+      .doc(userId)
+      .get();
+
+  return doc.data()?.currentStreak || 0;
+}
+
+async function recordNotificationSent(userId) {
+  await admin.firestore()
+      .collection("users")
+      .doc(userId)
+      .collection("metadata")
+      .doc("notifications")
+      .set({
+        lastReminderSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        weeklyReminders: admin.firestore.FieldValue.arrayUnion(
+            admin.firestore.Timestamp.now(),
+        ),
+      }, {merge: true});
+}
+
+async function buildPersonalizedMessage(userId, timeWindow) {
+  const streak = await getCurrentStreak(userId);
+
+  // Strategy 1: Streak-based
+  if (streak >= 3) {
     return {
-      ...messages[timeWindow],
-      strategy: "time_based",
+      title: `${streak}-day streak! 🔥`,
+      body: "Keep it going with a quick focus session",
+      strategy: "streak",
     };
   }
-  
-  // ========== END SMART RE-ENGAGEMENT ==========
+
+  // Strategy 2: Time-based default
+  const messages = {
+    morning: {
+      title: "Good morning! ☀️",
+      body: "Start your day with focused work",
+    },
+    afternoon: {
+      title: "Afternoon focus time 🎯",
+      body: "Beat the slump with a quick session",
+    },
+    evening: {
+      title: "Wind down with focus 🌙",
+      body: "One more session before the day ends?",
+    },
+  };
+
+  return {
+    ...messages[timeWindow],
+    strategy: "time_based",
+  };
+}
+
+// ========== END SMART RE-ENGAGEMENT ==========

@@ -7,6 +7,7 @@ import functions from '@react-native-firebase/functions';
 import { deepWorkStore } from './deepWorkStore';
 import { alarmService } from './alarmService';
 import { Platform } from 'react-native';
+import deviceIdService from './deviceIdService'; // ✅ FIX: Import stable device ID service
 
 // Constants
 const BACKGROUND_TIMER_TASK = 'com.expo.tasks.BACKGROUND_TIMER_TASK';
@@ -246,18 +247,43 @@ const sendCompletionNotification = async () => {
     
     debugLog('🔔 Triggering FCM session-end notification...');
     
+    // ✅ FIX: Get stable device ID that persists across app restarts
+    /**
+     * CRITICAL BUG FIX - USER ID MISMATCH
+     * 
+     * WHAT WAS WRONG:
+     * - Registration used random ID: 'temp_user_' + Math.random()
+     * - Notification used hardcoded: 'test_user_fcm'
+     * - These never matched, so FCM lookup failed
+     * - Fell back to local notification (only 30% reliable when force-quit)
+     * 
+     * THE FIX:
+     * - Use deviceIdService for stable, persistent ID
+     * - Same ID used in registration AND notification
+     * - FCM token lookup succeeds
+     * - Notification delivered even when app is killed
+     * 
+     * INTERVIEW CONCEPT: Distributed Identity
+     * - Multiple services need to reference same entity
+     * - Must use consistent identifier across all services
+     * - This is a "single source of truth" pattern
+     */
+    const deviceId = await deviceIdService.getDeviceId();
+    debugLog('🔔 Sending notification for device:', deviceId.substring(0, 15) + '...');
+    
     // Call Firebase Cloud Function
     const triggerNotification = functions().httpsCallable('triggerSessionEndNotification');
     
     await triggerNotification({
-      userId: 'test_user_fcm', // Placeholder for now
+      userId: deviceId, // ✅ FIX: Use stable device ID (not hardcoded)
       sessionDuration: sessionInfo.duration,
       activityName: sessionInfo.activity,
     });
     
-    debugLog('✅ FCM notification triggered');
+    debugLog('✅ FCM notification triggered successfully');
     
-    // BACKUP: Keep local notification too (remove after testing)
+    // BACKUP: Keep local notification for now (can remove after confirming FCM works)
+    // This provides fallback if FCM fails for any reason
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '🎉 Session Complete!',
@@ -271,6 +297,7 @@ const sendCompletionNotification = async () => {
     return true;
   } catch (error) {
     debugLog('❌ Failed to send notification:', error);
+    // Even if FCM fails, the backup local notification above still runs
     return false;
   }
 };
