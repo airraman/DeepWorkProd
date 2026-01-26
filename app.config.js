@@ -29,6 +29,7 @@ export default {
         "expo-build-properties",
         {
           ios: {
+            useFrameworks: "static",
             deploymentTarget: "15.1",
             newArchEnabled: false
           }
@@ -90,8 +91,7 @@ export default {
         "VIBRATE",
         "FOREGROUND_SERVICE",
         "WAKE_LOCK"
-      ],
-      googleServicesFile: "./google-services.json"
+      ]
     },
     web: {
       favicon: "./assets/favicon.png"
