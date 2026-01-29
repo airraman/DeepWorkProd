@@ -46,5 +46,4 @@ yarn-error.*
 expo-env.d.ts
 
 node_modules/
-GoogleService-Info.plist
 google-services.json
