@@ -1,6 +1,6 @@
 {
   "name": "deepworkprod",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -12,7 +12,9 @@
     "@0no-co/graphql.web": "^1.2.0",
     "@expo/cli": "^0.24.21",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/datetimepicker": "^8.6.0",
     "@react-native-firebase/app": "^23.8.3",
+    "@react-native-firebase/firestore": "^23.8.5",
     "@react-native-firebase/functions": "^23.8.3",
     "@react-native-firebase/messaging": "^23.8.3",
     "@react-navigation/bottom-tabs": "^7.3.13",

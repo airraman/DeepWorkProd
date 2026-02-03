@@ -34,12 +34,11 @@ const DevToolsScreen = __DEV__
   : () => null; // Return empty component in production
 
 import { notificationService } from './src/services/notificationService';
-// import DeepWorkSession from './src/screens/DeepWorkSession';
+
 
 
 // DATABASE IMPORTS
 import DatabaseService from './src/services/database/DatabaseService';
-// import { testDatabase } from './src/services/database/testDatabase';
 
 // SAFE IMPORT: Only import alarmService if we want to use it
 let alarmService = null;
@@ -67,7 +66,6 @@ import DeepWorkSession from './src/screens/DeepWorkSession';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
-// const [isUpdateBlocking, setIsUpdateBlocking] = useState(false);
 
 // Safe iPad detection
 const { width, height } = Dimensions.get('window');

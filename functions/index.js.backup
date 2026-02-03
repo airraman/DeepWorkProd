@@ -1,7 +1,5 @@
-// functions/index.js - Enhanced Cloud Functions for DeepWork Notifications (V2)
-const {onCall} = require("firebase-functions/v2/https");
-const {onRequest} = require("firebase-functions/v2/https");
-const {onSchedule} = require("firebase-functions/v2/scheduler");
+// functions/index.js - Enhanced Cloud Functions for DeepWork Notifications
+const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 
 // Initialize Firebase Admin SDK
@@ -16,9 +14,9 @@ admin.initializeApp();
  * HOW: Called from client app (backgroundTimer.js)
  * RELIABILITY: 95%+ (cloud-based, works even when app killed)
  */
-exports.triggerSessionEndNotification = onCall(
-    async (request) => {
-      const {userId, sessionDuration, activityName} = request.data;
+exports.triggerSessionEndNotification = functions.https.onCall(
+    async (data, context) => {
+      const {userId, sessionDuration, activityName} = data;
 
       console.log(`🔔 Session end notification for user: ${userId}`);
 
@@ -29,7 +27,10 @@ exports.triggerSessionEndNotification = onCall(
 
         if (!tokenDoc.exists) {
           console.warn(`⚠️ No FCM token for user: ${userId}`);
-          throw new Error("No FCM token found for this user");
+          throw new functions.https.HttpsError(
+              "not-found",
+              "No FCM token found for this user",
+          );
         }
 
         const fcmToken = tokenDoc.data().token;
@@ -65,7 +66,11 @@ exports.triggerSessionEndNotification = onCall(
         return {success: true, message: "Notification sent"};
       } catch (error) {
         console.error(`❌ Error sending notification to ${userId}:`, error);
-        throw new Error(`Failed to send notification: ${error.message}`);
+        throw new functions.https.HttpsError(
+            "internal",
+            "Failed to send notification",
+            error.message,
+        );
       }
     },
 );
@@ -85,12 +90,10 @@ exports.triggerSessionEndNotification = onCall(
  * - Firestore query optimizations
  * - Parallel FCM sends
  */
-exports.dailyRemindersBatch = onSchedule(
-    {
-      schedule: "0 * * * *", // Every hour at :00
-      timeZone: "UTC",
-    },
-    async (event) => {
+exports.dailyRemindersBatch = functions.pubsub
+    .schedule("0 * * * *") // Every hour at :00
+    .timeZone("UTC")
+    .onRun(async (context) => {
       console.log("⏰ Starting hourly daily reminders batch...");
 
       const now = new Date();
@@ -242,12 +245,10 @@ exports.dailyRemindersBatch = onSchedule(
  * - Checks each user's timezone
  * - Sends when it's 9 AM in their local time
  */
-exports.weeklySummaryBatch = onSchedule(
-    {
-      schedule: "0 * * * 1", // Every hour on Mondays
-      timeZone: "UTC",
-    },
-    async (event) => {
+exports.weeklySummaryBatch = functions.pubsub
+    .schedule("0 * * * 1") // Every hour on Mondays
+    .timeZone("UTC")
+    .onRun(async (context) => {
       console.log("📊 Starting weekly summary batch...");
 
       try {
@@ -392,41 +393,41 @@ exports.weeklySummaryBatch = onSchedule(
  * 
  * Called from client when app launches or token refreshes
  */
-exports.registerToken = onRequest(
-    {cors: true},
-    async (req, res) => {
-      // Handle preflight OPTIONS request
-      if (req.method === "OPTIONS") {
-        res.set("Access-Control-Allow-Methods", "POST");
-        res.set("Access-Control-Allow-Headers", "Content-Type");
-        return res.status(204).send("");
-      }
+exports.registerToken = functions.https.onRequest(async (req, res) => {
+  // Enable CORS
+  res.set("Access-Control-Allow-Origin", "*");
 
-      const {fcmToken, platform, userId} = req.body;
+  if (req.method === "OPTIONS") {
+    res.set("Access-Control-Allow-Methods", "POST");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+    return res.status(204).send("");
+  }
 
-      if (!fcmToken || !userId) {
-        return res.status(400).send({
-          error: "Missing required fields: fcmToken and userId",
-        });
-      }
+  const {fcmToken, platform, userId} = req.body;
 
-      try {
-        await admin.firestore().collection("fcm_tokens").doc(userId).set({
-          token: fcmToken,
-          platform,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, {merge: true});
-
-        console.log(`✅ Registered FCM token for user: ${userId}`);
-        return res.status(200).send({success: true});
-      } catch (error) {
-        console.error("❌ Error storing FCM token:", error);
-        return res.status(500).send({
-          error: "Failed to store token",
-          details: error.message,
-        });
-      }
+  if (!fcmToken || !userId) {
+    return res.status(400).send({
+      error: "Missing required fields: fcmToken and userId",
     });
+  }
+
+  try {
+    await admin.firestore().collection("fcm_tokens").doc(userId).set({
+      token: fcmToken,
+      platform,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+
+    console.log(`✅ Registered FCM token for user: ${userId}`);
+    return res.status(200).send({success: true});
+  } catch (error) {
+    console.error("❌ Error storing FCM token:", error);
+    return res.status(500).send({
+      error: "Failed to store token",
+      details: error.message,
+    });
+  }
+});
 
 /**
  * ============================================================================

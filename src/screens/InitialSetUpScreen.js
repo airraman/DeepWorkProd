@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { deepWorkStore } from '../services/deepWorkStore';
 
-// Import modals - REMOVED DurationSetupModal import
 import ActivitySetupModal from '../components/modals/ActivitySetupModal.js';
 import ReminderFrequencyModal from '../components/modals/ReminderFrequencyModal.js';
 import WelcomeStatsModal from '../components/modals/WelcomeStatsModal.js';
@@ -21,7 +20,6 @@ const { width, height } = Dimensions.get('window');
 const isTablet = width > 768 || height > 768;
 
 const InitialSetupScreen = ({navigation}) => {
-    // Modal visibility states - REMOVED showDurationModal
     const [showActivityModal, setShowActivityModal] = useState(false);
     const [showReminderModal, setShowReminderModal] = useState(false);
     const [showWelcomeStats, setShowWelcomeStats] = useState(false);
@@ -35,7 +33,6 @@ const InitialSetupScreen = ({navigation}) => {
     // Track transitions to prevent multiple alerts
     const isTransitioning = useRef(false);
 
-    // UPDATED: Define step labels with only 3 steps now
     const stepLabels = [
         'Create Activities',    // Step 1
         'Set Reminders',        // Step 2 (was Step 3)
@@ -70,7 +67,6 @@ const InitialSetupScreen = ({navigation}) => {
             // Get current settings
             const settings = await deepWorkStore.getSettings();
             
-            // UPDATED: Only check for activities since durations are now hardcoded
             // If activities exist, user has completed onboarding
             if (settings.activities && settings.activities.length > 0) {
                 console.log('Settings already exist, skipping setup');
@@ -125,7 +121,6 @@ const InitialSetupScreen = ({navigation}) => {
         }
     };
 
-    // REMOVED: handleDurationSave function entirely
 
     const handleReminderSave = async (reminderSettings) => {
         try {
@@ -218,7 +213,6 @@ const InitialSetupScreen = ({navigation}) => {
                 stepLabels={stepLabels}
             />
             
-            {/* REMOVED: DurationSetupModal completely */}
             
             <ReminderFrequencyModal
                 visible={showReminderModal}
@@ -234,14 +228,12 @@ const InitialSetupScreen = ({navigation}) => {
             <WelcomeStatsModal
                 visible={showWelcomeStats}
                 onClose={handleWelcomeStatsClose}
-                // Welcome modal - UPDATED to step 3 of 3
                 showProgress={true}
                 currentStep={3}
                 totalSteps={3}
                 stepLabels={stepLabels}
             />
             
-            {/* Fallback loading view - REMOVED showDurationModal check */}
             {!showActivityModal && !showReminderModal && !showWelcomeStats && !isTransitioning.current && (
                 <View style={styles.centered}>
                     <ActivityIndicator size="large" color="#2563EB" />
