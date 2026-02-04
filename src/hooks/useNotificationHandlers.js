@@ -1,8 +1,8 @@
 // src/hooks/useNotificationHandlers.js
 import { useEffect } from 'react';
 import messaging from '@react-native-firebase/messaging';
-import { useNavigation } from '@react-navigation/native';
-import * as Haptics from 'expo-haptics';
+import { navigationRef } from '../services/navigationService';
+// import * as Haptics from 'expo-haptics';
 import { Vibration } from 'react-native';
 
 /**
@@ -25,7 +25,7 @@ import { Vibration } from 'react-native';
  *    - This is why FCM works when local notifications don't
  */
 export function useNotificationHandlers() {
-  const navigation = useNavigation();
+  // const navigation = useNavigation();
 
   useEffect(() => {
     console.log('🔔 [FCM] Setting up notification handlers...');
@@ -35,7 +35,7 @@ export function useNotificationHandlers() {
       console.log('📱 [FCM] Foreground notification received:', message);
       
       // Trigger haptic feedback
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
       // Show in-app notification (you can customize this)
       console.log(`📱 ${message.notification?.title}: ${message.notification?.body}`);
@@ -73,22 +73,22 @@ export function useNotificationHandlers() {
     switch (notificationType) {
       case 'session_end':
         // Session completed - go to metrics
-        navigation.navigate('Metrics');
+        navigationRef.current?.navigate('Metrics');
         break;
       
       case 're_engagement':
         // Reminder to start session - go to home
-        navigation.navigate('Home');
+        navigationRef.current?.navigate('Home');
         break;
       
       case 'insights_ready':
         // New insights available - go to metrics
-        navigation.navigate('Metrics');
+        navigationRef.current?.navigate('Metrics');
         break;
       
       default:
         // Default to home screen
-        navigation.navigate('Home');
+        navigationRef.current?.navigate('Home');
     }
   }
 }

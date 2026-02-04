@@ -8,6 +8,9 @@
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
+      "ios": {
+        "simulator": true
+      },
       "env": {
         "EXPO_PUBLIC_OPENAI_API_KEY": "$(EXPO_PUBLIC_OPENAI_API_KEY)"
       }

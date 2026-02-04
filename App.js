@@ -1,6 +1,6 @@
 // App.js - Production Version with iOS Notification Fix + Database + RevenueCat
 import messaging from '@react-native-firebase/messaging';
-import { Vibration } from 'react-native';
+// import { Vibration } from 'react-native';
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -63,6 +63,9 @@ import HomeScreen from './src/screens/HomeScreen';
 import MetricsScreen from './src/screens/MetricsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import DeepWorkSession from './src/screens/DeepWorkSession';
+
+import SessionRatingScreen from './src/features/session-completion/screens/SessionRatingScreen';
+import SessionSummaryScreen from './src/features/session-completion/screens/SessionSummaryScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -749,7 +752,28 @@ const receivedSubscription = Notifications.addNotificationReceivedListener(
                     orientation: 'portrait',
                   })
                 }}
+                />
+              
+                {/* ✅ NEW: Session Rating & Summary Screens */}
+                <Stack.Screen 
+                  name="SessionRating" 
+                  component={SessionRatingScreen}
+                  options={{
+                    presentation: 'modal',
+                    gestureEnabled: true,
+                  }}
+                />
+                <Stack.Screen 
+                  name="SessionSummary" 
+                  component={SessionSummaryScreen}
+                  options={{
+                    presentation: 'modal',
+                    gestureEnabled: true,
+                  }}
+
+                
               />
+              
 {/* Only include DevTools screen in development builds */}
 {__DEV__ && (
   <Stack.Screen 
