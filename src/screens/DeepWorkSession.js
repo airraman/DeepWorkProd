@@ -19,7 +19,7 @@ import { deepWorkStore } from '../services/deepWorkStore';
 import SessionNotesModal from '../components/modals/SessionNotesModal';
 import { Pause, Play, ChevronLeft } from 'lucide-react-native';
 import backgroundTimer from '../services/backgroundTimer';
-import functions from '@react-native-firebase/functions';
+// import functions from '@react-native-firebase/functions';
 
 
 const { width, height } = Dimensions.get('window');
@@ -236,7 +236,7 @@ const DeepWorkSession = ({ route, navigation }) => {
   };
 
   const handleTimeout = async () => {
-    console.log('⏰ Session completed - triggering Firebase notification...');
+    console.log('⏰ Session completed!');
     
     try {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -247,26 +247,14 @@ const DeepWorkSession = ({ route, navigation }) => {
         await servicesRef.current.audioService.stopMusic();
       }
       
-      // 🔥 NEW: Firebase Cloud Function notification
-      try {
-        const triggerNotif = functions().httpsCallable('triggerSessionEndNotification');
-        const userId = 'temp_user_' + Math.random().toString(36).substring(7);
-        
-        await triggerNotif({
-          userId,
-          sessionDuration: Math.floor(duration),
-          activityName: activityDetails?.name || activity
-        });
-        
-        console.log('✅ Firebase notification triggered');
-      } catch (firebaseError) {
-        console.error('❌ Firebase failed, using fallback:', firebaseError);
-        await backgroundTimer.sendCompletionNotification();
-      }
-      
-      // Play local alarm as backup
+      // Play completion alarm
       if (servicesRef.current.alarmService) {
-        await servicesRef.current.alarmService.playAlarm();
+        try {
+          await servicesRef.current.alarmService.playCompletionAlarm();
+          console.log('🔔 Completion alarm played');
+        } catch (alarmError) {
+          console.warn('🔔 Alarm failed (non-critical):', alarmError);
+        }
       }
       
       setIsCompleted(true);
@@ -566,20 +554,8 @@ const DeepWorkSession = ({ route, navigation }) => {
       console.log('✅ Session saved successfully!');
       console.log('===================================\n');
 
-      Alert.alert(
-        'Session Complete!',
-        'Congratulations! Your deep work session has been saved.',
-        [
-          {
-            text: 'View Stats',
-            onPress: () => navigation.navigate('MainApp', { screen: 'Metrics' }),
-          },
-          {
-            text: 'Done',
-            onPress: () => navigation.navigate('MainApp', { screen: 'Home' }),
-          },
-        ]
-      );
+      // Navigate to rating screen instead of showing alert
+      navigation.navigate('SessionRating', { sessionId: sessionToSave.id });
 
       return true;
     } catch (error) {
