@@ -153,32 +153,67 @@ export const deepWorkStore = {
     }
   },
 
-  /**
-   * Get all stored sessions
-   * @returns {Promise<Object>} Object with dates as keys and arrays of sessions as values
-   */
-  getSessions: async () => {
-    try {
-      const sessions = await AsyncStorage.getItem(STORAGE_KEY);
-      
-      if (!sessions) {
-        log('No sessions found, returning empty object');
-        return {};
-      }
-
-      const parsed = JSON.parse(sessions);
-      
-      if (!isValidStorage(parsed)) {
-        throw new Error('Invalid sessions data structure');
-      }
-
-      log('Retrieved sessions successfully');
-      return parsed;
-    } catch (error) {
-      log('Error getting sessions:', error);
-      throw error;
+/**
+ * Get all stored sessions
+ * @returns {Promise<Object>} Object with dates as keys and arrays of sessions as values
+ */
+getSessions: async () => {
+  try {
+    const sessions = await AsyncStorage.getItem(STORAGE_KEY);
+    
+    if (!sessions) {
+      log('No sessions found, returning empty object');
+      return {};
     }
-  },
+
+    const parsed = JSON.parse(sessions);
+    
+    // AUTO-REPAIR: Instead of throwing, repair and return
+    if (!isValidStorage(parsed)) {
+      log('⚠️ Invalid storage detected, auto-repairing...');
+      
+      // Repair the storage
+      const repairedSessions = {};
+      
+      if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+        for (const [key, value] of Object.entries(parsed)) {
+          // Valid date format: YYYY-MM-DD
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+            log(`Skipping invalid date key: ${key}`);
+            continue;
+          }
+          
+          // Must be array
+          if (!Array.isArray(value)) {
+            log(`Skipping invalid value for ${key} (not an array)`);
+            continue;
+          }
+          
+          // Filter to only valid sessions
+          const validSessions = value.filter(isValidSession);
+          if (validSessions.length > 0) {
+            repairedSessions[key] = validSessions;
+          }
+        }
+      }
+      
+      // Save the repaired version
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(repairedSessions));
+      log('✅ Storage auto-repaired and saved');
+      
+      return repairedSessions;
+    }
+
+    log('Retrieved sessions successfully');
+    return parsed;
+  } catch (error) {
+    log('Error getting sessions:', error);
+    // Return empty instead of throwing
+    log('⚠️ Returning empty sessions object due to error');
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({}));
+    return {};
+  }
+},
 
   /**
    * Update the entire settings object

@@ -148,6 +148,99 @@ class SessionService {
       };
     }
   }
+
+  /**
+   * Get session statistics
+   * Calculates: this month, this year, all time counts, average length, most productive day
+   */
+  async getSessionStats(sessionId) {
+    try {
+      const allSessions = await this._getAllSessions();
+      const session = await this.getSession(sessionId);
+      
+      if (!session) return null;
+      
+      // Get current date info
+      const now = new Date();
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const currentYear = now.getFullYear();
+      
+      // Calculate stats
+      let thisMonth = 0;
+      let thisYear = 0;
+      let allTime = 0;
+      let totalMinutes = 0;
+      let sessionCount = 0;
+      let dailyTotals = {};
+      
+      for (const [date, sessions] of Object.entries(allSessions)) {
+        if (!Array.isArray(sessions)) continue;
+        
+        sessions.forEach(s => {
+          if (!s || !s.duration) return;
+          
+          const sessionDate = new Date(date);
+          const sessionMonth = `${sessionDate.getFullYear()}-${String(sessionDate.getMonth() + 1).padStart(2, '0')}`;
+          const sessionYear = sessionDate.getFullYear();
+          
+          // Count sessions by period
+          allTime++;
+          totalMinutes += s.duration;
+          sessionCount++;
+          
+          if (sessionYear === currentYear) {
+            thisYear++;
+          }
+          
+          if (sessionMonth === currentMonth) {
+            thisMonth++;
+          }
+          
+          // Track daily totals for most productive day
+          if (!dailyTotals[date]) {
+            dailyTotals[date] = 0;
+          }
+          dailyTotals[date] += s.duration;
+        });
+      }
+      
+      // Find most productive day
+      let mostProductiveDay = 'N/A';
+      let maxMinutes = 0;
+      
+      for (const [date, minutes] of Object.entries(dailyTotals)) {
+        if (minutes > maxMinutes) {
+          maxMinutes = minutes;
+          const dateObj = new Date(date);
+          mostProductiveDay = dateObj.toLocaleDateString('en-US', { 
+            weekday: 'long',
+            month: 'short',
+            day: 'numeric'
+          });
+        }
+      }
+      
+      // Calculate average
+      const avgLength = sessionCount > 0 ? Math.round(totalMinutes / sessionCount) : 0;
+      
+      return {
+        thisMonth,
+        thisYear,
+        allTime,
+        avgLength,
+        mostProductiveDay,
+      };
+    } catch (error) {
+      console.error('Failed to get session stats:', error);
+      return {
+        thisMonth: 0,
+        thisYear: 0,
+        allTime: 0,
+        avgLength: 0,
+        mostProductiveDay: 'N/A',
+      };
+    }
+  }
 }
 
 export const sessionService = new SessionService();
