@@ -237,6 +237,7 @@ const DeepWorkSession = ({ route, navigation }) => {
 
   const handleTimeout = async () => {
     console.log('⏰ Session completed!');
+    console.log('🐛 DEBUG: About to set isCompleted and show modal');
     
     try {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -258,7 +259,19 @@ const DeepWorkSession = ({ route, navigation }) => {
       }
       
       setIsCompleted(true);
-      setTimeout(() => setShowNotesModal(true), 1500);
+      console.log('🐛 DEBUG: isCompleted set to true, skipping modal and going straight to save');
+      
+      // Skip the modal - go straight to saving and rating
+      setTimeout(async () => {
+        console.log('🐛 DEBUG: Auto-submitting session without modal');
+        // Call handleNotesSubmit with empty data (no notes from old modal)
+        await handleNotesSubmit({
+          notes: '',
+          productivityRating: null,
+          focusRating: null,
+          energyLevel: null
+        });
+      }, 1500);
       
     } catch (error) {
       console.error('❌ Error in handleTimeout:', error);
@@ -433,143 +446,207 @@ const DeepWorkSession = ({ route, navigation }) => {
     }
   };
 
-  // Handle session completion with notes
-  const handleNotesSubmit = async (sessionData) => {
-    setShowNotesModal(false);
-    
-    try {
-      // ✅ Stop alarm regardless of save outcome
-      if (servicesRef.current.alarmService) {
-        await servicesRef.current.alarmService.stopAlarm();
-      }
-    } catch (error) {
-      console.warn('Alarm stop error:', error);
+// Handle session completion with notes
+const handleNotesSubmit = async (sessionData) => {
+  console.log('🐛 DEBUG: handleNotesSubmit called with:', sessionData);
+  setShowNotesModal(false);
+  
+  try {
+    // ✅ Stop alarm regardless of save outcome
+    if (servicesRef.current.alarmService) {
+      await servicesRef.current.alarmService.stopAlarm();
     }
+  } catch (error) {
+    console.warn('Alarm stop error:', error);
+  }
+  
+  console.log('🐛 DEBUG: About to call handleSessionComplete');
+  // ✅ Attempt to save session
+  const success = await handleSessionComplete(sessionData);
+  console.log('🐛 DEBUG: handleSessionComplete returned:', success);
+  
+  if (success) {
+    // ✅ Success path: navigate to rating screen
+    console.log('🐛 DEBUG: Session saved successfully, navigation should happen in handleSessionComplete');
+    setIsCompleted(true);
+  } else {
+    // ❌ Failure path: inform user but don't panic
+    setIsCompleted(true);  // ✅ Still mark as complete visually
     
-    // ✅ Attempt to save session
-    const success = await handleSessionComplete(sessionData);
-    
-    if (success) {
-      // ✅ Success path: celebrate and navigate (Alert is already in handleSessionComplete)
-      setIsCompleted(true);
-    } else {
-      // ❌ Failure path: inform user but don't panic
-      setIsCompleted(true);  // ✅ Still mark as complete visually
-      
-      Alert.alert(
-        '⚠️ Save Issue',
-        'Your session data couldn\'t be saved. This might be due to storage limits. Your session is complete, but won\'t appear in metrics.',
-        [
-          {
-            text: 'Retry Save',
-            onPress: async () => {
-              const retrySuccess = await handleSessionComplete(sessionData);
-              if (retrySuccess) {
-                Alert.alert('Success', 'Session saved successfully!');
-              } else {
-                Alert.alert('Failed', 'Please contact support if this persists.');
-              }
+    Alert.alert(
+      '⚠️ Save Issue',
+      'Your session data couldn\'t be saved. This might be due to storage limits. Your session is complete, but won\'t appear in metrics.',
+      [
+        {
+          text: 'Retry Save',
+          onPress: async () => {
+            const retrySuccess = await handleSessionComplete(sessionData);
+            if (retrySuccess) {
+              Alert.alert('Success', 'Session saved successfully!');
+            } else {
+              Alert.alert('Failed', 'Please contact support if this persists.');
             }
-          },
-          {
-            text: 'Continue Anyway',
-            onPress: () => navigation.navigate('MainApp', { screen: 'Home' })
           }
-        ]
-      );
-    }
-  };
-  // Save completed session
-  const handleSessionComplete = async (sessionData = {}) => {
-    if (isSaving) return false;
-
-    try {
-      setIsSaving(true);
-      await cleanup();
-
-      // ===== ENHANCED VALIDATION SECTION =====
-      console.log('📝 ===== SESSION SAVE DEBUG =====');
-      console.log('Route params:', { duration, activity, musicChoice });
-      console.log('Session data from modal:', sessionData);
-      
-      // Prepare session data
-      const now = Date.now();
-      const dateString = new Date().toISOString().split('T')[0];
-      
-      const sessionToSave = {
-        id: `${dateString}-${now}`,
-        date: dateString,
-        activity: activity,
-        duration: parseFloat(duration),
-        musicChoice: musicChoice || 'none',
-        
-        // CHANGED: Store structured session data instead of just notes string
-        notes: sessionData.notes || '',
-        ratings: {
-          productivity: sessionData.productivityRating,
-          focus: sessionData.focusRating,
-          energy: sessionData.energyLevel,
         },
-        
-        timestamp: now,
-        completedAt: new Date().toISOString(),
-        syncStatus: 'synced',
-        metadata: {
-          appVersion: '1.0.0',
-          created: now,
-          modified: now
+        {
+          text: 'Continue Anyway',
+          onPress: () => navigation.navigate('MainApp', { screen: 'Home' })
         }
-      };
+      ]
+    );
+  }
+};
+// Save completed session
+const handleSessionComplete = async (sessionData = {}) => {
+  if (isSaving) {
+    console.log('🐛 DEBUG: Already saving, skipping duplicate call');
+    return false;
+  }
+
+  try {
+    setIsSaving(true);
+    await cleanup();
+  
+    // ===== STORAGE REPAIR SECTION =====
+    try {
+      console.log('🔧 Checking storage integrity...');
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const rawSessions = await AsyncStorage.getItem('@deep_work_sessions');
       
-      console.log('Prepared session data:', sessionToSave);
-      
-      // Additional validation checks
-      console.log('Validation checks:');
-      console.log('- activity type:', typeof sessionToSave.activity, 'value:', sessionToSave.activity);
-      console.log('- duration type:', typeof sessionToSave.duration, 'value:', sessionToSave.duration);
-      console.log('- notes type:', typeof sessionToSave.notes, 'value:', sessionToSave.notes);
-      console.log('- ratings:', sessionToSave.ratings);
-      console.log('- duration > 0?', sessionToSave.duration > 0);
-      console.log('- activity not empty?', sessionToSave.activity.length > 0);
-      
-      // Check for potential issues
-      if (!sessionToSave.activity || sessionToSave.activity.length === 0) {
-        throw new Error('Activity is required but was empty');
+      if (rawSessions) {
+        const parsed = JSON.parse(rawSessions);
+        
+        // Check if it's a valid object
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          console.log('⚠️ Storage is corrupted (not an object), resetting...');
+          await AsyncStorage.setItem('@deep_work_sessions', JSON.stringify({}));
+        } else {
+          // Check if all keys are valid date strings and values are arrays
+          let needsRepair = false;
+          const repairedSessions = {};
+          
+          for (const [key, value] of Object.entries(parsed)) {
+            // Valid date format: YYYY-MM-DD
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+              console.log(`⚠️ Invalid date key: ${key}, skipping...`);
+              needsRepair = true;
+              continue;
+            }
+            
+            // Must be array
+            if (!Array.isArray(value)) {
+              console.log(`⚠️ Invalid value for ${key} (not an array), skipping...`);
+              needsRepair = true;
+              continue;
+            }
+            
+            repairedSessions[key] = value;
+          }
+          
+          if (needsRepair) {
+            console.log('🔧 Repairing storage structure...');
+            await AsyncStorage.setItem('@deep_work_sessions', JSON.stringify(repairedSessions));
+          } else {
+            console.log('✅ Storage structure is valid');
+          }
+        }
+      } else {
+        console.log('📝 No existing sessions, initializing empty storage');
+        await AsyncStorage.setItem('@deep_work_sessions', JSON.stringify({}));
       }
-      
-      if (isNaN(sessionToSave.duration) || sessionToSave.duration <= 0) {
-        throw new Error(`Invalid duration: ${sessionToSave.duration}`);
-      }
-      
-      console.log('✅ Validation passed, saving session...');
-      // ===== END VALIDATION SECTION =====
-
-      // Save session to storage
-      const result = await deepWorkStore.addSession(sessionToSave);
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to save session');
-      }
-
-      console.log('✅ Session saved successfully!');
-      console.log('===================================\n');
-
-      // Navigate to rating screen instead of showing alert
-      navigation.navigate('SessionRating', { sessionId: sessionToSave.id });
-
-      return true;
-    } catch (error) {
-      console.error('❌ Error saving session:', error);
-      Alert.alert(
-        'Error',
-        'Failed to save your session. Please try again.',
-        [{ text: 'OK' }]
-      );
-      return false;
-    } finally {
-      setIsSaving(false);
+    } catch (repairError) {
+      console.error('⚠️ Storage repair failed, initializing fresh:', repairError);
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      await AsyncStorage.setItem('@deep_work_sessions', JSON.stringify({}));
     }
-  };
+    // ===== END STORAGE REPAIR SECTION =====
+  
+    // ===== ENHANCED VALIDATION SECTION =====
+    console.log('📝 ===== SESSION SAVE DEBUG =====');
+    console.log('Route params:', { duration, activity, musicChoice });
+    console.log('Session data from modal:', sessionData);
+    
+    // Prepare session data
+    const now = Date.now();
+    const dateString = new Date().toISOString().split('T')[0];
+    
+    const sessionToSave = {
+      id: `${dateString}-${now}`,
+      date: dateString,
+      activity: activity,
+      duration: parseFloat(duration),
+      musicChoice: musicChoice || 'none',
+      
+      // CHANGED: Store structured session data instead of just notes string
+      notes: sessionData.notes || '',
+      ratings: {
+        productivity: sessionData.productivityRating,
+        focus: sessionData.focusRating,
+        energy: sessionData.energyLevel,
+      },
+      
+      timestamp: now,
+      completedAt: new Date().toISOString(),
+      syncStatus: 'synced',
+      metadata: {
+        appVersion: '1.0.0',
+        created: now,
+        modified: now
+      }
+    };
+    
+    console.log('Prepared session data:', sessionToSave);
+    
+    // Additional validation checks
+    console.log('Validation checks:');
+    console.log('- activity type:', typeof sessionToSave.activity, 'value:', sessionToSave.activity);
+    console.log('- duration type:', typeof sessionToSave.duration, 'value:', sessionToSave.duration);
+    console.log('- notes type:', typeof sessionToSave.notes, 'value:', sessionToSave.notes);
+    console.log('- ratings:', sessionToSave.ratings);
+    console.log('- duration > 0?', sessionToSave.duration > 0);
+    console.log('- activity not empty?', sessionToSave.activity.length > 0);
+    
+    // Check for potential issues
+    if (!sessionToSave.activity || sessionToSave.activity.length === 0) {
+      throw new Error('Activity is required but was empty');
+    }
+    
+    if (isNaN(sessionToSave.duration) || sessionToSave.duration <= 0) {
+      throw new Error(`Invalid duration: ${sessionToSave.duration}`);
+    }
+    
+    console.log('✅ Validation passed, saving session...');
+    // ===== END VALIDATION SECTION =====
+
+    // Save session to storage
+    const result = await deepWorkStore.addSession(sessionToSave);
+
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to save session');
+    }
+
+    console.log('✅ Session saved successfully!');
+    console.log('===================================\n');
+    console.log('🐛 DEBUG: About to navigate to SessionRating with sessionId:', sessionToSave.id);
+
+    // Navigate to rating screen instead of showing alert
+    navigation.navigate('SessionRating', { sessionId: sessionToSave.id });
+    console.log('🐛 DEBUG: Navigation called successfully');
+
+    return true;
+  } catch (error) {
+    console.error('❌ Error saving session:', error);
+    console.error('🐛 DEBUG: Error details:', error.message, error.stack);
+    Alert.alert(
+      'Error',
+      'Failed to save your session. Please try again.',
+      [{ text: 'OK' }]
+    );
+    return false;
+  } finally {
+    setIsSaving(false);
+  }
+};
 
   // Format time display
   const formatTime = (milliseconds) => {
