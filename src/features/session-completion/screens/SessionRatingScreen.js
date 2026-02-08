@@ -10,8 +10,81 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Slider from '@react-native-community/slider';
 import { sessionService } from '../services/sessionService';
+
+// Custom Slider Component (no native dependencies)
+function CustomSlider({ value, onValueChange, min = 1, max = 10 }) {
+  const percentage = ((value - min) / (max - min)) * 100;
+
+  return (
+    <View style={sliderStyles.container}>
+      <View style={sliderStyles.track}>
+        <View style={[sliderStyles.fill, { width: `${percentage}%` }]} />
+      </View>
+      <View style={sliderStyles.buttonsRow}>
+        {Array.from({ length: max - min + 1 }, (_, i) => min + i).map((num) => (
+          <TouchableOpacity
+            key={num}
+            onPress={() => onValueChange(num)}
+            style={[
+              sliderStyles.numberButton,
+              value === num && sliderStyles.numberButtonActive,
+            ]}
+          >
+            <Text
+              style={[
+                sliderStyles.numberText,
+                value === num && sliderStyles.numberTextActive,
+              ]}
+            >
+              {num}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const sliderStyles = StyleSheet.create({
+  container: {
+    width: '100%',
+  },
+  track: {
+    height: 4,
+    backgroundColor: '#DDDDDD',
+    borderRadius: 2,
+    marginBottom: 16,
+  },
+  fill: {
+    height: '100%',
+    backgroundColor: '#000000',
+    borderRadius: 2,
+  },
+  buttonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  numberButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  numberButtonActive: {
+    backgroundColor: '#000000',
+  },
+  numberText: {
+    fontSize: 12,
+    color: '#666666',
+    fontWeight: '600',
+  },
+  numberTextActive: {
+    color: '#FFFFFF',
+  },
+});
 
 export default function SessionRatingScreen({ navigation, route }) {
   const { sessionId } = route.params;
@@ -22,7 +95,7 @@ export default function SessionRatingScreen({ navigation, route }) {
   const handleContinue = async () => {
     try {
       await sessionService.saveRating(sessionId, {
-        rating: Math.round((focusRating + productivityRating) / 2), // Average for 1-5 emoji rating
+        rating: Math.round((focusRating + productivityRating) / 2),
         focus: focusRating,
         productivity: productivityRating,
         notes: workDescription.trim() || undefined,
@@ -32,7 +105,6 @@ export default function SessionRatingScreen({ navigation, route }) {
       navigation.navigate('SessionSummary', { sessionId });
     } catch (error) {
       console.error('Failed to save rating:', error);
-      // Continue anyway - don't block the user
       navigation.navigate('SessionSummary', { sessionId });
     }
   };
@@ -62,32 +134,22 @@ export default function SessionRatingScreen({ navigation, route }) {
 
           {/* Focus Slider */}
           <View style={styles.sliderSection}>
-            <Slider
-              style={styles.slider}
-              minimumValue={1}
-              maximumValue={10}
-              step={1}
+            <CustomSlider
               value={focusRating}
               onValueChange={setFocusRating}
-              minimumTrackTintColor="#000000"
-              maximumTrackTintColor="#DDDDDD"
-              thumbTintColor="#000000"
+              min={1}
+              max={10}
             />
             <Text style={styles.sliderLabel}>How focused did you feel</Text>
           </View>
 
           {/* Productivity Slider */}
           <View style={styles.sliderSection}>
-            <Slider
-              style={styles.slider}
-              minimumValue={1}
-              maximumValue={10}
-              step={1}
+            <CustomSlider
               value={productivityRating}
               onValueChange={setProductivityRating}
-              minimumTrackTintColor="#000000"
-              maximumTrackTintColor="#DDDDDD"
-              thumbTintColor="#000000"
+              min={1}
+              max={10}
             />
             <Text style={styles.sliderLabel}>
               How much do you feel like you{'\n'}accomplished?
@@ -154,10 +216,6 @@ const styles = StyleSheet.create({
   },
   sliderSection: {
     marginBottom: 40,
-  },
-  slider: {
-    width: '100%',
-    height: 40,
   },
   sliderLabel: {
     fontSize: 14,

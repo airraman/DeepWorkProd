@@ -48,7 +48,19 @@ export default function SessionSummaryScreen({ navigation, route }) {
   };
 
   const handleDone = () => {
-    navigation.navigate('MainApp', { screen: 'Home' });
+    // Reset the entire navigation stack and go to Metrics
+    navigation.reset({
+      index: 0,
+      routes: [
+        {
+          name: 'MainApp',
+          state: {
+            routes: [{ name: 'Metrics' }],
+            index: 0,
+          },
+        },
+      ],
+    });
   };
 
   if (loading) {
