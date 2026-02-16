@@ -1,0 +1,121 @@
+{
+  "identifier" : "deepwork-storekit-premium",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "40",
+      "familyShareable" : false,
+      "internalID" : "6738675649",
+      "localizations" : [
+        {
+          "description" : "One-time purchase for unlimited lifetime access to all premium features",
+          "displayName" : "Lifetime Premium",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.airraman.deepwork.premium.lifetime",
+      "referenceName" : "Lifetime Premium",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "6748564027",
+    "_developerTeamID" : "YOUR_TEAM_ID",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 751809600.0,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21532804",
+      "localizations" : [],
+      "name" : "Premium",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "2.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6738675647",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Monthly access to all premium features",
+              "displayName" : "Monthly Premium",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.airraman.deepwork.premium.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Monthly Premium",
+          "subscriptionGroupID" : "21532804",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "25.00",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "6738675648",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Annual access to all premium features",
+              "displayName" : "Annual Premium",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.airraman.deepwork.premium.annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Annual Premium",
+          "subscriptionGroupID" : "21532804",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

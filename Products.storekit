@@ -1,0 +1,85 @@
+{
+  "appPolicies": {
+    "eula": "",
+    "policies": []
+  },
+  "identifier": "E15E70AB",
+  "nonRenewingSubscriptions": [],
+  "products": [
+    {
+      "displayPrice": "40.00",
+      "familyShareable": false,
+      "internalID": "5539BEA2",
+      "localizations": [
+        {
+          "description": "Lifetime access to all premium features",
+          "displayName": "Lifetime Premium",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.airraman.deepwork.Lifetime",
+      "referenceName": "Lifetime",
+      "type": "NonConsumable"
+    }
+  ],
+  "settings": {
+    "_failTransactionsEnabled": false,
+    "_locale": "en_US",
+    "_storefront": "USA"
+  },
+  "subscriptionGroups": [
+    {
+      "id": "17C93423",
+      "localizations": [],
+      "name": "Premium",
+      "subscriptions": [
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "2.99",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "C2B2FB14",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "Monthly access to all premium features",
+              "displayName": "Monthly Premium",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "com.airraman.deepwork.Monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "Monthly Premium",
+          "subscriptionGroupID": "17C93423",
+          "type": "RecurringSubscription"
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "25.00",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "B2A02309",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "Annual access to all premium features",
+              "displayName": "Annual Premium",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "com.airraman.deepwork.Annual",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Annual Premium",
+          "subscriptionGroupID": "17C93423",
+          "type": "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version": {
+    "major": 4,
+    "minor": 0
+  }
+}
