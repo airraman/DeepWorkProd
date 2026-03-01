@@ -1,7 +1,7 @@
 // app.config.js
 export default {
   expo: {
-    name: "DeepWork.io",
+    name: "DeepWork.io (Dev)",
     slug: "DeepWorkApp",
     version: "1.0.5",
     orientation: "portrait",
@@ -58,7 +58,7 @@ export default {
     ],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.airraman.deepwork", 
+      bundleIdentifier: "com.airraman.deepwork.dev", 
       buildNumber: "30",
       googleServicesFile: "./GoogleService-Info.plist",
       infoPlist: {
@@ -72,7 +72,8 @@ export default {
           "com.expo.tasks.BACKGROUND_TIMER_TASK"
         ],
         NSUserNotificationsUsageDescription: "This app uses notifications to remind you when your deep work sessions are complete and to track session progress.",
-        CFBundleDisplayName: "DeepWork.io",
+        NSFamilyControlsUsageDescription: "DeepWork needs Screen Time access to block selected apps during your focus sessions.",
+        CFBundleDisplayName: "DeepWork.io (Dev)",
         ITSAppUsesNonExemptEncryption: false
       },
       config: {
