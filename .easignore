@@ -1,0 +1,17 @@
+# iOS build artifacts
+ios/Pods/
+ios/Pods.OLD*/
+ios/build/
+ios/DerivedData/
+ios/*.xcworkspace
+
+# Node modules (already handled by .gitignore but be explicit)
+node_modules/
+
+# Build artifacts
+.expo/
+android/build/
+android/.gradle/
+
+# Logs
+*.log
