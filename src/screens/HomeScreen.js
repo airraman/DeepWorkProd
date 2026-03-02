@@ -20,11 +20,14 @@ import { useTheme, THEMES } from '../context/ThemeContext';
 import SharedHeader from '../components/SharedHeader';
 import { useSubscription } from '../context/SubscriptionContext';  // ✅ NEW IMPORT
 import { PaywallModal } from '../components/PaywallModal';  // ✅ NEW IMPORT
+import { useFocusLock } from '../context/FocusLockContext';
+
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isTablet = SCREEN_WIDTH > 768 || SCREEN_HEIGHT > 768;
 const HEADER_HEIGHT = Platform.OS === 'ios' ? 60 : 50;
 const CONTENT_PADDING_TOP = HEADER_HEIGHT - (Platform.OS === 'ios' ? 0 : 20);
+
 
 const HomeScreen = () => {
   const navigation = useNavigation();
@@ -55,6 +58,8 @@ const HomeScreen = () => {
     { value: 'white-noise', label: 'White noise' },
     { value: 'lofi', label: 'Lo-fi' }
   ];
+  const { isAvailable, selectionCount, refreshSelection } = useFocusLock();
+const [focusLockEnabled, setFocusLockEnabled] = useState(false);
 
 
   // Load settings when component first mounts
@@ -75,6 +80,7 @@ const HomeScreen = () => {
   useFocusEffect(
     React.useCallback(() => {
       loadSettings();
+      refreshSelection();
     }, [])
   );
 
@@ -125,7 +131,8 @@ const HomeScreen = () => {
     navigation.navigate('DeepWorkSession', {
       duration,
       activity,
-      musicChoice
+      musicChoice,
+      focusLockEnabled: isAvailable && focusLockEnabled, // only passes true if actually available
     });
   };
 
@@ -297,6 +304,55 @@ const HomeScreen = () => {
             ))}
           </View>
         </View>
+
+        {isAvailable && (
+  <View style={[
+    styles.section,
+    {
+      backgroundColor: isDark ? '#1f1f1f' : colors.card,
+      borderColor: focusLockEnabled ? '#6C63FF' : colors.border,
+      borderWidth: 1,
+      borderRadius: 12,
+      padding: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    }
+  ]}>
+    <View style={{ flex: 1 }}>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>
+        🔒 Focus Lock
+      </Text>
+      <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
+        Block {selectionCount} app{selectionCount !== 1 ? 's' : ''} during session
+      </Text>
+    </View>
+    <TouchableOpacity
+      style={{
+        width: 51,
+        height: 31,
+        borderRadius: 15.5,
+        backgroundColor: focusLockEnabled ? '#6C63FF' : (isDark ? '#3A3A3C' : '#E5E5EA'),
+        justifyContent: 'center',
+        paddingHorizontal: 2,
+      }}
+      onPress={() => setFocusLockEnabled(prev => !prev)}
+      activeOpacity={0.8}
+    >
+      <View style={{
+        width: 27,
+        height: 27,
+        borderRadius: 13.5,
+        backgroundColor: '#FFFFFF',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1,
+        alignSelf: focusLockEnabled ? 'flex-end' : 'flex-start',
+      }} />
+    </TouchableOpacity>
+  </View>
+)}
         
         {/* Extra padding at bottom */}
         <View style={{ height: 80 }} />

@@ -21,6 +21,7 @@ import ErrorBoundary from './src/components/ErrorBoundary';
 import { audioSessionManager } from './src/services/audioSessionManager';
 import { useNotificationSetup } from './src/hooks/useNotificationSetup';
 import { useNotificationHandlers } from './src/hooks/useNotificationHandlers';
+import { FocusLockProvider } from './src/context/FocusLockContext';
 
 
 messaging().setBackgroundMessageHandler(async (remoteMessage) => {
@@ -702,6 +703,7 @@ const receivedSubscription = Notifications.addNotificationReceivedListener(
     <ErrorBoundary>
       {/* ✅ UPDATED: SubscriptionProvider wraps ThemeProvider */}
       <SubscriptionProvider>
+        <FocusLockProvider>
         <ThemeProvider>
           <StatusBar 
             barStyle="dark-content" 
@@ -790,6 +792,7 @@ const receivedSubscription = Notifications.addNotificationReceivedListener(
             </Stack.Navigator>
           </NavigationContainer>
         </ThemeProvider>
+        </FocusLockProvider>
       </SubscriptionProvider>
       {/* ✅ END OF UPDATED SECTION */}
     </ErrorBoundary>

@@ -19,6 +19,7 @@ import { deepWorkStore } from '../services/deepWorkStore';
 import SessionNotesModal from '../components/modals/SessionNotesModal';
 import { Pause, Play, ChevronLeft } from 'lucide-react-native';
 import backgroundTimer from '../services/backgroundTimer';
+import { useFocusLock } from '../context/FocusLockContext';
 // import functions from '@react-native-firebase/functions';
 
 
@@ -29,8 +30,12 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DeepWorkSession = ({ route, navigation }) => {
   console.log('🔍 DeepWorkSession starting with safe initialization...');
   
-  const { duration, activity, musicChoice } = route.params;
+  // const { duration, activity, musicChoice } = route.params;
   const totalDuration = parseFloat(duration) * 60 * 1000;
+
+  const { startBlocking, stopBlocking } = useFocusLock();
+const { duration, activity, musicChoice, focusLockEnabled } = route.params;
+  
 
   // Core state - only what's essential
   const [timeLeft, setTimeLeft] = useState(totalDuration);
@@ -53,6 +58,8 @@ const DeepWorkSession = ({ route, navigation }) => {
   const intervalRef = useRef(null);
   const animatedHeight = useRef(new Animated.Value(0)).current;
   const swipeAnim = useRef(new Animated.Value(0)).current;
+
+  
 
   // SAFE: Load activity details without crashing
   useEffect(() => {
@@ -172,8 +179,16 @@ const DeepWorkSession = ({ route, navigation }) => {
         servicesRef.current.alarmService
           ?.init()
           .then(() => console.log('🔔 Alarm service initialized'))
-          .catch(err => console.warn('🔔 Alarm init failed:', err))
-      ]).catch(err => {
+          .catch(err => console.warn('🔔 Alarm init failed:', err)),
+
+          focusLockEnabled
+          ? startBlocking()
+              .then(() => console.log('🔒 Focus Lock blocking started'))
+              .catch(err => console.warn('🔒 Focus Lock start failed (non-critical):', err))
+          : Promise.resolve(),
+      
+      
+        ]).catch(err => {
         console.warn('🔍 Some services failed to initialize:', err);
         // Non-critical - timer still works
       });
@@ -407,24 +422,29 @@ const DeepWorkSession = ({ route, navigation }) => {
   // ✅ UPDATED: Safe cleanup function with music cleanup
   const cleanup = async () => {
     console.log('🔍 Cleaning up session...');
-    
+  
     try {
-      // Clear local timer
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
-      
-      // ✅ STOP BACKGROUND MUSIC
+  
+      // Stop Focus Lock blocking regardless of whether it was enabled —
+      // defensive call ensures shields are never left on after session ends.
+      try {
+        await stopBlocking();
+        console.log('🔒 Focus Lock blocking stopped');
+      } catch (error) {
+        console.warn('🔒 Focus Lock cleanup error (non-critical):', error);
+      }
+  
       if (servicesRef.current.audioService) {
         try {
           await servicesRef.current.audioService.stopMusic();
-          console.log('🎵 Music stopped during cleanup');
         } catch (error) {
           console.warn('🎵 Music cleanup error:', error);
         }
       }
-      
-      // Stop background services if available
+  
       if (servicesRef.current.backgroundTimer) {
         try {
           await servicesRef.current.backgroundTimer.stopTimerNotification();
@@ -432,7 +452,7 @@ const DeepWorkSession = ({ route, navigation }) => {
           console.warn('Background cleanup error:', error);
         }
       }
-      
+  
       if (servicesRef.current.alarmService) {
         try {
           await servicesRef.current.alarmService.cleanup();
@@ -440,7 +460,7 @@ const DeepWorkSession = ({ route, navigation }) => {
           console.warn('Alarm cleanup error:', error);
         }
       }
-      
+  
     } catch (error) {
       console.warn('Cleanup error:', error);
     }
