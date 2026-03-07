@@ -19,35 +19,31 @@ class FocusLockModule: NSObject {
 
   private let store = ManagedSettingsStore(named: ManagedSettingsStore.Name("deepwork.focuslock"))
   private var activitySelection = FamilyActivitySelection()
-  private let selectionKey   = "focusLock_activitySelection"
-  private let isBlockingKey  = "focusLock_isBlocking"
+  private let selectionKey      = "focusLock_activitySelection"
+  private let isBlockingKey     = "focusLock_isBlocking"
 
   override init() {
     super.init()
     loadPersistedSelection()
-    // Advanced: If the app was killed while blocking, the OS-level shields
-    // from ManagedSettingsStore persist automatically. However we defensively
-    // re-apply them here so our in-memory store instance is always in sync
-    // with what UserDefaults says should be active.
     restoreBlockingStateIfNeeded()
+    // Session 8: On every launch, audit and self-heal state.
+    // Catches the case where UserDefaults and OS shield state diverged
+    // (e.g. authorization was revoked while the app was killed).
+    auditAndHealState()
   }
 
-  // MARK: - Session 4: Initialization
+  // MARK: - Initialization
 
-  /// Returns full Focus Lock state in a single call.
-  /// Use this on app launch instead of three separate calls —
-  /// reduces bridge overhead and ensures atomic state snapshot.
   @objc
   func initialize(
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    let authStatus: String
-    switch AuthorizationCenter.shared.authorizationStatus {
-    case .approved:      authStatus = "approved"
-    case .denied:        authStatus = "denied"
-    case .notDetermined: authStatus = "notDetermined"
-    @unknown default:    authStatus = "unknown"
+    let authStatus = currentAuthStatusString()
+    // Session 8: If auth was revoked, ensure shields are cleared
+    // so we don't report isBlocking: true with no enforcement capability.
+    if authStatus == "denied" || authStatus == "notDetermined" {
+      healRevokedAuthState()
     }
 
     resolve([
@@ -81,13 +77,7 @@ class FocusLockModule: NSObject {
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    let status = AuthorizationCenter.shared.authorizationStatus
-    switch status {
-    case .approved:      resolve("approved")
-    case .denied:        resolve("denied")
-    case .notDetermined: resolve("notDetermined")
-    @unknown default:    resolve("unknown")
-    }
+    resolve(currentAuthStatusString())
   }
 
   // MARK: - App Selection
@@ -97,6 +87,13 @@ class FocusLockModule: NSObject {
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
+    // Session 8: Guard — require authorization before showing picker.
+    // Presenting the picker without authorization crashes on some iOS versions.
+    guard AuthorizationCenter.shared.authorizationStatus == .approved else {
+      reject("NOT_AUTHORIZED", "Screen Time authorization required before selecting apps.", nil)
+      return
+    }
+
     DispatchQueue.main.async {
       guard let rootVC = self.topViewController() else {
         reject("NO_ROOT_VC", "Could not find root view controller", nil)
@@ -114,7 +111,6 @@ class FocusLockModule: NSObject {
       hostingVC.modalPresentationStyle = .formSheet
       hostingVC.onDismiss = {
         self.persistSelection()
-        // If blocking is active, update shields to reflect new selection
         if UserDefaults.standard.bool(forKey: self.isBlockingKey) {
           self.applyShields()
         }
@@ -152,6 +148,14 @@ class FocusLockModule: NSObject {
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
+    // Session 8: Verify authorization is still valid before applying shields.
+    // User could have revoked between app launches.
+    guard AuthorizationCenter.shared.authorizationStatus == .approved else {
+      healRevokedAuthState()
+      reject("NOT_AUTHORIZED", "Screen Time authorization was revoked. Please re-authorize in Settings.", nil)
+      return
+    }
+
     guard !activitySelection.applicationTokens.isEmpty
        || !activitySelection.categoryTokens.isEmpty
        || !activitySelection.webDomainTokens.isEmpty
@@ -183,7 +187,67 @@ class FocusLockModule: NSObject {
     resolve(blockingStatus())
   }
 
-  // MARK: - Private helpers
+  // MARK: - Session 8: Force Stop (Emergency Recovery)
+
+  /// Nuclear option: clears all shields AND resets all persisted state.
+  /// Call this when the user reports apps are stuck blocked, or when
+  /// state is known to be corrupted (e.g. after authorization revocation
+  /// detected mid-session).
+  ///
+  /// Safe to call at any time — idempotent, never throws.
+  @objc
+  func forceStopBlocking(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    // Clear OS-level shields
+    removeShields()
+
+    // Reset all UserDefaults state
+    UserDefaults.standard.set(false, forKey: isBlockingKey)
+    UserDefaults.standard.removeObject(forKey: selectionKey)
+
+    // Reset in-memory selection so subsequent calls start clean
+    activitySelection = FamilyActivitySelection()
+
+    resolve([
+      "success": true,
+      "message": "Force stop complete. All shields removed and state reset.",
+      "blocking": blockingStatus(),
+      "selection": selectionSummary(),
+    ])
+  }
+
+  // MARK: - Session 8: Private recovery helpers
+
+  /// Called on init. Detects and heals diverged state before any
+  /// JS interaction happens. Covers the auth-revoked-while-killed scenario.
+  private func auditAndHealState() {
+    let authStatus = AuthorizationCenter.shared.authorizationStatus
+    let userDefaultsSaysBlocking = UserDefaults.standard.bool(forKey: isBlockingKey)
+
+    // If we think we're blocking but auth was revoked, clear everything.
+    // ManagedSettingsStore shields are automatically removed by iOS when
+    // authorization is revoked, so we just need to sync our state.
+    if userDefaultsSaysBlocking && authStatus != .approved {
+      healRevokedAuthState()
+    }
+  }
+
+  /// Clears shield state without touching the stored app selection.
+  /// Call when authorization is revoked — user's app list is preserved
+  /// so they don't have to re-select after re-authorizing.
+  private func healRevokedAuthState() {
+    store.shield.applications = nil
+    store.shield.applicationCategories = nil
+    store.shield.webDomains = nil
+    UserDefaults.standard.set(false, forKey: isBlockingKey)
+  }
+
+  private func restoreBlockingStateIfNeeded() {
+    guard UserDefaults.standard.bool(forKey: isBlockingKey) else { return }
+    applyShields()
+  }
 
   private func applyShields() {
     if !activitySelection.applicationTokens.isEmpty {
@@ -203,21 +267,20 @@ class FocusLockModule: NSObject {
     store.shield.webDomains = nil
   }
 
-  // Advanced: Called on init. If UserDefaults says we were blocking when
-  // the app was last killed, re-apply shields to this store instance.
-  // ManagedSettingsStore is OS-persisted so the user is still blocked —
-  // this just ensures our in-memory instance matches that state so
-  // subsequent calls to startBlocking/stopBlocking behave correctly.
-  private func restoreBlockingStateIfNeeded() {
-    guard UserDefaults.standard.bool(forKey: isBlockingKey) else { return }
-    applyShields()
+  private func currentAuthStatusString() -> String {
+    switch AuthorizationCenter.shared.authorizationStatus {
+    case .approved:      return "approved"
+    case .denied:        return "denied"
+    case .notDetermined: return "notDetermined"
+    @unknown default:    return "unknown"
+    }
   }
 
   private func blockingStatus() -> [String: Any] {
     return [
-      "isBlocking":            UserDefaults.standard.bool(forKey: isBlockingKey),
-      "shieldedAppCount":      activitySelection.applicationTokens.count,
-      "shieldedCategoryCount": activitySelection.categoryTokens.count,
+      "isBlocking":             UserDefaults.standard.bool(forKey: isBlockingKey),
+      "shieldedAppCount":       activitySelection.applicationTokens.count,
+      "shieldedCategoryCount":  activitySelection.categoryTokens.count,
       "shieldedWebDomainCount": activitySelection.webDomainTokens.count,
     ]
   }
