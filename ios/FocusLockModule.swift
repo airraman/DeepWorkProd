@@ -15,6 +15,7 @@ private class PickerHostingController<Content: View>: UIHostingController<Conten
 
 // MARK: - FocusLockModule
 @objc(FocusLockModule)
+@available(iOS 16.0, *)
 class FocusLockModule: NSObject {
 
   private let store = ManagedSettingsStore(named: ManagedSettingsStore.Name("deepwork.focuslock"))
