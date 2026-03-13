@@ -9,7 +9,8 @@
       "distribution": "internal",
       "channel": "development",
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "bundleIdentifier": "com.airraman.deepwork.dev"
       },
       "env": {
         "EXPO_PUBLIC_OPENAI_API_KEY": "$(EXPO_PUBLIC_OPENAI_API_KEY)"
@@ -25,7 +26,8 @@
     "production": {
       "autoIncrement": true,
       "ios": {
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "bundleIdentifier": "com.airraman.deepwork"
       },
       "channel": "production",
       "env": {
