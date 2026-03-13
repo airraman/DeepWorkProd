@@ -31,7 +31,10 @@ export default {
           ios: {
             useFrameworks: "static",
             deploymentTarget: "16.0",
-            newArchEnabled: false
+            newArchEnabled: false,
+            entitlements: {
+              "com.apple.developer.family-controls": true
+            }
           }
         }
       ],
