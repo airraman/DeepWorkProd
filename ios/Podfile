@@ -63,11 +63,13 @@ target 'DeepWorkio' do
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
     
-    # Disable Swift module interface for ALL targets to avoid Xcode 15+ issues
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
-        config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'
-        unless target.name.start_with?('Firebase') || target.name.start_with?('RNFB')
+        if target.name.start_with?('Firebase') || target.name.start_with?('RNFB') || target.name == 'FirebaseSharedSwift'
+          config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'NO'
+          config.build_settings['SWIFT_EMIT_MODULE_INTERFACE'] = 'NO'
+        else
+          config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'
           config.build_settings['SWIFT_EMIT_MODULE_INTERFACE'] = 'NO'
         end
       end
