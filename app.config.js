@@ -48,7 +48,8 @@ export default {
             useFramework: "static"
           }
         }
-      ]
+      ],
+      "./ios-family-controls-plugin.js",
     ],
     assets: [
       "./assets/sounds/completion_alarm.wav",
