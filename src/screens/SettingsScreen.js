@@ -809,9 +809,26 @@ const SettingsScreen = () => {
             <Text style={styles.updateButtonText}>Save Settings</Text>
           )}
         </TouchableOpacity>
-      </ScrollView>
 
-      {/* Alert Toast */}
+{__DEV__ && (
+  <TouchableOpacity
+    style={{
+      margin: 16,
+      padding: 16,
+      borderRadius: 8,
+      backgroundColor: '#6C63FF',
+      alignItems: 'center',
+    }}
+    onPress={() => navigation.navigate('FocusLockTest')}
+  >
+    <Text style={{ color: 'white', fontSize: 16, fontWeight: '500' }}>
+      🔒 Focus Lock Test (Dev)
+    </Text>
+  </TouchableOpacity>
+)}
+
+</ScrollView>
+{/* Alert Toast */}
       {showAlert && (
         <View style={[styles.alert, { backgroundColor: colors.primary }]}>
           <Text style={styles.alertText}>{alertMessage}</Text>

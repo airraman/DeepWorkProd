@@ -1,18 +1,7 @@
-// src/hooks/useNotificationSetup.js - ENHANCED for Sprint 2
-/**
- * Notification Setup Hook
- * 
- * RESPONSIBILITIES:
- * - Request notification permissions
- * - Register FCM token with Cloud Functions
- * - Initialize notification preferences in Firestore
- * - Handle token refresh
- * 
- * CALLED FROM: App.js on launch
- */
-
+// src/hooks/useNotificationSetup.js
 import { useEffect, useState } from 'react';
 import messaging from '@react-native-firebase/messaging';
+import { firebase } from '@react-native-firebase/app';
 import { Platform, Alert, Linking } from 'react-native';
 import deviceIdService from '../services/deviceIdService';
 import notificationPreferences from '../services/notificationPreferences';
@@ -23,6 +12,10 @@ export function useNotificationSetup() {
   const [deviceId, setDeviceId] = useState(null);
 
   useEffect(() => {
+    if (!firebase.apps.length) {
+      console.warn('⚠️ [FCM] Firebase not ready, skipping notification setup');
+      return;
+    }
     setupNotifications();
   }, []);
 
@@ -30,12 +23,10 @@ export function useNotificationSetup() {
     try {
       console.log('🔔 [FCM] Starting notification setup...');
 
-      // STEP 1: Get stable device ID
       const devId = await deviceIdService.getDeviceId();
       setDeviceId(devId);
       console.log('🔔 [FCM] Device ID:', devId.substring(0, 20) + '...');
 
-      // STEP 2: Request permission
       const authStatus = await messaging().requestPermission();
       const enabled =
         authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
@@ -66,18 +57,13 @@ export function useNotificationSetup() {
       setPermissionGranted(true);
       console.log('✅ [FCM] Permission granted');
 
-      // STEP 3: Get FCM token
       const token = await messaging().getToken();
       setFcmToken(token);
       console.log('🔑 [FCM] Token received:', token.substring(0, 20) + '...');
 
-      // STEP 4: Register token with Cloud Functions
       await registerTokenWithBackend(devId, token);
-
-      // ✅ NEW STEP 5: Initialize notification preferences in Firestore
       await initializePreferences(devId);
 
-      // STEP 6: Listen for token refresh
       const unsubscribe = messaging().onTokenRefresh(async (newToken) => {
         console.log('🔄 [FCM] Token refreshed');
         setFcmToken(newToken);
@@ -90,25 +76,14 @@ export function useNotificationSetup() {
     }
   }
 
-  /**
-   * Register FCM token with Cloud Functions
-   * 
-   * WHY CLOUD FUNCTIONS:
-   * - Stores token in Firestore
-   * - Allows sending notifications from server
-   * - Handles token updates automatically
-   */
   async function registerTokenWithBackend(userId, token) {
     try {
       console.log('📤 [FCM] Registering token with backend...');
-
       const response = await fetch(
         'https://us-central1-deepwork-8416f.cloudfunctions.net/registerToken',
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             fcmToken: token,
             platform: Platform.OS,
@@ -116,7 +91,6 @@ export function useNotificationSetup() {
           }),
         }
       );
-
       if (response.ok) {
         console.log('✅ [FCM] Token registered successfully');
       } else {
@@ -128,28 +102,12 @@ export function useNotificationSetup() {
     }
   }
 
-  /**
-   * ✅ NEW: Initialize notification preferences in Firestore
-   * 
-   * WHY THIS MATTERS:
-   * - Sets up default preferences for new users
-   * - Ensures Cloud Functions can read user preferences
-   * - Detects and stores user's timezone
-   * 
-   * CALLED ONCE: On first app launch after FCM setup
-   */
   async function initializePreferences(userId) {
     try {
       console.log('📋 [FCM] Initializing notification preferences...');
-  
-      // Check if preferences already exist
       const existingPrefs = await notificationPreferences.getPreferences();
-      
-      // If preferences don't have updatedAt, they're defaults (not saved yet)
       if (!existingPrefs.updatedAt) {
         console.log('📋 [FCM] No existing preferences, creating defaults...');
-        
-        // Save default preferences to AsyncStorage
         const success = await notificationPreferences.savePreferences({
           sessionComplete: true,
           dailyReminder: {
@@ -159,23 +117,18 @@ export function useNotificationSetup() {
           },
           weeklySummary: true,
         });
-        
         if (success) {
-          console.log('✅ [FCM] Preferences initialized in AsyncStorage');
+          console.log('✅ [FCM] Preferences initialized');
         } else {
           console.warn('⚠️ [FCM] Failed to initialize preferences');
         }
       } else {
-        console.log('📋 [FCM] Preferences already exist, skipping initialization');
+        console.log('📋 [FCM] Preferences already exist, skipping');
       }
     } catch (error) {
       console.error('❌ [FCM] Error initializing preferences:', error);
     }
   }
 
-  return {
-    fcmToken,
-    permissionGranted,
-    deviceId,
-  };
+  return { fcmToken, permissionGranted, deviceId };
 }

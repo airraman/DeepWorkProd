@@ -1,4 +1,6 @@
 // App.js - Production Version with iOS Notification Fix + Database + RevenueCat
+import '@react-native-firebase/app'; // MUST be absolute first
+
 import './src/config/firebaseConfig';
 
 import messaging from '@react-native-firebase/messaging';
@@ -22,15 +24,19 @@ import { audioSessionManager } from './src/services/audioSessionManager';
 import { useNotificationSetup } from './src/hooks/useNotificationSetup';
 import { useNotificationHandlers } from './src/hooks/useNotificationHandlers';
 import { FocusLockProvider } from './src/context/FocusLockContext';
+import FocusLockTest from './src/screens/FocusLockTest';
 
 
-messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-  console.log('📱 [FCM Background] Notification received:', remoteMessage);
-  Vibration.vibrate([0, 250, 250, 250]);
-  const { title, body } = remoteMessage.notification || {};
-  console.log(`📱 Background notification: ${title} - ${body}`);
-  return Promise.resolve();
-});
+// At top level, replace the bare call with:
+try {
+  messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+    console.log('📱 [FCM Background] Notification received:', remoteMessage);
+    Vibration.vibrate([0, 250, 250, 250]);
+    const { title, body } = remoteMessage.notification || {};
+  });
+} catch (e) {
+  console.warn('FCM background handler registration failed:', e);
+}
 
 const DevToolsScreen = __DEV__ 
   ? require('./src/screens/DevToolsScreen').default 
@@ -783,6 +789,16 @@ const receivedSubscription = Notifications.addNotificationReceivedListener(
   <Stack.Screen 
     name="DevTools" 
     component={DevToolsScreen}
+    options={{
+      presentation: 'modal',
+      gestureEnabled: true,
+    }}
+  />
+)}
+{__DEV__ && (
+  <Stack.Screen 
+    name="FocusLockTest" 
+    component={FocusLockTest}
     options={{
       presentation: 'modal',
       gestureEnabled: true,
