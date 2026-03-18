@@ -128,7 +128,6 @@
 				BECDAD3A50762B7B02BB1C28 /* ExpoModulesProvider.swift */,
 			);
 			name = DeepWorkio;
-			path = DeepWorkio;
 			sourceTree = "<group>";
 		};
 		EBE590C43B07100B94A68FD5 /* ExpoModulesProviders */ = {
