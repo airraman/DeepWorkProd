@@ -62,6 +62,7 @@
 				148FBC9938E025AB322C6733 /* PrivacyInfo.xcprivacy */,
 			);
 			name = DeepWorkio;
+			path = DeepWorkio;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
@@ -127,6 +128,7 @@
 				BECDAD3A50762B7B02BB1C28 /* ExpoModulesProvider.swift */,
 			);
 			name = DeepWorkio;
+			path = DeepWorkio;
 			sourceTree = "<group>";
 		};
 		EBE590C43B07100B94A68FD5 /* ExpoModulesProviders */ = {
