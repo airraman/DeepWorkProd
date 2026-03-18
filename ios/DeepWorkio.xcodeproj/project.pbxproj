@@ -20,18 +20,18 @@
 
 /* Begin PBXFileReference section */
 		13B07F961A680F5B00A75B9A /* DeepWorkio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DeepWorkio.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = DeepWorkio/Images.xcassets; sourceTree = "<group>"; };
-		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = DeepWorkio/Info.plist; sourceTree = "<group>"; };
-		148FBC9938E025AB322C6733 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = DeepWorkio/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Images.xcassets; sourceTree = "<group>"; };
+		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Info.plist; sourceTree = "<group>"; };
+		148FBC9938E025AB322C6733 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		79DAE3E3BD08D94FFBD13984 /* libPods-DeepWorkio.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-DeepWorkio.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		90C079DB4D0100DB7DC53ACA /* Pods-DeepWorkio.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DeepWorkio.debug.xcconfig"; path = "Target Support Files/Pods-DeepWorkio/Pods-DeepWorkio.debug.xcconfig"; sourceTree = "<group>"; };
-		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = DeepWorkio/SplashScreen.storyboard; sourceTree = "<group>"; };
+		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		BECDAD3A50762B7B02BB1C28 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-DeepWorkio/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		D5D04745352971465F2CB4A4 /* Pods-DeepWorkio.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DeepWorkio.release.xcconfig"; path = "Target Support Files/Pods-DeepWorkio/Pods-DeepWorkio.release.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
-		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = DeepWorkio/AppDelegate.swift; sourceTree = "<group>"; };
-		F11748442D0722820044C1D9 /* DeepWorkio-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "DeepWorkio-Bridging-Header.h"; path = "DeepWorkio/DeepWorkio-Bridging-Header.h"; sourceTree = "<group>"; };
+		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		F11748442D0722820044C1D9 /* DeepWorkio-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "DeepWorkio-Bridging-Header.h"; path = "DeepWorkio-Bridging-Header.h"; sourceTree = "<group>"; };
 		F1BE39CD2F5C8B380079B3A5 /* FocusLockModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = FocusLockModule.m; sourceTree = "<group>"; };
 		F1BE39CE2F5C8B380079B3A5 /* FocusLockModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusLockModule.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -119,7 +119,7 @@
 				BB2F792C24A3F905000567C9 /* Expo.plist */,
 			);
 			name = Supporting;
-			path = DeepWorkio/Supporting;
+			path = Supporting;
 			sourceTree = "<group>";
 		};
 		C3FB31C29F5A41C3D60B3086 /* DeepWorkio */ = {
