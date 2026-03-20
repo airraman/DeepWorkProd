@@ -258,7 +258,7 @@ class FocusLockModule: NSObject {
       store.shield.applicationCategories = .specific(activitySelection.categoryTokens)
     }
     if !activitySelection.webDomainTokens.isEmpty {
-      store.shield.webDomains = .specific(activitySelection.webDomainTokens)
+      store.shield.webDomains = activitySelection.webDomainTokens
     }
   }
 
