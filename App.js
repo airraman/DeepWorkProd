@@ -27,6 +27,8 @@ import { FocusLockProvider } from './src/context/FocusLockContext';
 import FocusLockTest from './src/screens/FocusLockTest';
 import LoginScreen from './src/screens/LoginScreen';
 import { useAuth } from './src/context/AuthContext';
+import { runMigration } from './src/services/migrationService';
+
 
 try {
   messaging().setBackgroundMessageHandler(async (remoteMessage) => {
@@ -85,8 +87,8 @@ console.log('📱 Device Info:', {
 // Stub for now — Session 2 wires this to migrationService
 const handleMigrationNeeded = async (firebaseUser) => {
   console.log('📦 [App] migration check triggered for uid:', firebaseUser.uid);
-  // Session 2: import { runMigration } from './src/services/migrationService'
-  // and call it here
+  const result = await runMigration(firebaseUser);
+  console.log('📦 [App] migration result:', result);
 };
 
 // ─── Auth-Gated Navigator ─────────────────────────────────────────────────────

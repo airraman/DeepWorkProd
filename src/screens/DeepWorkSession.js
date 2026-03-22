@@ -20,6 +20,8 @@ import SessionNotesModal from '../components/modals/SessionNotesModal';
 import { Pause, Play, ChevronLeft } from 'lucide-react-native';
 import backgroundTimer from '../services/backgroundTimer';
 import { useFocusLock } from '../context/FocusLockContext';
+import { saveSessionToFirestore } from '../services/firestoreSessionService';
+
 // import functions from '@react-native-firebase/functions';
 
 
@@ -640,6 +642,12 @@ const handleSessionComplete = async (sessionData = {}) => {
 
     // Save session to storage
     const result = await deepWorkStore.addSession(sessionToSave);
+
+    try {
+      await saveSessionToFirestore(sessionToSave);
+    } catch (firestoreError) {
+      console.log('❌ [DeepWorkSession] Firestore save failed (non-critical):', firestoreError.message);
+    }
 
     if (!result.success) {
       throw new Error(result.error || 'Failed to save session');
