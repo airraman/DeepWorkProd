@@ -69,8 +69,8 @@ target 'DeepWorkio' do
         config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
         config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
 
-        # Fix gRPC-Core compiler warning treated as error in newer Xcode/iOS SDK
-        if target.name == 'gRPC-Core'
+        # Fix all gRPC pods compiler warning treated as error in iOS 26 SDK
+        if target.name.start_with?('gRPC')
           config.build_settings['WARNING_CFLAGS'] = '$(inherited) -Wno-missing-template-arg-list-after-template-kw'
         end
 
