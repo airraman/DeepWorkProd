@@ -68,7 +68,12 @@ target 'DeepWorkio' do
         config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
         config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
         config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
-    
+
+        # Fix gRPC-Core compiler warning treated as error in newer Xcode/iOS SDK
+        if target.name == 'gRPC-Core'
+          config.build_settings['WARNING_CFLAGS'] = '$(inherited) -Wno-missing-template-arg-list-after-template-kw'
+        end
+
         if target.name.start_with?('Firebase') || target.name.start_with?('RNFB') || target.name == 'FirebaseSharedSwift'
           config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'NO'
           config.build_settings['SWIFT_EMIT_MODULE_INTERFACE'] = 'NO'
