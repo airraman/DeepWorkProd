@@ -5,10 +5,7 @@ require 'json'
 podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties.json'))) rescue {}
 
 def ccache_enabled?(podfile_properties)
-  # Environment variable takes precedence
   return ENV['USE_CCACHE'] == '1' if ENV['USE_CCACHE']
-  
-  # Fall back to Podfile properties
   podfile_properties['apple.ccacheEnabled'] == 'true'
 end
 
@@ -19,8 +16,8 @@ ENV['RCT_USE_PREBUILT_RNCORE'] ||= '1' if podfile_properties['ios.buildReactNati
 
 platform :ios, podfile_properties['ios.deploymentTarget'] || '16.0'
 
-# Firebase v18 SDK version (v10.x for React Native Firebase v18.x)
-$FirebaseSDKVersion = '10.29.0'
+# Firebase iOS SDK version — must match React Native Firebase v23.x
+$FirebaseSDKVersion = '11.9.0'
 
 # Required for Firebase Swift pods
 use_modular_headers!
@@ -65,15 +62,23 @@ target 'DeepWorkio' do
 
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
+        # Use C++17 — required for Firestore/gRPC on iOS 26 SDK
         config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
         config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
         config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
 
-        # Fix all gRPC pods compiler warning treated as error in iOS 26 SDK
+        # Fix gRPC pods: suppress template keyword warning (iOS 26 SDK Clang is stricter)
         if target.name.start_with?('gRPC')
           config.build_settings['WARNING_CFLAGS'] = '$(inherited) -Wno-missing-template-arg-list-after-template-kw'
         end
 
+        # Fix BoringSSL-GRPC: reset OTHER_CFLAGS to strip the injected -G GPU flag
+        # which is invalid for arm64-apple-ios targets
+        if target.name == 'BoringSSL-GRPC'
+          config.build_settings['OTHER_CFLAGS'] = '$(inherited)'
+        end
+
+        # Firebase Swift pods must not use library evolution — causes linker errors
         if target.name.start_with?('Firebase') || target.name.start_with?('RNFB') || target.name == 'FirebaseSharedSwift'
           config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'NO'
           config.build_settings['SWIFT_EMIT_MODULE_INTERFACE'] = 'NO'

@@ -9,8 +9,7 @@
       "distribution": "internal",
       "channel": "development",
       "ios": {
-        "simulator": false, 
-        "provisioningProfilePath": "credentials/ios/profile.mobileprovision"
+        "simulator": false
       },
       "env": {
         "EXPO_PUBLIC_OPENAI_API_KEY": "$(EXPO_PUBLIC_OPENAI_API_KEY)"

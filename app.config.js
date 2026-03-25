@@ -49,7 +49,7 @@ export default {
           }
         }
       ],
-      "./ios-family-controls-plugin.js",
+      // "./ios-family-controls-plugin.js",
     ],
     assets: [
       "./assets/sounds/completion_alarm.wav",
