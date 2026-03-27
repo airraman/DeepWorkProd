@@ -11,8 +11,12 @@
       "ios": {
         "simulator": false
       },
+      "credentialsSource": "local",
       "env": {
         "EXPO_PUBLIC_OPENAI_API_KEY": "$(EXPO_PUBLIC_OPENAI_API_KEY)"
+      },
+      "cache": {
+        "disabled": true
       }
     },
     "preview": {
