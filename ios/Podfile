@@ -70,6 +70,7 @@ target 'DeepWorkio' do
         # Fix gRPC pods: suppress template keyword warning (iOS 26 SDK Clang is stricter)
         if target.name.start_with?('gRPC')
           config.build_settings['WARNING_CFLAGS'] = '$(inherited) -Wno-missing-template-arg-list-after-template-kw'
+          config.build_settings['CLANG_ENABLE_MODULES'] = 'NO'
         end
 
         # Fix BoringSSL-GRPC: reset OTHER_CFLAGS to strip the injected -G GPU flag

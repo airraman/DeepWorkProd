@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.airraman.deepwork</string>
+	<string>com.airraman.deepwork.dev</string>
 	<key>PROJECT_ID</key>
 	<string>deepwork-8416f</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:545504050117:ios:3f4fbd9c89395fcb7429ac</string>
+	<string>1:545504050117:ios:4bf84f27f81d899f7429ac</string>
 </dict>
 </plist>
