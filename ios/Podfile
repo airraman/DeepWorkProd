@@ -1,10 +1,7 @@
 require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
 require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
-
 require 'json'
 podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties.json'))) rescue {}
-
-
 def ccache_enabled?(podfile_properties)
   # Environment variable takes precedence
   return ENV['USE_CCACHE'] == '1' if ENV['USE_CCACHE']
@@ -12,25 +9,15 @@ def ccache_enabled?(podfile_properties)
   # Fall back to Podfile properties
   podfile_properties['apple.ccacheEnabled'] == 'true'
 end
-
 ENV['RCT_NEW_ARCH_ENABLED'] ||= '0' if podfile_properties['newArchEnabled'] == 'false'
 ENV['EX_DEV_CLIENT_NETWORK_INSPECTOR'] ||= podfile_properties['EX_DEV_CLIENT_NETWORK_INSPECTOR']
 ENV['RCT_USE_RN_DEP'] ||= '1'
 ENV['RCT_USE_PREBUILT_RNCORE'] ||= '1'
 platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
-
+use_modular_headers!
 prepare_react_native_project!
-
 target 'DeepWorkioDev' do
   use_expo_modules!
-
-    # Firebase modular headers (REQUIRED)
-    pod 'FirebaseCore', :modular_headers => true
-    pod 'FirebaseCoreInternal', :modular_headers => true
-    pod 'FirebaseSharedSwift', :modular_headers => true
-    pod 'GoogleUtilities', :modular_headers => true
-    pod 'FirebaseAuth', :modular_headers => true
-
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
     config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
   else
@@ -46,20 +33,15 @@ target 'DeepWorkioDev' do
       'ios'
     ]
   end
-
   config = use_native_modules!(config_command)
-
   use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
   use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
-
   use_react_native!(
     :path => config[:reactNativePath],
     :hermes_enabled => podfile_properties['expo.jsEngine'] == nil || podfile_properties['expo.jsEngine'] == 'hermes',
-    # An absolute path to your application root.
     :app_path => "#{Pod::Config.instance.installation_root}/..",
     :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
   )
-
   post_install do |installer|
     react_native_post_install(
       installer,
@@ -73,7 +55,6 @@ target 'DeepWorkioDev' do
       installer.sandbox.root,
       'gRPC-Core/third_party/zlib/zutil.h'
     )
-
     if File.exist?(zlib_header)
       text = File.read(zlib_header)
       text.gsub!(/#\s*define\s+fdopen\(.*\).*/, '')
@@ -83,37 +64,28 @@ target 'DeepWorkioDev' do
 
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
-    
+
+        config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'
+        config.build_settings['SWIFT_EMIT_MODULE_INTERFACE'] = 'NO'
         config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
         config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
-    
+        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+
         # C++20 only for targets that require it
         cpp20_targets = ['gRPC-Core', 'gRPC-C++', 'BoringSSL-GRPC', 'abseil', 'RCT-Folly', 'React-Core', 'React-Core-prebuilt']
         if cpp20_targets.include?(target.name)
           config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++20'
           config.build_settings['CLANG_CXX_LIBRARY'] = 'libc++'
         end
-    
-        # gRPC / BoringSSL / React-Core fixes
-        if target.name == 'gRPC-Core' || target.name == 'BoringSSL-GRPC' || target.name == 'React-Core' || target.name == 'React-Core-prebuilt'
-          config.build_settings['WARNING_CFLAGS'] = '$(inherited) -Wno-missing-template-arg-list-after-template-kw'
-          config.build_settings['CLANG_ENABLE_MODULES'] = 'NO'
-        end
-    
+
         if target.name == 'BoringSSL-GRPC'
           config.build_settings['OTHER_CFLAGS'] = '$(inherited)'
         end
-    
+
         if target.name == 'gRPC-Core'
           config.build_settings['OTHER_CFLAGS'] = '$(inherited) -Ufdopen'
         end
-    
-        # Firebase Swift compatibility
-        if target.name.start_with?('Firebase') || target.name.start_with?('RNFB') || target.name == 'FirebaseSharedSwift'
-          config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'NO'
-          config.build_settings['SWIFT_EMIT_MODULE_INTERFACE'] = 'NO'
-        end
-    
+
       end
     end
   end
