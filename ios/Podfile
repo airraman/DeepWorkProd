@@ -15,8 +15,8 @@ end
 
 ENV['RCT_NEW_ARCH_ENABLED'] ||= '0' if podfile_properties['newArchEnabled'] == 'false'
 ENV['EX_DEV_CLIENT_NETWORK_INSPECTOR'] ||= podfile_properties['EX_DEV_CLIENT_NETWORK_INSPECTOR']
-ENV['RCT_USE_RN_DEP'] ||= '1' if podfile_properties['ios.buildReactNativeFromSource'] != 'true' && podfile_properties['newArchEnabled'] != 'false'
-ENV['RCT_USE_PREBUILT_RNCORE'] ||= '1' if podfile_properties['ios.buildReactNativeFromSource'] != 'true' && podfile_properties['newArchEnabled'] != 'false'
+ENV['RCT_USE_RN_DEP'] ||= '1'
+ENV['RCT_USE_PREBUILT_RNCORE'] ||= '1'
 platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
 
 prepare_react_native_project!
@@ -83,34 +83,37 @@ target 'DeepWorkioDev' do
 
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
-
-        # ✅ C++20 FIX (critical)
-        config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++20'
-        config.build_settings['CLANG_CXX_LIBRARY'] = 'libc++'
-
+    
         config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
         config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
-
-        # gRPC / BoringSSL fixes
-        if target.name == 'gRPC-Core' || target.name == 'BoringSSL-GRPC'
+    
+        # C++20 only for targets that require it
+        cpp20_targets = ['gRPC-Core', 'gRPC-C++', 'BoringSSL-GRPC', 'abseil', 'RCT-Folly', 'React-Core', 'React-Core-prebuilt']
+        if cpp20_targets.include?(target.name)
+          config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++20'
+          config.build_settings['CLANG_CXX_LIBRARY'] = 'libc++'
+        end
+    
+        # gRPC / BoringSSL / React-Core fixes
+        if target.name == 'gRPC-Core' || target.name == 'BoringSSL-GRPC' || target.name == 'React-Core' || target.name == 'React-Core-prebuilt'
           config.build_settings['WARNING_CFLAGS'] = '$(inherited) -Wno-missing-template-arg-list-after-template-kw'
           config.build_settings['CLANG_ENABLE_MODULES'] = 'NO'
         end
-
+    
         if target.name == 'BoringSSL-GRPC'
           config.build_settings['OTHER_CFLAGS'] = '$(inherited)'
         end
-
+    
         if target.name == 'gRPC-Core'
           config.build_settings['OTHER_CFLAGS'] = '$(inherited) -Ufdopen'
         end
-
+    
         # Firebase Swift compatibility
         if target.name.start_with?('Firebase') || target.name.start_with?('RNFB') || target.name == 'FirebaseSharedSwift'
           config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'NO'
           config.build_settings['SWIFT_EMIT_MODULE_INTERFACE'] = 'NO'
         end
-
+    
       end
     end
   end
