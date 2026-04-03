@@ -419,6 +419,7 @@
 				SWIFT_OBJC_BRIDGING_HEADER = "DeepWorkioDev/DeepWorkioDev-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
+				MACH_O_TYPE = mh_execute;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
@@ -452,6 +453,7 @@
 				PRODUCT_NAME = DeepWorkioDev;
 				SWIFT_OBJC_BRIDGING_HEADER = "DeepWorkioDev/DeepWorkioDev-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
+				MACH_O_TYPE = mh_execute;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
