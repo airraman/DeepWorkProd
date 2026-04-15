@@ -16,6 +16,11 @@ import * as Updates from 'expo-updates';
 import { Alert, View, Text, Platform, Dimensions, StatusBar, Linking, AppState, Vibration } from 'react-native';
 import { navigationRef, safeNavigate } from './src/services/navigationService';
 import { versionCheckService } from './src/services/versionCheckService.js';
+import { ForceUpdateModal } from './src/components/ForceUpdateModal';
+import { WhatsNewModal } from './src/components/WhatsNewModal';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
+import { devModalService } from './src/services/devModalService';
 import { notificationBackgroundTask } from './src/services/notificationBackgroundTask';
 import backgroundTimer from './src/services/backgroundTimer';
 import { setupNotificationHandler } from './src/services/notificationHandler';
@@ -28,6 +33,7 @@ import FocusLockTest from './src/screens/FocusLockTest';
 import LoginScreen from './src/screens/LoginScreen';
 import { useAuth } from './src/context/AuthContext';
 import { runMigration } from './src/services/migrationService';
+import { runLocalMigrationsIfNeeded } from './src/services/localMigrationService';
 
 
 try {
@@ -68,6 +74,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import DeepWorkSession from './src/screens/DeepWorkSession';
 import SessionRatingScreen from './src/features/session-completion/screens/SessionRatingScreen';
 import SessionSummaryScreen from './src/features/session-completion/screens/SessionSummaryScreen';
+import OnboardingScreen from './src/screens/OnboardingScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -129,6 +136,11 @@ function AppNavigator() {
         options={{ presentation: 'card', gestureEnabled: false }}
       />
       <Stack.Screen
+        name="Onboarding"
+        component={OnboardingScreen}
+        options={{ presentation: 'card', gestureEnabled: false }}
+      />
+      <Stack.Screen
         name="MainApp"
         component={TabNavigator}
         options={{ presentation: 'card', gestureEnabled: false }}
@@ -149,7 +161,7 @@ function AppNavigator() {
         options={{ presentation: 'modal', gestureEnabled: true }}
       />
       <Stack.Screen
-        name="SessionSummaryScreen"
+        name="SessionSummary"
         component={SessionSummaryScreen}
         options={{ presentation: 'modal', gestureEnabled: true }}
       />
@@ -313,6 +325,10 @@ function MainApp() {
   const [notificationSubscription, setNotificationSubscription] = useState(null);
   const [isAppReady, setIsAppReady] = useState(false);
   const [isUpdateBlocking, setIsUpdateBlocking] = useState(false);
+  const [updateUrl, setUpdateUrl] = useState(null);
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showForceUpdateDebug, setShowForceUpdateDebug] = useState(false);
+  const [showWhatsNewDebug, setShowWhatsNewDebug] = useState(false);
   const [initializationStatus, setInitializationStatus] = useState({
     database: 'pending',
     backgroundServices: 'pending',
@@ -333,6 +349,12 @@ function MainApp() {
   }, [fcmToken, permissionGranted]);
 
   useEffect(() => {
+    if (__DEV__) {
+      devModalService.register(setShowForceUpdateDebug, setShowWhatsNewDebug);
+    }
+  }, []);
+
+  useEffect(() => {
     console.log('🚀 App.js: useEffect starting...');
     setupNotificationHandler();
 
@@ -341,9 +363,10 @@ function MainApp() {
         console.log('🚀 App initialization starting...');
 
         console.log('📱 Step 0: Checking app version...');
-        const forceUpdate = await versionCheckService.performVersionCheck();
+        const { forceUpdate, updateUrl: versionUpdateUrl } = await versionCheckService.performVersionCheck();
         if (forceUpdate) {
           console.log('🚫 Force update required - blocking app');
+          setUpdateUrl(versionUpdateUrl);
           setIsUpdateBlocking(true);
           setIsAppReady(true);
           return;
@@ -356,6 +379,15 @@ function MainApp() {
           console.log('✅ Database initialized successfully');
 
           setInitializationStatus(prev => ({ ...prev, database: 'success' }));
+
+          try {
+            console.log('📦 Running local schema migrations...');
+            await runLocalMigrationsIfNeeded();
+            console.log('✅ Local migrations complete');
+          } catch (migrationError) {
+            // Non-fatal — migration will retry on next launch
+            console.warn('⚠️ Local migration error (non-critical):', migrationError);
+          }
 
           try {
             console.log('🔔 Checking notification permissions...');
@@ -411,6 +443,19 @@ function MainApp() {
         }
 
         console.log('✅ App initialization completed successfully');
+
+        // Check whether to show What's New modal (once per version)
+        try {
+          const WHATS_NEW_KEY = '@last_seen_whats_new_version';
+          const currentVersion = Constants.expoConfig?.version ?? '0.0.0';
+          const lastSeen = await AsyncStorage.getItem(WHATS_NEW_KEY);
+          if (lastSeen !== currentVersion) {
+            setShowWhatsNew(true);
+          }
+        } catch (whatsNewErr) {
+          console.warn('⚠️ What\'s New version check failed (non-critical):', whatsNewErr);
+        }
+
         setIsAppReady(true);
       } catch (error) {
         console.error('❌ Critical app initialization error:', error);
@@ -572,19 +617,26 @@ function MainApp() {
     }
   };
 
-  if (isUpdateBlocking) {
+  const handleWhatsNewComplete = async () => {
+    try {
+      const WHATS_NEW_KEY = '@last_seen_whats_new_version';
+      const currentVersion = Constants.expoConfig?.version ?? '0.0.0';
+      await AsyncStorage.setItem(WHATS_NEW_KEY, currentVersion);
+    } catch (err) {
+      console.warn('⚠️ Failed to persist What\'s New version:', err);
+    }
+    setShowWhatsNew(false);
+    if (__DEV__) devModalService.dismissWhatsNew();
+  };
+
+  if (isUpdateBlocking || showForceUpdateDebug) {
     return (
-      <ThemeProvider>
-        <View style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-          <Text style={{ fontSize: 48, marginBottom: 20 }}>⚠️</Text>
-          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#1F2937', marginBottom: 12, textAlign: 'center' }}>
-            Update Required
-          </Text>
-          <Text style={{ fontSize: 16, color: '#6B7280', textAlign: 'center', lineHeight: 24, marginBottom: 30 }}>
-            A critical update is required to continue using DeepWork. Please update to the latest version from the App Store.
-          </Text>
-        </View>
-      </ThemeProvider>
+      <View style={{ flex: 1, backgroundColor: '#0f0f0f' }}>
+        <ForceUpdateModal
+          visible
+          updateUrl={isUpdateBlocking ? updateUrl : 'https://apps.apple.com'}
+        />
+      </View>
     );
   }
 
@@ -621,6 +673,10 @@ function MainApp() {
               <NavigationContainer ref={navigationRef}>
                 <AppNavigator />
               </NavigationContainer>
+              <WhatsNewModal
+                visible={showWhatsNew || showWhatsNewDebug}
+                onComplete={handleWhatsNewComplete}
+              />
             </AuthProvider>
           </ThemeProvider>
         </FocusLockProvider>

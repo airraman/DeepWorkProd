@@ -1,6 +1,7 @@
 // src/services/deepWorkStore.js - UPDATED FOR REMINDER FREQUENCY
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isMigrationRunning } from './localMigrationService';
 
 // Storage configuration
 const STORAGE_KEY = '@deep_work_sessions';
@@ -77,6 +78,10 @@ const isValidSettings = (settings) => {
   );
 };
 
+// Serializes all addSession writes to prevent concurrent read-modify-write races.
+// Each call waits for the previous one to finish before reading storage.
+let _addSessionLock = Promise.resolve();
+
 export const deepWorkStore = {
   /**
    * Initialize the storage system and perform integrity check
@@ -152,6 +157,25 @@ export const deepWorkStore = {
       return DEFAULT_SETTINGS;
     }
   },
+
+/**
+ * Merge partial fields into existing settings without overwriting unrelated keys.
+ * Safe to call with any subset of settings fields (e.g. { userType, onboardingComplete }).
+ * Does NOT run isValidSettings — caller is responsible for valid values.
+ */
+patchSettings: async (partial) => {
+  try {
+    const raw = await AsyncStorage.getItem(SETTINGS_KEY);
+    const existing = raw ? JSON.parse(raw) : { ...DEFAULT_SETTINGS };
+    const merged = { ...existing, ...partial, lastUpdated: new Date().toISOString() };
+    await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(merged));
+    log('Settings patched', Object.keys(partial));
+    return true;
+  } catch (error) {
+    log('Error patching settings:', error);
+    return false;
+  }
+},
 
 /**
  * Get all stored sessions
@@ -367,6 +391,20 @@ getSessions: async () => {
    * @param {Object} session - The session details
    */
   addSession: async (session) => {
+    // Refuse writes while local schema migration is in progress.
+    // In normal flow this never fires (isAppReady gates the UI), but guards
+    // against any code path that might call addSession during startup.
+    if (isMigrationRunning()) {
+      console.warn('[deepWorkStore] addSession blocked — local migration in progress');
+      return { success: false, error: 'Migration in progress — please try again shortly' };
+    }
+
+    // Acquire write lock — waits for any concurrent addSession to finish first.
+    const prevLock = _addSessionLock;
+    let releaseLock;
+    _addSessionLock = new Promise(resolve => { releaseLock = resolve; });
+    await prevLock.catch(() => {}); // wait, ignore errors from prior call
+
     try {
       if (!isValidSession(session)) {
         throw new Error('Invalid session data');
@@ -388,19 +426,21 @@ getSessions: async () => {
       }
       
       const date = new Date().toISOString().split('T')[0];
+      const now = Date.now();
       const newSession = {
-        id: `${date}-${Date.now()}`,
+        id: `${date}-${now}`,
         date,
         activity: session.activity,
-        duration: parseInt(session.duration),
+        duration: parseFloat(session.duration),
         musicChoice: session.musicChoice,
-        notes: session.notes || '', // Add notes field, default to empty string if not provided
+        notes: session.notes || '',
+        timestamp: session.timestamp || now,
         completedAt: new Date().toISOString(),
         syncStatus: 'pending',
         metadata: {
           appVersion: '1.0.0',
-          created: Date.now(),
-          modified: Date.now()
+          created: now,
+          modified: now,
         }
       };
       
@@ -426,6 +466,8 @@ getSessions: async () => {
     } catch (error) {
       log('Error saving session:', error);
       return { success: false, error: error.message };
+    } finally {
+      releaseLock();
     }
   },
 

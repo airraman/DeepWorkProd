@@ -8,6 +8,7 @@ export default {
     icon: "./assets/applogo.png",
     userInterfaceStyle: "light",
     newArchEnabled: false,
+    scheme: "deepworkapp",
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
@@ -91,6 +92,7 @@ export default {
       },
       package: "com.airraman.deepwork",
       versionCode: 1,
+      googleServicesFile: "./google-services.json", 
       permissions: [
         "NOTIFICATIONS",
         "VIBRATE",

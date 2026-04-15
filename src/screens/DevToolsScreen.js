@@ -15,17 +15,28 @@ import {
 import { seedData, clearSeedData } from '../utils/seedData';
 import { useTheme } from '../context/ThemeContext';
 import InsightGenerator from '../services/insights/InsightGenerator';
+import SessionRepository from '../services/database/SessionRepository';
+import DataAggregator from '../services/insights/DataAggregator';
+import PromptBuilder from '../services/insights/PromptBuilder';
+import { getSessionsFromFirestore } from '../services/firestoreSessionService';
+import {
+  testNotification,
+  previewNotificationPayload,
+} from '../services/personalizedNotificationService';
+import { devModalService } from '../services/devModalService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DevToolsScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [insight, setInsight] = useState(null);
+  const [notifPreview, setNotifPreview] = useState(null);
 
   const handleSeedData = async () => {
     Alert.alert(
-      'Seed 90 Days of Data?',
-      'This will create realistic test data for the last 90 days.',
+      'Seed 120 Days of Data?',
+      'This will create realistic test data for the last 120 days.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -205,6 +216,132 @@ const DevToolsScreen = ({ navigation }) => {
     }
   };
 
+  const handleValidatePipeline = async () => {
+    setLoading(true);
+    const PASS = '✅';
+    const FAIL = '❌';
+    const WARN = '⚠️';
+    const log = (symbol, label, detail = '') =>
+      console.log(`  ${symbol} ${label}${detail ? ': ' + detail : ''}`);
+
+    try {
+      console.log('\n🔬 ===== PIPELINE VALIDATION =====');
+
+      // ── Stage 1: AsyncStorage — find most recent session with a rating ──────
+      console.log('\n[1] AsyncStorage — most recent rated session');
+      const { deepWorkStore: store } = require('../services/deepWorkStore');
+      const allSessions = await store.getSessions();
+      const allFlat = Object.values(allSessions).flat().sort((a, b) => b.timestamp - a.timestamp);
+      const rated = allFlat.find(s => s.rating);
+
+      if (!rated) {
+        log(WARN, 'No rated session found', 'complete a session and submit reflection first');
+        Alert.alert('No rated session', 'Complete a session and submit the reflection, then run again.');
+        return;
+      }
+
+      log(PASS, 'Session found', rated.id);
+      log(rated.rating?.reflection?.workedOn ? PASS : FAIL, 'workedOn',    rated.rating?.reflection?.workedOn  || 'MISSING');
+      log(rated.rating?.reflection?.wentWell  ? PASS : WARN, 'wentWell',   rated.rating?.reflection?.wentWell   || 'empty');
+      log(rated.rating?.reflection?.distractions ? PASS : WARN, 'distractions', rated.rating?.reflection?.distractions || 'empty');
+      log(rated.rating?.reflection?.nextStep  ? PASS : WARN, 'nextStep',   rated.rating?.reflection?.nextStep   || 'empty');
+      log(rated.rating?.focus        != null ? PASS : FAIL, 'focusRating',       String(rated.rating?.focus));
+      log(rated.rating?.productivity != null ? PASS : FAIL, 'productivityRating', String(rated.rating?.productivity));
+
+      // ── Stage 2: SessionRepository mapping ───────────────────────────────────
+      console.log('\n[2] SessionRepository — field mapping');
+      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const repoSessions = await SessionRepository.getSessionsByDateRange(weekAgo, Date.now());
+      const repoMatch = repoSessions.find(s => s.id === rated.id);
+
+      if (!repoMatch) {
+        log(WARN, 'Session outside last-7-day window', 'expanding to 90 days');
+        const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+        const wider = await SessionRepository.getSessionsByDateRange(ninetyDaysAgo, Date.now());
+        const found = wider.find(s => s.id === rated.id);
+        log(found ? PASS : FAIL, 'Found in 90-day range', found ? found.id : 'NOT FOUND');
+        if (found) {
+          log(found.description ? PASS : FAIL, 'description mapped', found.description || 'NULL');
+          log(found.reflection?.workedOn ? PASS : FAIL, 'reflection.workedOn passed through', found.reflection?.workedOn || 'NULL');
+        }
+      } else {
+        log(PASS, 'Session found in repository', repoMatch.id);
+        log(repoMatch.description ? PASS : FAIL, 'description mapped', repoMatch.description || 'NULL');
+        log(repoMatch.reflection?.workedOn ? PASS : FAIL, 'reflection.workedOn passed through', repoMatch.reflection?.workedOn || 'NULL');
+      }
+
+      // ── Stage 3: DataAggregator ───────────────────────────────────────────────
+      console.log('\n[3] DataAggregator — reflection buckets');
+      const targetSessions = repoSessions.length
+        ? repoSessions
+        : await SessionRepository.getSessionsByDateRange(Date.now() - 90 * 24 * 60 * 60 * 1000, Date.now());
+
+      const aggregated = DataAggregator.aggregateSessions(targetSessions);
+      const activities = Object.entries(aggregated.activitiesBreakdown || {});
+
+      if (activities.length === 0) {
+        log(FAIL, 'No activities in aggregated output');
+      } else {
+        activities.forEach(([name, stats]) => {
+          log(PASS, `Activity: ${name}`);
+          log(stats.sampleDescriptions?.length  ? PASS : WARN, '  sampleDescriptions',  JSON.stringify(stats.sampleDescriptions));
+          log(stats.sampleWentWell?.length       ? PASS : WARN, '  sampleWentWell',      JSON.stringify(stats.sampleWentWell));
+          log(stats.sampleDistractions?.length   ? PASS : WARN, '  sampleDistractions',  JSON.stringify(stats.sampleDistractions));
+          log(stats.sampleNextSteps?.length      ? PASS : WARN, '  sampleNextSteps',     JSON.stringify(stats.sampleNextSteps));
+        });
+      }
+
+      // ── Stage 4: PromptBuilder output ─────────────────────────────────────────
+      console.log('\n[4] PromptBuilder — prompt content');
+      const prompt = PromptBuilder.buildWeeklyPrompt(aggregated);
+      const hasWorkedOn    = prompt.includes('Worked on:');
+      const hasWentWell    = prompt.includes('Went well:');
+      const hasDistracts   = prompt.includes('Distractions:');
+      const hasNextSteps   = prompt.includes('Next steps:');
+
+      log(hasWorkedOn  ? PASS : WARN, '"Worked on:" line in prompt',    hasWorkedOn  ? 'present' : 'absent (no workedOn data)');
+      log(hasWentWell  ? PASS : WARN, '"Went well:" line in prompt',    hasWentWell  ? 'present' : 'absent');
+      log(hasDistracts ? PASS : WARN, '"Distractions:" line in prompt', hasDistracts ? 'present' : 'absent');
+      log(hasNextSteps ? PASS : WARN, '"Next steps:" line in prompt',   hasNextSteps ? 'present' : 'absent');
+      console.log('\n--- Prompt preview (first 500 chars) ---');
+      console.log(prompt.substring(0, 500));
+
+      // ── Stage 5: Firestore ────────────────────────────────────────────────────
+      console.log('\n[5] Firestore — synced rating');
+      const firestoreSessions = await getSessionsFromFirestore();
+      const fsMatch = firestoreSessions.find(s => s.id === rated.id);
+
+      if (!fsMatch) {
+        log(WARN, 'Session not found in Firestore', 'user may be logged out or sync pending');
+      } else {
+        log(PASS, 'Session found in Firestore', fsMatch.id);
+        log(fsMatch.rating?.reflection?.workedOn    ? PASS : FAIL, 'reflection.workedOn',    fsMatch.rating?.reflection?.workedOn    || 'MISSING');
+        log(fsMatch.rating?.reflection?.wentWell    ? PASS : WARN, 'reflection.wentWell',    fsMatch.rating?.reflection?.wentWell    || 'empty');
+        log(fsMatch.rating?.reflection?.distractions ? PASS : WARN, 'reflection.distractions', fsMatch.rating?.reflection?.distractions || 'empty');
+        log(fsMatch.rating?.reflection?.nextStep    ? PASS : WARN, 'reflection.nextStep',    fsMatch.rating?.reflection?.nextStep    || 'empty');
+      }
+
+      console.log('\n===== VALIDATION COMPLETE =====\n');
+
+      const promptHealth = [hasWorkedOn, hasWentWell, hasDistracts, hasNextSteps].filter(Boolean).length;
+      Alert.alert(
+        '🔬 Pipeline Validation',
+        `AsyncStorage: ${rated.rating?.reflection?.workedOn ? '✅' : '❌'} reflection present\n` +
+        `Repository:   ${repoMatch || 'found in wider range' ? '✅' : '❌'} field mapped\n` +
+        `Aggregator:   ${activities.length ? '✅' : '❌'} ${activities.length} activities\n` +
+        `Prompt:       ${promptHealth}/4 reflection lines present\n` +
+        `Firestore:    ${fsMatch ? '✅' : '⚠️'} ${fsMatch ? 'synced' : 'not found (check auth)'}\n\n` +
+        'See console for full detail.'
+      );
+
+    } catch (error) {
+      console.error('❌ Validation error:', error);
+      Alert.alert('Validation Error', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDebugRendering = async () => {
     try {
       setLoading(true);
@@ -269,6 +406,31 @@ const DevToolsScreen = ({ navigation }) => {
     }
   };
 
+  const handleTestNotification = async (type) => {
+    setLoading(true);
+    setNotifPreview(null);
+    try {
+      // Show the payload preview first
+      const payload = await previewNotificationPayload(type);
+      setNotifPreview(payload);
+      console.log(`\n🔔 [DevTools] Notification payload for "${type}":`);
+      console.log('  title:', payload.title);
+      console.log('  body: ', payload.body);
+      console.log('  data: ', JSON.stringify(payload.data));
+
+      // Fire it immediately
+      await testNotification(type);
+      Alert.alert(
+        '🔔 Notification Sent',
+        `Type: ${payload.type}\n\n"${payload.title}"\n${payload.body}`,
+      );
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -290,7 +452,7 @@ const DevToolsScreen = ({ navigation }) => {
             onPress={handleSeedData}
             disabled={loading}
           >
-            <Text style={styles.buttonText}>🌱 Seed 90 Days of Data</Text>
+            <Text style={styles.buttonText}>🌱 Seed 120 Days of Data</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -323,7 +485,6 @@ const DevToolsScreen = ({ navigation }) => {
     try {
       setLoading(true);
       
-      const { deepWorkStore } = require('../services/deepWorkStore');
       const DataAggregator = require('../services/insights/DataAggregator').default;
       const SessionRepository = require('../services/database/SessionRepository').default;
       
@@ -372,6 +533,14 @@ const DevToolsScreen = ({ navigation }) => {
 >
   <Text style={styles.buttonText}>🔑 Verify API Key</Text>
 </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#6366f1' }]}
+            onPress={handleValidatePipeline}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>🔬 Validate Pipeline</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.button, { backgroundColor: '#ef4444' }]}
@@ -449,6 +618,91 @@ const DevToolsScreen = ({ navigation }) => {
               </Text>
             </View>
           )}
+        </View>
+
+        {/* Notification Testing */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Test Notifications
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary, marginBottom: 12 }]}>
+            Fires immediately. Check console for full payload log.
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#0ea5e9' }]}
+            onPress={() => handleTestNotification('nextStep')}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>📋 Next Step Notification</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#0ea5e9' }]}
+            onPress={() => handleTestNotification('workedOn')}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>🔁 Worked On Notification</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#64748b' }]}
+            onPress={() => handleTestNotification('fallback')}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>💬 Fallback Notification</Text>
+          </TouchableOpacity>
+
+          {notifPreview && (
+            <View style={[styles.resultBox, { backgroundColor: colors.cardBackground }]}>
+              <Text style={[styles.resultText, { color: colors.primary, fontWeight: '700', marginBottom: 4 }]}>
+                {notifPreview.type.toUpperCase()}
+              </Text>
+              <Text style={[styles.resultText, { color: colors.text, fontWeight: '600' }]}>
+                {notifPreview.title}
+              </Text>
+              <Text style={[styles.resultText, { color: colors.textSecondary }]}>
+                {notifPreview.body}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Modal Testing */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Modal Testing
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary, marginBottom: 12 }]}>
+            Trigger global modals on demand. Force Update requires dev menu reload to dismiss.
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#dc2626' }]}
+            onPress={() => devModalService.triggerForceUpdate()}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>🚨 Trigger Force Update Modal</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#7c3aed' }]}
+            onPress={() => devModalService.triggerWhatsNew()}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>✨ Trigger What's New Modal</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#475569' }]}
+            onPress={async () => {
+              await AsyncStorage.removeItem('@last_seen_whats_new_version');
+              Alert.alert('Reset', "What's New will show again on next launch.");
+            }}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>🔄 Reset What's New Seen</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Navigation */}

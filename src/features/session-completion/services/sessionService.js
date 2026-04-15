@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { updateSessionRatingInFirestore } from '../../../services/firestoreSessionService';
 
 const STORAGE_KEY = '@deep_work_sessions';
 const SETTINGS_KEY = '@deep_work_settings';
@@ -69,7 +70,10 @@ class SessionService {
               rating: rating.rating,
               focus: rating.focus,
               productivity: rating.productivity,
-              notes: rating.notes,
+              // Structured reflection — four discrete fields for AI insight parsing
+              reflection: rating.reflection || null,
+              // Legacy alias: keeps old reads (summary screen, insights) working
+              notes: rating.reflection?.workedOn || rating.notes || null,
               ratedAt: rating.ratedAt,
             },
           };
@@ -87,6 +91,12 @@ class SessionService {
       // Save back to storage
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedSessions));
       console.log('✅ Rating saved successfully for session:', sessionId);
+
+      // Sync reflection to Firestore after AsyncStorage succeeds.
+      // Fire-and-forget — failure is non-critical, AsyncStorage is the source of truth.
+      updateSessionRatingInFirestore(sessionId, rating).catch(err =>
+        console.warn('[sessionService] Firestore rating sync failed:', err.message)
+      );
     } catch (error) {
       console.error('❌ Failed to save rating:', error);
       // Don't throw - allow user to continue
@@ -102,9 +112,9 @@ class SessionService {
       const settings = await this._getSettings();
       
       // Find the session by ID
-      for (const [date, sessions] of Object.entries(allSessions)) {
+      for (const [, sessions] of Object.entries(allSessions)) {
         if (!Array.isArray(sessions)) continue; // Skip invalid entries
-        
+
         const session = sessions.find(s => s && s.id === sessionId);
         
         if (session) {

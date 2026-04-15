@@ -43,6 +43,8 @@ import { notificationService } from '../services/notificationService';
 import { notificationBackgroundTask } from '../services/notificationBackgroundTask';
 import notificationPreferences from '../services/notificationPreferences';
 import SharedHeader from '../components/SharedHeader';
+import { useFocusLock } from '../context/FocusLockContext';
+import focusLockService from '../services/focusLockService';
 
 const isTablet = Platform.isPad || Dimensions.get('window').width > 768;
 const HEADER_HEIGHT = isTablet ? 60 : 50;
@@ -79,6 +81,10 @@ const SettingsScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+
+  // Focus Lock
+  const { isAuthorized, selectionCount, refreshSelection } = useFocusLock();
+  const [focusLockSelecting, setFocusLockSelecting] = useState(false);
 
 
   //User Profile
@@ -391,6 +397,30 @@ const SettingsScreen = () => {
       showFeedback('Alarm test failed');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleChangeBlockedApps = async () => {
+    if (!focusLockService.isSupported) return;
+    setFocusLockSelecting(true);
+    try {
+      if (!isAuthorized) {
+        const result = await focusLockService.requestAuthorization();
+        const authorized = result === 'authorized' || result === 'approved' || result === true ||
+          (typeof result === 'object' && result?.authorizationStatus === 'approved');
+        if (!authorized) {
+          showFeedback('Permission denied. Enable Screen Time in iOS Settings.');
+          return;
+        }
+      }
+      await focusLockService.selectAppsToBlock();
+      await refreshSelection();
+      showFeedback('Blocked apps updated.');
+    } catch (err) {
+      console.warn('[Settings] handleChangeBlockedApps failed:', err);
+      showFeedback('Could not open app picker. Try again.');
+    } finally {
+      setFocusLockSelecting(false);
     }
   };
 
@@ -869,6 +899,64 @@ const SettingsScreen = () => {
   )}
 </View>
 
+        {/* Focus Lock Section */}
+        {focusLockService.isSupported && (
+          <View style={[
+            styles.section,
+            {
+              backgroundColor: isDark ? '#1f1f1f' : colors.card,
+              borderColor: colors.border,
+              borderWidth: 1,
+              borderRadius: 12,
+            }
+          ]}>
+            <View style={styles.sectionHeader}>
+              <Text style={{ fontSize: 20 }}>📵</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Focus Lock
+              </Text>
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <Text style={[styles.settingLabel, { color: colors.text }]}>
+                  Blocked apps
+                </Text>
+                <Text style={[styles.helpText, { color: colors.textSecondary, marginTop: 4 }]}>
+                  {selectionCount > 0
+                    ? `${selectionCount} app${selectionCount !== 1 ? 's' : ''} selected`
+                    : 'No apps selected yet'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.changeAppsBtn,
+                  { borderColor: colors.primary },
+                  focusLockSelecting && { opacity: 0.5 },
+                ]}
+                onPress={handleChangeBlockedApps}
+                disabled={focusLockSelecting}
+              >
+                {focusLockSelecting ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text style={[styles.changeAppsBtnText, { color: colors.primary }]}>
+                    {selectionCount > 0 ? 'Change' : 'Set up'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {focusLockSelecting && (
+              <Text style={[styles.helpText, { color: colors.textSecondary, marginTop: 8, marginHorizontal: 4 }]}>
+                Select apps to block, then tap{' '}
+                <Text style={{ fontWeight: '700', color: colors.text }}>Done</Text>
+                {' '}in the top-right of the picker.
+              </Text>
+            )}
+          </View>
+        )}
+
         {/* Save Button */}
         <TouchableOpacity
           style={[
@@ -887,20 +975,38 @@ const SettingsScreen = () => {
         </TouchableOpacity>
 
 {__DEV__ && (
-  <TouchableOpacity
-    style={{
-      margin: 16,
-      padding: 16,
-      borderRadius: 8,
-      backgroundColor: '#6C63FF',
-      alignItems: 'center',
-    }}
-    onPress={() => navigation.navigate('FocusLockTest')}
-  >
-    <Text style={{ color: 'white', fontSize: 16, fontWeight: '500' }}>
-      🔒 Focus Lock Test (Dev)
-    </Text>
-  </TouchableOpacity>
+  <>
+    <TouchableOpacity
+      style={{
+        margin: 16,
+        marginBottom: 8,
+        padding: 16,
+        borderRadius: 8,
+        backgroundColor: '#1f2937',
+        alignItems: 'center',
+      }}
+      onPress={() => navigation.navigate('DevTools')}
+    >
+      <Text style={{ color: 'white', fontSize: 16, fontWeight: '500' }}>
+        🛠️ Dev Tools
+      </Text>
+    </TouchableOpacity>
+    <TouchableOpacity
+      style={{
+        marginHorizontal: 16,
+        marginBottom: 16,
+        padding: 16,
+        borderRadius: 8,
+        backgroundColor: '#6C63FF',
+        alignItems: 'center',
+      }}
+      onPress={() => navigation.navigate('FocusLockTest')}
+    >
+      <Text style={{ color: 'white', fontSize: 16, fontWeight: '500' }}>
+        🔒 Focus Lock Test (Dev)
+      </Text>
+    </TouchableOpacity>
+  </>
 )}
 
 </ScrollView>
@@ -1166,6 +1272,19 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontWeight: '500',
+  },
+  changeAppsBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minWidth: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  changeAppsBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   updateButton: {
     padding: 16,

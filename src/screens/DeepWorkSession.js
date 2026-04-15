@@ -1,5 +1,10 @@
 // src/screens/DeepWorkSession.js - COMPLETE VERSION with Enhanced Session Questions
 import React, { useEffect, useRef, useState } from 'react';
+import { useSessionTimer } from '../hooks/useSessionTimer';
+import {
+  scheduleSessionEndNotification,
+  cancelSessionEndNotification,
+} from '../services/sessionEndNotification';
 import {
   View,
   Text,
@@ -21,6 +26,15 @@ import { Pause, Play, ChevronLeft } from 'lucide-react-native';
 import backgroundTimer from '../services/backgroundTimer';
 import { useFocusLock } from '../context/FocusLockContext';
 import { saveSessionToFirestore } from '../services/firestoreSessionService';
+import {
+  saveActiveSession,
+  clearActiveSession,
+  saveLastSessionConfig,
+} from '../services/sessionStateService';
+import {
+  incrementStreak,
+  cancelStreakRiskNotification,
+} from '../services/streakService';
 
 // import functions from '@react-native-firebase/functions';
 
@@ -31,21 +45,28 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const DeepWorkSession = ({ route, navigation }) => {
   console.log('🔍 DeepWorkSession starting with safe initialization...');
-  
-  // const { duration, activity, musicChoice } = route.params;
+
+  // Destructure FIRST — using route.params before this declaration causes NaN
+  const { duration, activity, musicChoice, focusLockEnabled } = route.params;
   const totalDuration = parseFloat(duration) * 60 * 1000;
 
   const { startBlocking, stopBlocking } = useFocusLock();
-const { duration, activity, musicChoice, focusLockEnabled } = route.params;
-  
 
-  // Core state - only what's essential
-  const [timeLeft, setTimeLeft] = useState(totalDuration);
+  // Timestamp-based timer — no drift, survives app reload
+  const { timeLeft, isPaused, isExpired, start, pause, resume, stop } = useSessionTimer(totalDuration);
+
+  // Core state
   const [isCompleted, setIsCompleted] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSaving, setIsSaving] = useState(false); // UI spinner only
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [activityDetails, setActivityDetails] = useState(null);
+
+  // Synchronous guards — React state updates are async/batched and can't be
+  // used reliably as mutex locks. Refs are synchronous and safe for this purpose.
+  const isSavingRef             = useRef(false); // prevents double-save
+  const isHandlingTimeoutRef    = useRef(false); // prevents double handleTimeout
+  const isCleanedUpRef          = useRef(false); // prevents double cleanup
+  const completionTimeoutRef    = useRef(null);  // 1500ms delay handle in handleTimeout
 
   // Services loaded dynamically to prevent crashes
   const [servicesReady, setServicesReady] = useState(false);
@@ -55,9 +76,6 @@ const { duration, activity, musicChoice, focusLockEnabled } = route.params;
     audioService: null
   });
 
-  // Timer management
-  const startTimeRef = useRef(Date.now());
-  const intervalRef = useRef(null);
   const animatedHeight = useRef(new Animated.Value(0)).current;
   const swipeAnim = useRef(new Animated.Value(0)).current;
 
@@ -157,14 +175,39 @@ const { duration, activity, musicChoice, focusLockEnabled } = route.params;
     };
   }, []);
 
+  // React to timer expiry — isCompleted guard prevents a second fire if the
+  // effect re-runs (e.g. strict-mode double-invoke in dev).
+  useEffect(() => {
+    if (isExpired && !isCompleted) {
+      handleTimeout();
+    }
+  }, [isExpired]);
+
   // SAFE: Session initialization
   const initializeSession = async () => {
     console.log('🔍 Initializing session...');
-    
+
     try {
-      // ✅ CRITICAL: Start timer IMMEDIATELY (user sees countdown start)
-      startLocalTimer();
-      
+      // start() returns the effective endTime (fresh or restored from AsyncStorage)
+      const endTime = await start();
+      Animated.timing(animatedHeight, {
+        toValue: 1,
+        duration: totalDuration,
+        useNativeDriver: false,
+      }).start();
+
+      // Schedule OS-level notification at endTime — fires even if app is killed/locked.
+      if (endTime) {
+        scheduleSessionEndNotification(
+          endTime,
+          activityDetails?.name || 'Focus Session',
+          parseFloat(duration)
+        );
+      }
+
+      // Persist config so HomeScreen can offer resume if app is killed mid-session
+      saveActiveSession({ activity, duration, musicChoice, focusLockEnabled });
+
       // ✅ Initialize everything else in parallel (non-blocking)
       // User already sees timer counting down while this happens in background
       Promise.all([
@@ -223,49 +266,23 @@ const { duration, activity, musicChoice, focusLockEnabled } = route.params;
     }
   };
 
-  // CORE: Local timer that always works (no external dependencies)
-  const startLocalTimer = () => {
-    startTimeRef.current = Date.now() - (totalDuration - timeLeft);
-
-    // Clear any existing interval
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
-
-    intervalRef.current = setInterval(() => {
-      if (!isPaused) {
-        const elapsed = Date.now() - startTimeRef.current;
-        const remaining = Math.max(0, totalDuration - elapsed);
-        setTimeLeft(remaining);
-
-        if (remaining <= 0) {
-          handleTimeout();
-        }
-      }
-    }, 1000);
-
-    // Start progress animation
-    Animated.timing(animatedHeight, {
-      toValue: 1,
-      duration: timeLeft,
-      useNativeDriver: false,
-    }).start();
-  };
-
   const handleTimeout = async () => {
+    // Synchronous re-entry guard — prevents double fire from strict-mode or
+    // rapid state updates delivering isExpired=true more than once.
+    if (isHandlingTimeoutRef.current) {
+      console.log('⏰ handleTimeout already running — skipping duplicate');
+      return;
+    }
+    isHandlingTimeoutRef.current = true;
     console.log('⏰ Session completed!');
-    console.log('🐛 DEBUG: About to set isCompleted and show modal');
-    
+
     try {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      setIsPaused(true);
-      
-      // Stop music
+      await cancelSessionEndNotification();
+
       if (servicesRef.current.audioService) {
         await servicesRef.current.audioService.stopMusic();
       }
-      
-      // Play completion alarm
+
       if (servicesRef.current.alarmService) {
         try {
           await servicesRef.current.alarmService.playCompletionAlarm();
@@ -274,55 +291,50 @@ const { duration, activity, musicChoice, focusLockEnabled } = route.params;
           console.warn('🔔 Alarm failed (non-critical):', alarmError);
         }
       }
-      
+
       setIsCompleted(true);
-      console.log('🐛 DEBUG: isCompleted set to true, skipping modal and going straight to save');
-      
-      // Skip the modal - go straight to saving and rating
-      setTimeout(async () => {
-        console.log('🐛 DEBUG: Auto-submitting session without modal');
-        // Call handleNotesSubmit with empty data (no notes from old modal)
+
+      // Store the timeout handle so we can cancel it on unmount.
+      completionTimeoutRef.current = setTimeout(async () => {
+        completionTimeoutRef.current = null;
         await handleNotesSubmit({
           notes: '',
           productivityRating: null,
           focusRating: null,
-          energyLevel: null
+          energyLevel: null,
         });
-      }, 1500);
-      
+      }, 800);
+
     } catch (error) {
       console.error('❌ Error in handleTimeout:', error);
       setIsCompleted(true);
-      setTimeout(() => setShowNotesModal(true), 1500);
+      completionTimeoutRef.current = setTimeout(() => {
+        completionTimeoutRef.current = null;
+        setShowNotesModal(true);
+      }, 800);
     }
   };
 
-  // Fallback celebration when alarm service isn't available
-  const showFallbackCelebration = () => {
-    Alert.alert(
-      '🎉 Session Complete!',
-      'Congratulations! You completed your deep work session.',
-      [{ text: 'Awesome!', style: 'default' }]
-    );
-  };
-
-  // ✅ UPDATED: Handle pause/resume with music control
   const togglePause = async () => {
     console.log('🔍 Toggle pause:', isPaused);
-    
-    const newPauseState = !isPaused;
-    
+
     if (isPaused) {
-      // Resume
-      startTimeRef.current = Date.now() - (totalDuration - timeLeft);
-      
+      // Resume — hook recomputes endTime from remaining; reschedule OS notification
+      // with the new (extended) endTime so the lock-screen alert still fires correctly.
+      const newEndTime = await resume();
+      if (newEndTime) {
+        scheduleSessionEndNotification(
+          newEndTime,
+          activityDetails?.name || 'Focus Session',
+          parseFloat(duration)
+        );
+      }
       Animated.timing(animatedHeight, {
         toValue: 1,
         duration: timeLeft,
         useNativeDriver: false,
       }).start();
-      
-      // Update background service if available
+
       if (servicesRef.current.backgroundTimer) {
         try {
           await servicesRef.current.backgroundTimer.updateTimerPauseState(false);
@@ -330,8 +342,7 @@ const { duration, activity, musicChoice, focusLockEnabled } = route.params;
           console.warn('Background pause update failed:', error);
         }
       }
-      
-      // ✅ RESUME MUSIC
+
       if (servicesRef.current.audioService) {
         try {
           await servicesRef.current.audioService.resumeMusic();
@@ -340,12 +351,11 @@ const { duration, activity, musicChoice, focusLockEnabled } = route.params;
           console.warn('🎵 Music resume error:', error);
         }
       }
-      
     } else {
-      // Pause
+      // Pause — hook captures endTime → remainingAtPause, clears interval
+      await pause();
       animatedHeight.stopAnimation();
-      
-      // Update background service if available
+
       if (servicesRef.current.backgroundTimer) {
         try {
           await servicesRef.current.backgroundTimer.updateTimerPauseState(true);
@@ -353,8 +363,7 @@ const { duration, activity, musicChoice, focusLockEnabled } = route.params;
           console.warn('Background pause update failed:', error);
         }
       }
-      
-      // ✅ PAUSE MUSIC
+
       if (servicesRef.current.audioService) {
         try {
           await servicesRef.current.audioService.pauseMusic();
@@ -364,8 +373,6 @@ const { duration, activity, musicChoice, focusLockEnabled } = route.params;
         }
       }
     }
-
-    setIsPaused(newPauseState);
   };
 
   // Pan responder for swipe to end
@@ -421,15 +428,30 @@ const { duration, activity, musicChoice, focusLockEnabled } = route.params;
     );
   };
 
-  // ✅ UPDATED: Safe cleanup function with music cleanup
   const cleanup = async () => {
+    // Idempotency guard — cleanup is called from both handleSessionComplete and
+    // the unmount effect; running it twice wastes bridge calls and can cause
+    // "already stopped" warnings from audio/alarm services.
+    if (isCleanedUpRef.current) {
+      console.log('🔍 cleanup already ran — skipping');
+      return;
+    }
+    isCleanedUpRef.current = true;
     console.log('🔍 Cleaning up session...');
-  
+
+    // Cancel the pending 1500ms completion timeout if cleanup is called early
+    // (e.g. user force-quits mid-delay). Prevents ghost save on unmounted component.
+    if (completionTimeoutRef.current) {
+      clearTimeout(completionTimeoutRef.current);
+      completionTimeoutRef.current = null;
+    }
+
     try {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-  
+      await stop();
+      await cancelSessionEndNotification();
+      await clearActiveSession(); // remove orphan-detection key
+
+
       // Stop Focus Lock blocking regardless of whether it was enabled —
       // defensive call ensures shields are never left on after session ends.
       try {
@@ -473,15 +495,6 @@ const handleNotesSubmit = async (sessionData) => {
   console.log('🐛 DEBUG: handleNotesSubmit called with:', sessionData);
   setShowNotesModal(false);
   
-  try {
-    // ✅ Stop alarm regardless of save outcome
-    if (servicesRef.current.alarmService) {
-      await servicesRef.current.alarmService.stopAlarm();
-    }
-  } catch (error) {
-    console.warn('Alarm stop error:', error);
-  }
-  
   console.log('🐛 DEBUG: About to call handleSessionComplete');
   // ✅ Attempt to save session
   const success = await handleSessionComplete(sessionData);
@@ -520,70 +533,20 @@ const handleNotesSubmit = async (sessionData) => {
 };
 // Save completed session
 const handleSessionComplete = async (sessionData = {}) => {
-  if (isSaving) {
+  // Use a ref — not state — as the mutex. State updates are async/batched,
+  // so two rapid calls can both read isSaving===false before the re-render.
+  if (isSavingRef.current) {
     console.log('🐛 DEBUG: Already saving, skipping duplicate call');
     return false;
   }
+  isSavingRef.current = true;
 
   try {
     setIsSaving(true);
     await cleanup();
-  
-    // ===== STORAGE REPAIR SECTION =====
-    try {
-      console.log('🔧 Checking storage integrity...');
-      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-      const rawSessions = await AsyncStorage.getItem('@deep_work_sessions');
-      
-      if (rawSessions) {
-        const parsed = JSON.parse(rawSessions);
-        
-        // Check if it's a valid object
-        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-          console.log('⚠️ Storage is corrupted (not an object), resetting...');
-          await AsyncStorage.setItem('@deep_work_sessions', JSON.stringify({}));
-        } else {
-          // Check if all keys are valid date strings and values are arrays
-          let needsRepair = false;
-          const repairedSessions = {};
-          
-          for (const [key, value] of Object.entries(parsed)) {
-            // Valid date format: YYYY-MM-DD
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) {
-              console.log(`⚠️ Invalid date key: ${key}, skipping...`);
-              needsRepair = true;
-              continue;
-            }
-            
-            // Must be array
-            if (!Array.isArray(value)) {
-              console.log(`⚠️ Invalid value for ${key} (not an array), skipping...`);
-              needsRepair = true;
-              continue;
-            }
-            
-            repairedSessions[key] = value;
-          }
-          
-          if (needsRepair) {
-            console.log('🔧 Repairing storage structure...');
-            await AsyncStorage.setItem('@deep_work_sessions', JSON.stringify(repairedSessions));
-          } else {
-            console.log('✅ Storage structure is valid');
-          }
-        }
-      } else {
-        console.log('📝 No existing sessions, initializing empty storage');
-        await AsyncStorage.setItem('@deep_work_sessions', JSON.stringify({}));
-      }
-    } catch (repairError) {
-      console.error('⚠️ Storage repair failed, initializing fresh:', repairError);
-      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-      await AsyncStorage.setItem('@deep_work_sessions', JSON.stringify({}));
-    }
-    // ===== END STORAGE REPAIR SECTION =====
-  
-    // ===== ENHANCED VALIDATION SECTION =====
+
+    // deepWorkStore.getSessions() auto-repairs storage on read — no need to
+    // duplicate that logic here before every save.
     console.log('📝 ===== SESSION SAVE DEBUG =====');
     console.log('Route params:', { duration, activity, musicChoice });
     console.log('Session data from modal:', sessionData);
@@ -643,23 +606,38 @@ const handleSessionComplete = async (sessionData = {}) => {
     // Save session to storage
     const result = await deepWorkStore.addSession(sessionToSave);
 
-    try {
-      await saveSessionToFirestore(sessionToSave);
-    } catch (firestoreError) {
-      console.log('❌ [DeepWorkSession] Firestore save failed (non-critical):', firestoreError.message);
-    }
-
     if (!result.success) {
       throw new Error(result.error || 'Failed to save session');
     }
 
+    // Use the ID that was actually stored — deepWorkStore.addSession generates
+    // its own ID internally, so result.session.id is the canonical ID.
+    // Pass the full sessionToSave fields (for timestamp, ratings, etc.) but
+    // override id so the Firestore doc matches AsyncStorage.
+    const savedSessionId = result.session?.id || sessionToSave.id;
+    try {
+      await saveSessionToFirestore({ ...sessionToSave, id: savedSessionId });
+    } catch (firestoreError) {
+      console.log('❌ [DeepWorkSession] Firestore save failed (non-critical):', firestoreError.message);
+    }
     console.log('✅ Session saved successfully!');
     console.log('===================================\n');
-    console.log('🐛 DEBUG: About to navigate to SessionRating with sessionId:', sessionToSave.id);
+    console.log('🐛 DEBUG: About to navigate to SessionRating with sessionId:', savedSessionId);
 
-    // Navigate to rating screen instead of showing alert
-    navigation.navigate('SessionRating', { sessionId: sessionToSave.id });
-    console.log('🐛 DEBUG: Navigation called successfully');
+    // Navigate to rating screen
+    navigation.navigate('SessionRating', { sessionId: savedSessionId });
+
+    // Non-critical post-save: streak + quick-restart config (fire-and-forget)
+    Promise.all([
+      saveLastSessionConfig({
+        activity,
+        activityName: activityDetails?.name || '',
+        duration,
+        musicChoice,
+      }),
+      incrementStreak(),
+      cancelStreakRiskNotification(),
+    ]).catch(err => console.warn('[DeepWorkSession] Post-save services failed:', err));
 
     return true;
   } catch (error) {
@@ -672,6 +650,7 @@ const handleSessionComplete = async (sessionData = {}) => {
     );
     return false;
   } finally {
+    isSavingRef.current = false;
     setIsSaving(false);
   }
 };

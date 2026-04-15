@@ -31,6 +31,7 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<string>deepworkapp</string>
 				<string>com.airraman.deepwork.dev</string>
 			</array>
 		</dict>

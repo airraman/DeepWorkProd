@@ -141,14 +141,60 @@ export const getUserStats = async () => {
   }
 };
 
+/**
+ * Patch the rating + reflection onto an existing Firestore session document.
+ * Called from sessionService.saveRating() after AsyncStorage is updated.
+ *
+ * Uses { merge: true } so it is safe to call multiple times — subsequent
+ * calls overwrite with the same data rather than creating duplicates.
+ *
+ * @param {string} sessionId - The session doc ID (format: YYYY-MM-DD-<timestamp>)
+ * @param {object} rating    - Full rating object including reflection sub-object
+ * @returns {Promise<boolean>}
+ */
+export const updateSessionRatingInFirestore = async (sessionId, rating) => {
+  const user = auth().currentUser;
+
+  if (!user) {
+    console.log('[firestoreSessionService] No user — skipping rating sync');
+    return false;
+  }
+
+  try {
+    await firestore()
+      .collection('users')
+      .doc(user.uid)
+      .collection(SESSIONS_SUBCOLLECTION)
+      .doc(sessionId)
+      .set(
+        {
+          rating: sanitizeRating(rating),
+          syncStatus: 'synced',
+          ratingUpdatedAt: firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }   // never overwrites base session fields
+      );
+
+    console.log('[firestoreSessionService] Rating synced to Firestore:', sessionId);
+    return true;
+
+  } catch (error) {
+    console.log('[firestoreSessionService] Rating sync failed (non-critical):', error.message);
+    return false;
+  }
+};
+
 // ─── Private Helpers ─────────────────────────────────────────────────────────
 
 const sanitizeSession = (session) => {
   const sanitized = {};
 
+  // 'rating' (singular) is written by sessionService.saveRating after navigation.
+  // 'ratings' (plural, legacy) is the pre-reflection field from handleSessionComplete.
+  // Both are included so whichever is present gets synced.
   const fields = [
     'id', 'date', 'activity', 'duration', 'musicChoice',
-    'notes', 'ratings', 'timestamp', 'completedAt', 'metadata'
+    'notes', 'rating', 'ratings', 'timestamp', 'completedAt', 'metadata',
   ];
 
   fields.forEach((field) => {
@@ -156,6 +202,29 @@ const sanitizeSession = (session) => {
       sanitized[field] = session[field];
     }
   });
+
+  return sanitized;
+};
+
+const sanitizeRating = (rating) => {
+  if (!rating || typeof rating !== 'object') return null;
+
+  const sanitized = {
+    rating:      rating.rating      ?? null,
+    focus:       rating.focus       ?? null,
+    productivity: rating.productivity ?? null,
+    ratedAt:     rating.ratedAt     ?? null,
+  };
+
+  // Reflection: four structured fields — the data the AI insight pipeline reads
+  if (rating.reflection && typeof rating.reflection === 'object') {
+    sanitized.reflection = {
+      workedOn:    rating.reflection.workedOn    || null,
+      wentWell:    rating.reflection.wentWell    || null,
+      distractions: rating.reflection.distractions || null,
+      nextStep:    rating.reflection.nextStep    || null,
+    };
+  }
 
   return sanitized;
 };

@@ -1,66 +1,101 @@
-// src/services/insights/PromptBuilder.js - IMPROVED VERSION
-
-/**
- * 🎯 KEY CHANGES:
- * 1. Include sample descriptions (qualitative data)
- * 2. Focus on observations over recommendations
- * 3. Structure: Quantitative → Qualitative → Light suggestion
- * 4. Analytical tone (data-driven, not coaching)
- */
+// src/services/insights/PromptBuilder.js
 
 class PromptBuilder {
-  
-  static buildWeeklyPrompt(aggregatedData) {
-    const { 
-      totalSessions, 
-      totalHours, 
-      avgSessionMinutes,
-      activitiesBreakdown 
-    } = aggregatedData;
-    
-    if (totalSessions === 0) {
-      return this._buildEmptyPrompt('weekly');
+
+  // ─── Shared helpers ───────────────────────────────────────────────────────
+
+  static _sanitize(str, maxLen = 100) {
+    return String(str)
+      .replace(/"/g, "'")
+      .replace(/[\n\r\t\\]/g, ' ')
+      .substring(0, maxLen)
+      .trim();
+  }
+
+  static _formatSamples(arr, maxLen = 100) {
+    if (!arr || arr.length === 0) return null;
+    return arr
+      .slice(0, 3)
+      .map(s => `"${this._sanitize(s, maxLen)}"`)
+      .join(', ');
+  }
+
+  static _buildActivityBlock(activity, stats) {
+    const lines = [
+      `- ${activity}: ${stats.sessionCount} sessions, ` +
+      `${stats.totalHours.toFixed(1)}h total, ` +
+      `avg ${stats.avgMinutes} min/session`,
+    ];
+
+    const worked       = this._formatSamples(stats.sampleDescriptions);
+    const wentWell     = this._formatSamples(stats.sampleWentWell);
+    const distractions = this._formatSamples(stats.sampleDistractions);
+    const nextSteps    = this._formatSamples(stats.sampleNextSteps);
+
+    if (worked)       lines.push(`  Worked on:    ${worked}`);
+    if (wentWell)     lines.push(`  Went well:    ${wentWell}`);
+    if (distractions) lines.push(`  Distractions: ${distractions}`);
+    if (nextSteps)    lines.push(`  Next steps:   ${nextSteps}`);
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Build the behavioral patterns section included in every prompt.
+   * Covers: time-of-day distribution, peak focus window, avg duration per window,
+   * most common topics, and recurring distractions.
+   */
+  static _buildPatternBlock(patterns) {
+    if (!patterns) return 'No pattern data available.';
+
+    const { timeOfDay, peakTimeOfDay, longestSessionsTime, topWorkedOn, topDistractions } = patterns;
+
+    const lines = [];
+
+    // Time-of-day distribution — only show non-zero buckets
+    const activeBuckets = Object.entries(timeOfDay || {})
+      .filter(([, d]) => d.count > 0)
+      .map(([name, d]) => `${name} (${d.count} sessions, avg ${d.avgMinutes} min)`);
+
+    if (activeBuckets.length > 0) {
+      lines.push(`Sessions by time of day: ${activeBuckets.join(' | ')}`);
     }
 
-    // Build activity breakdown WITH descriptions
+    if (peakTimeOfDay) {
+      const peakLine = `Peak focus window: ${peakTimeOfDay}`;
+      const longestLine = longestSessionsTime && longestSessionsTime !== peakTimeOfDay
+        ? ` | Longest sessions in: ${longestSessionsTime}`
+        : '';
+      lines.push(peakLine + longestLine);
+    }
+
+    if (topWorkedOn && topWorkedOn.length > 0) {
+      lines.push(`Most common topics: ${topWorkedOn.join(', ')}`);
+    }
+
+    if (topDistractions && topDistractions.length > 0) {
+      lines.push(`Recurring distractions: ${topDistractions.join(', ')}`);
+    }
+
+    return lines.length > 0 ? lines.join('\n') : 'No pattern data available.';
+  }
+
+  // ─── Weekly ───────────────────────────────────────────────────────────────
+
+  static buildWeeklyPrompt(aggregatedData) {
+    const { totalSessions, totalHours, avgSessionMinutes, activitiesBreakdown, patterns } = aggregatedData;
+
+    if (totalSessions === 0) return this._buildEmptyPrompt('weekly');
+
     const activityText = Object.entries(activitiesBreakdown || {})
-    .map(([activity, stats]) => {
-      let text = `- ${activity}: ${stats.sessionCount} sessions, ${stats.totalHours.toFixed(1)}h total (avg ${stats.avgMinutes} min/session)`;
-      
-      // ✅ FIXED: Sanitize descriptions to prevent prompt corruption
-      if (stats.sampleDescriptions && stats.sampleDescriptions.length > 0) {
-        const descriptions = stats.sampleDescriptions
-          .slice(0, 3)
-          .map(desc => {
-            // Sanitize: remove problematic characters
-            const cleaned = String(desc)
-              .replace(/"/g, "'")           // Replace double quotes
-              .replace(/\n/g, " ")          // Remove newlines
-              .replace(/\r/g, " ")          // Remove carriage returns
-              .replace(/\t/g, " ")          // Remove tabs
-              .replace(/\\/g, "")           // Remove backslashes
-              .substring(0, 100)            // Limit length
-              .trim();
-            
-            return cleaned;
-          })
-          .filter(desc => desc.length > 0)  // Remove empty strings
-          .map(desc => `"${desc}"`)
-          .join(', ');
-        
-        if (descriptions) {
-          text += `\n  Notes: ${descriptions}`;
-        }
-      }
-      
-      return text;
-    })
-    .join('\n\n');
+      .map(([activity, stats]) => this._buildActivityBlock(activity, stats))
+      .join('\n\n');
 
-    // ✅ IMPROVED PROMPT STRUCTURE
-    return `Analyze this week's focus work patterns:
+    const patternBlock = this._buildPatternBlock(patterns);
 
-QUANTITATIVE SUMMARY:
+    return `You are writing a brief weekly focus review for a user of a deep work app.
+
+DATA:
 • Sessions completed: ${totalSessions}
 • Total focus time: ${totalHours.toFixed(1)} hours
 • Average session length: ${avgSessionMinutes} minutes
@@ -68,145 +103,137 @@ QUANTITATIVE SUMMARY:
 ACTIVITY BREAKDOWN:
 ${activityText}
 
-Generate a 2-3 sentence analytical observation that:
-1. Identifies a pattern in the quantitative data (session length, distribution, consistency)
-2. References specific work from the session notes to add context
-3. Ends with ONE optional, data-driven suggestion (not generic advice)
+BEHAVIORAL PATTERNS:
+${patternBlock}
 
-Use an analytical tone - you're a data analyst reviewing metrics, not a motivational coach.`;
+Write exactly 3 bullet points. Each bullet must:
+- Start with "• This week, you" or "• You" (second person, personal)
+- Be one sentence, specific to the data above
+- Reference actual work, wins, or patterns where available
+
+The three bullets should cover:
+1. Volume or consistency (sessions completed, total time)
+2. A specific observation about what they worked on or their peak focus window (time-of-day pattern)
+3. One concrete, data-driven suggestion based on their distractions, session timing, or next steps
+
+Tone: direct, warm, specific. No generic motivation. No paragraph text — bullets only.`;
   }
 
-  /**
-   * 🎯 ADVANCED CONCEPT: Prompt Engineering Patterns
-   * 
-   * This prompt uses several techniques:
-   * 
-   * 1. STRUCTURED INPUT (Quantitative → Qualitative)
-   *    - Makes it easier for the AI to reference specific data points
-   *    - Separates numbers from context
-   * 
-   * 2. EXPLICIT OUTPUT FORMAT
-   *    - "2-3 sentence" constrains length
-   *    - "1. Pattern 2. Context 3. Suggestion" structures the response
-   * 
-   * 3. ROLE DEFINITION
-   *    - "data analyst" vs "coach" changes vocabulary/tone
-   *    - "not generic advice" prevents cliché recommendations
-   * 
-   * 4. SAMPLE DATA INCLUSION
-   *    - Descriptions provide concrete examples
-   *    - AI can reference actual work instead of abstractions
-   */
+  // ─── Daily ────────────────────────────────────────────────────────────────
 
   static buildDailyPrompt(aggregatedData) {
-    const { 
-      totalSessions, 
-      totalHours, 
-      avgSessionMinutes,
-      activitiesBreakdown 
-    } = aggregatedData;
-    
-    if (totalSessions === 0) {
-      return this._buildEmptyPrompt('daily');
-    }
+    const { totalSessions, totalHours, avgSessionMinutes, activitiesBreakdown, patterns } = aggregatedData;
+
+    if (totalSessions === 0) return this._buildEmptyPrompt('daily');
 
     const activityText = Object.entries(activitiesBreakdown || {})
-    .map(([activity, stats]) => {
-      let text = `- ${activity}: ${stats.sessionCount} sessions, ${stats.totalHours.toFixed(1)}h`;
-      
-      // ✅ FIXED: Sanitize descriptions
-      if (stats.sampleDescriptions && stats.sampleDescriptions.length > 0) {
-        const sanitized = stats.sampleDescriptions
-          .map(desc => String(desc)
-            .replace(/"/g, "'")
-            .replace(/\n/g, " ")
-            .replace(/\r/g, " ")
-            .replace(/\t/g, " ")
-            .replace(/\\/g, "")
-            .substring(0, 100)
-            .trim()
-          )
-          .filter(desc => desc.length > 0)
-          .join(', ');
-        
-        if (sanitized) {
-          text += `\n  Worked on: ${sanitized}`;
-        }
-      }
-      
-      return text;
-    })
-    .join('\n');
+      .map(([activity, stats]) => this._buildActivityBlock(activity, stats))
+      .join('\n\n');
 
-    return `Review yesterday's focus sessions:
+    const patternBlock = this._buildPatternBlock(patterns);
 
-METRICS:
-• ${totalSessions} sessions completed
-• ${totalHours.toFixed(1)} hours total
-• ${avgSessionMinutes} min average
+    return `You are writing a brief daily focus review for a user of a deep work app.
 
-ACTIVITIES:
+DATA:
+• Sessions completed: ${totalSessions}
+• Total focus time: ${totalHours.toFixed(1)} hours
+• Average session length: ${avgSessionMinutes} minutes
+
+ACTIVITY BREAKDOWN:
 ${activityText}
 
-Provide a brief analytical summary (2 sentences max): one quantitative observation about session patterns, and one observation about the type of work completed based on the notes.`;
+BEHAVIORAL PATTERNS:
+${patternBlock}
+
+Write exactly 2 bullet points. Each bullet must:
+- Start with "• Yesterday, you" (second person, personal)
+- Be one sentence, specific to the data above
+- Reference actual work content, time of day, or wins where available
+
+The two bullets should cover:
+1. What they accomplished (volume + what they worked on, and when — morning/afternoon/evening)
+2. One observation about quality or a pattern worth noting (session length, distractions, or a next step)
+
+Tone: direct, warm, specific. No generic motivation. No paragraph text — bullets only.`;
   }
+
+  // ─── Monthly ──────────────────────────────────────────────────────────────
 
   static buildMonthlyPrompt(aggregatedData) {
-    const { 
-      totalSessions, 
-      totalHours, 
-      avgSessionMinutes,
-      activitiesBreakdown 
-    } = aggregatedData;
-    
-    if (totalSessions === 0) {
-      return this._buildEmptyPrompt('monthly');
-    }
+    const { totalSessions, totalHours, avgSessionMinutes, activitiesBreakdown, patterns } = aggregatedData;
+
+    if (totalSessions === 0) return this._buildEmptyPrompt('monthly');
 
     const activityText = Object.entries(activitiesBreakdown || {})
-    .map(([activity, stats]) => {
-      let text = `- ${activity}: ${stats.sessionCount} sessions (${stats.totalHours.toFixed(1)}h total)`;
-      
-      // ✅ FIXED: Sanitize descriptions
-      if (stats.sampleDescriptions && stats.sampleDescriptions.length > 0) {
-        const topWork = stats.sampleDescriptions
-          .slice(0, 2)
-          .map(desc => String(desc)
-            .replace(/"/g, "'")
-            .replace(/\n/g, " ")
-            .replace(/\r/g, " ")
-            .replace(/\t/g, " ")
-            .replace(/\\/g, "")
-            .substring(0, 100)
-            .trim()
-          )
-          .filter(desc => desc.length > 0)
-          .join('; ');
-        
-        if (topWork) {
-          text += `\n  Examples: ${topWork}`;
-        }
-      }
-      
-      return text;
-    })
-    .join('\n');
+      .map(([activity, stats]) => this._buildActivityBlock(activity, stats))
+      .join('\n\n');
 
-    return `Analyze this month's focus patterns:
+    const patternBlock = this._buildPatternBlock(patterns);
 
-METRICS:
-• ${totalSessions} total sessions (${(totalSessions / 4).toFixed(1)} per week)
-• ${totalHours.toFixed(1)} hours total focus time
-• ${avgSessionMinutes} min average session
+    return `You are writing a brief monthly focus review for a user of a deep work app.
 
-ACTIVITY DISTRIBUTION:
+DATA:
+• Sessions completed: ${totalSessions} (avg ${(totalSessions / 4).toFixed(1)}/week)
+• Total focus time: ${totalHours.toFixed(1)} hours
+• Average session length: ${avgSessionMinutes} minutes
+
+ACTIVITY BREAKDOWN:
 ${activityText}
 
-Provide an analytical summary (2-3 sentences): highlight the most significant quantitative pattern (volume, consistency, or session length), reference 1-2 specific projects from the notes, and optionally suggest one area to track differently next month.`;
+BEHAVIORAL PATTERNS:
+${patternBlock}
+
+Write exactly 3 bullet points. Each bullet must:
+- Start with "• This month, you" or "• You" (second person, personal)
+- Be one sentence, specific to the data above
+- Reference actual projects, time-of-day patterns, or recurring distractions where available
+
+The three bullets should cover:
+1. Overall volume and consistency across the month
+2. A behavioral pattern — when they focused most (morning/afternoon/evening), what topics came up most, or how session length varied by time of day
+3. One concrete suggestion based on recurring distractions or next steps
+
+Tone: direct, warm, specific. No generic motivation. No paragraph text — bullets only.`;
   }
 
+  // ─── Activity-specific ────────────────────────────────────────────────────
+
+  static buildActivityPrompt(aggregatedData, activityType) {
+    const { totalSessions, totalHours, avgSessionMinutes, activitiesBreakdown, patterns } = aggregatedData;
+
+    if (totalSessions === 0) return this._buildEmptyPrompt('activity');
+
+    const stats = activitiesBreakdown?.[activityType];
+    const activityBlock = stats
+      ? this._buildActivityBlock(activityType, stats)
+      : `- ${activityType}: no sessions with reflection data`;
+
+    const patternBlock = this._buildPatternBlock(patterns);
+
+    return `You are writing a brief activity-specific focus review for a user of a deep work app.
+
+DATA — last 7 days of "${activityType}":
+• Sessions: ${totalSessions}, ${totalHours.toFixed(1)}h total, ${avgSessionMinutes} min avg
+
+${activityBlock}
+
+BEHAVIORAL PATTERNS:
+${patternBlock}
+
+Write exactly 2 bullet points. Each bullet must:
+- Start with "• This week, you" (second person, personal)
+- Be one sentence, specific to the data above
+
+The two bullets should cover:
+1. Volume, what they specifically worked on, and when (morning/afternoon/evening)
+2. A pattern, win, or blocker worth noting — reference distractions or next steps if available
+
+Tone: direct, warm, specific. No paragraph text — bullets only.`;
+  }
+
+  // ─── Fallback ─────────────────────────────────────────────────────────────
+
   static _buildEmptyPrompt(insightType) {
-    // Even empty prompts should be analytical, not motivational
     return `No focus sessions recorded in this ${insightType} period. Consider what data points would be valuable to track.`;
   }
 }

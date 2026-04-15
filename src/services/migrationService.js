@@ -12,7 +12,7 @@
 
 import firestore from '../config/firebaseConfig';
 import { hasMigrated, setMigrationComplete } from './authService';
-import { getSessions } from './deepWorkStore';
+import { deepWorkStore } from './deepWorkStore';
 
 const SESSIONS_SUBCOLLECTION = 'sessions';
 const BATCH_SIZE = 100;
@@ -37,7 +37,7 @@ export const runMigration = async (firebaseUser) => {
     }
 
     // ── Read all local sessions ──────────────────────────────────────────────
-    const sessionsByDate = await getSessions();
+    const sessionsByDate = await deepWorkStore.getSessions();
     const allSessions = flattenSessions(sessionsByDate);
 
     console.log(`📦 [migrationService] Found ${allSessions.length} local sessions to migrate`);
@@ -145,7 +145,7 @@ const sanitizeSession = (session) => {
   // Copy all defined fields
   const fields = [
     'id', 'date', 'activity', 'duration', 'musicChoice',
-    'notes', 'ratings', 'timestamp', 'completedAt', 'metadata'
+    'notes', 'rating', 'ratings', 'timestamp', 'completedAt', 'metadata',
   ];
 
   fields.forEach((field) => {
