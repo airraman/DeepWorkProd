@@ -26,3 +26,5 @@ yarn-error.log*
 # IDE
 .vscode/
 .idea/
+credentials/
+credentials.json

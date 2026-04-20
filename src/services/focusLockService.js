@@ -1,38 +1,77 @@
-import { NativeModules, Alert } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 
 const { FocusLockModule } = NativeModules;
 
-/**
- * Focus Lock Service
- * Bridges to Swift FocusLockModule for iOS Screen Time app blocking
- */
-class FocusLockService {
-  
-  /**
-   * Request Screen Time authorization
-   */
-  async requestAuthorization() {
-    try {
-      const granted = await FocusLockModule.requestAuthorization();
-      console.log('✅ Screen Time authorized:', granted);
-      return granted;
-    } catch (error) {
-      console.error('❌ Screen Time authorization failed:', error);
-      Alert.alert(
-        'Authorization Failed',
-        'Could not access Screen Time. Please check Settings → Screen Time.',
-        [{ text: 'OK' }]
-      );
-      return false;
-    }
-  }
-  
-  /**
-   * Check if module is available
-   */
-  isAvailable() {
-    return !!FocusLockModule;
+const isSupported = Platform.OS === 'ios' && !!FocusLockModule;
+
+function assertSupported() {
+  if (!isSupported) {
+    throw new Error(
+      Platform.OS !== 'ios'
+        ? 'Focus Lock is only available on iOS.'
+        : 'FocusLockModule not found. Ensure you are running a development build (not Expo Go).'
+    );
   }
 }
 
-export default new FocusLockService();
+const focusLockService = {
+  isSupported,
+
+  /**
+   * Call once on app launch. Returns auth status, selection, and blocking
+   * state in a single bridge call. Use this to hydrate UI instead of
+   * calling three separate methods.
+   *
+   * @returns {Promise<{
+   *   authorizationStatus: 'approved' | 'denied' | 'notDetermined' | 'unknown',
+   *   selection: { appTokenCount: number, categoryTokenCount: number, webDomainTokenCount: number, totalCount: number },
+   *   blocking: { isBlocking: boolean, shieldedAppCount: number, shieldedCategoryCount: number, shieldedWebDomainCount: number }
+   * }>}
+   */
+  async initialize() {
+    assertSupported();
+    return FocusLockModule.initialize();
+  },
+
+  async requestAuthorization() {
+    assertSupported();
+    return FocusLockModule.requestAuthorization();
+  },
+
+  async getAuthorizationStatus() {
+    assertSupported();
+    return FocusLockModule.getAuthorizationStatus();
+  },
+
+  async selectAppsToBlock() {
+    assertSupported();
+    return FocusLockModule.selectAppsToBlock();
+  },
+
+  async getSelectionCount() {
+    assertSupported();
+    return FocusLockModule.getSelectionCount();
+  },
+
+  async clearSelection() {
+    assertSupported();
+    return FocusLockModule.clearSelection();
+  },
+
+  async startBlocking() {
+    assertSupported();
+    return FocusLockModule.startBlocking();
+  },
+
+  async stopBlocking() {
+    assertSupported();
+    return FocusLockModule.stopBlocking();
+  },
+
+  async getBlockingStatus() {
+    assertSupported();
+    return FocusLockModule.getBlockingStatus();
+  },
+};
+
+export default focusLockService;

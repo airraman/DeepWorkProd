@@ -30,6 +30,8 @@ import {
   Platform,
   Linking,
 } from 'react-native';
+import { useAuth } from '../context/AuthContext';
+import { signOut } from '../services/authService';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Bell, Clock, TrendingUp, Volume2, Plus, X } from 'lucide-react-native';
 import { useTheme, THEMES } from '../context/ThemeContext';
@@ -41,6 +43,8 @@ import { notificationService } from '../services/notificationService';
 import { notificationBackgroundTask } from '../services/notificationBackgroundTask';
 import notificationPreferences from '../services/notificationPreferences';
 import SharedHeader from '../components/SharedHeader';
+import { useFocusLock } from '../context/FocusLockContext';
+import focusLockService from '../services/focusLockService';
 
 const isTablet = Platform.isPad || Dimensions.get('window').width > 768;
 const HEADER_HEIGHT = isTablet ? 60 : 50;
@@ -51,6 +55,7 @@ const SettingsScreen = () => {
   const isDark = theme === THEMES.DARK;
   const navigation = useNavigation();
   const { isPremium } = useSubscription();
+  
   
   // Core state
   const [activities, setActivities] = useState([]);
@@ -76,6 +81,14 @@ const SettingsScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+
+  // Focus Lock
+  const { isAuthorized, selectionCount, refreshSelection } = useFocusLock();
+  const [focusLockSelecting, setFocusLockSelecting] = useState(false);
+
+
+  //User Profile
+  const { user, userProfile } = useAuth();
 
   const colorPalette = [
     '#ffb3ba', '#ffdfdf', '#ffcc99', '#ffd9b3',
@@ -384,6 +397,30 @@ const SettingsScreen = () => {
       showFeedback('Alarm test failed');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleChangeBlockedApps = async () => {
+    if (!focusLockService.isSupported) return;
+    setFocusLockSelecting(true);
+    try {
+      if (!isAuthorized) {
+        const result = await focusLockService.requestAuthorization();
+        const authorized = result === 'authorized' || result === 'approved' || result === true ||
+          (typeof result === 'object' && result?.authorizationStatus === 'approved');
+        if (!authorized) {
+          showFeedback('Permission denied. Enable Screen Time in iOS Settings.');
+          return;
+        }
+      }
+      await focusLockService.selectAppsToBlock();
+      await refreshSelection();
+      showFeedback('Blocked apps updated.');
+    } catch (err) {
+      console.warn('[Settings] handleChangeBlockedApps failed:', err);
+      showFeedback('Could not open app picker. Try again.');
+    } finally {
+      setFocusLockSelecting(false);
     }
   };
 
@@ -793,6 +830,133 @@ const SettingsScreen = () => {
           )}
         </View>
 
+        {/* ── Profile Section ──────────────────────────────────────── */}
+<View style={[
+  styles.section,
+  {
+    backgroundColor: isDark ? '#1f1f1f' : colors.card,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 12,
+  }
+]}>
+  <View style={styles.sectionHeader}>
+    <Text style={[styles.sectionTitle, { color: colors.text }]}>
+      Account
+    </Text>
+  </View>
+
+  {user ? (
+    // ── Logged in state ──────────────────────────────────────
+    <>
+      <View style={styles.settingRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.settingLabel, { color: colors.text }]}>
+            {userProfile?.displayName || user.displayName || 'DeepWorker'}
+          </Text>
+          <Text style={[styles.helpText, { color: colors.textSecondary, marginTop: 2 }]}>
+            {user.email}
+          </Text>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        style={[
+          styles.profileButton,
+          { borderColor: colors.primary || colors.accent }
+        ]}
+        onPress={() => navigation.navigate('Profile')}
+      >
+        <Text style={[
+          styles.profileButtonText,
+          { color: colors.primary || colors.accent }
+        ]}>
+          View Profile & Stats
+        </Text>
+      </TouchableOpacity>
+    </>
+  ) : (
+    // ── Logged out state ─────────────────────────────────────
+    <>
+      <Text style={[styles.helpText, { color: colors.textSecondary, marginBottom: 12 }]}>
+        Sign in to back up your sessions and sync across devices.
+      </Text>
+      <TouchableOpacity
+        style={[
+          styles.profileButton,
+          { borderColor: colors.primary || colors.accent }
+        ]}
+        onPress={() => navigation.navigate('Login')}
+      >
+        <Text style={[
+          styles.profileButtonText,
+          { color: colors.primary || colors.accent }
+        ]}>
+          Sign In / Create Account
+        </Text>
+      </TouchableOpacity>
+    </>
+  )}
+</View>
+
+        {/* Focus Lock Section */}
+        {focusLockService.isSupported && (
+          <View style={[
+            styles.section,
+            {
+              backgroundColor: isDark ? '#1f1f1f' : colors.card,
+              borderColor: colors.border,
+              borderWidth: 1,
+              borderRadius: 12,
+            }
+          ]}>
+            <View style={styles.sectionHeader}>
+              <Text style={{ fontSize: 20 }}>📵</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Focus Lock
+              </Text>
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <Text style={[styles.settingLabel, { color: colors.text }]}>
+                  Blocked apps
+                </Text>
+                <Text style={[styles.helpText, { color: colors.textSecondary, marginTop: 4 }]}>
+                  {selectionCount > 0
+                    ? `${selectionCount} app${selectionCount !== 1 ? 's' : ''} selected`
+                    : 'No apps selected yet'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.changeAppsBtn,
+                  { borderColor: colors.primary },
+                  focusLockSelecting && { opacity: 0.5 },
+                ]}
+                onPress={handleChangeBlockedApps}
+                disabled={focusLockSelecting}
+              >
+                {focusLockSelecting ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text style={[styles.changeAppsBtnText, { color: colors.primary }]}>
+                    {selectionCount > 0 ? 'Change' : 'Set up'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {focusLockSelecting && (
+              <Text style={[styles.helpText, { color: colors.textSecondary, marginTop: 8, marginHorizontal: 4 }]}>
+                Select apps to block, then tap{' '}
+                <Text style={{ fontWeight: '700', color: colors.text }}>Done</Text>
+                {' '}in the top-right of the picker.
+              </Text>
+            )}
+          </View>
+        )}
+
         {/* Save Button */}
         <TouchableOpacity
           style={[
@@ -809,9 +973,44 @@ const SettingsScreen = () => {
             <Text style={styles.updateButtonText}>Save Settings</Text>
           )}
         </TouchableOpacity>
-      </ScrollView>
 
-      {/* Alert Toast */}
+{__DEV__ && (
+  <>
+    <TouchableOpacity
+      style={{
+        margin: 16,
+        marginBottom: 8,
+        padding: 16,
+        borderRadius: 8,
+        backgroundColor: '#1f2937',
+        alignItems: 'center',
+      }}
+      onPress={() => navigation.navigate('DevTools')}
+    >
+      <Text style={{ color: 'white', fontSize: 16, fontWeight: '500' }}>
+        🛠️ Dev Tools
+      </Text>
+    </TouchableOpacity>
+    <TouchableOpacity
+      style={{
+        marginHorizontal: 16,
+        marginBottom: 16,
+        padding: 16,
+        borderRadius: 8,
+        backgroundColor: '#6C63FF',
+        alignItems: 'center',
+      }}
+      onPress={() => navigation.navigate('FocusLockTest')}
+    >
+      <Text style={{ color: 'white', fontSize: 16, fontWeight: '500' }}>
+        🔒 Focus Lock Test (Dev)
+      </Text>
+    </TouchableOpacity>
+  </>
+)}
+
+</ScrollView>
+{/* Alert Toast */}
       {showAlert && (
         <View style={[styles.alert, { backgroundColor: colors.primary }]}>
           <Text style={styles.alertText}>{alertMessage}</Text>
@@ -1074,6 +1273,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  changeAppsBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minWidth: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  changeAppsBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
   updateButton: {
     padding: 16,
     borderRadius: 8,
@@ -1098,6 +1310,17 @@ const styles = StyleSheet.create({
   alertText: {
     color: 'white',
     fontWeight: '500',
+  },
+  profileButton: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  profileButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
 

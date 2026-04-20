@@ -38,6 +38,9 @@ class DataAggregator {
     ).length;
     const descriptionDensity = sessionsWithDescriptions / totalSessions;
     
+    // Compute behavioral patterns
+    const patterns = this._computePatterns(sessions);
+
     // Build summary object
     const summary = {
       totalSessions,
@@ -45,7 +48,8 @@ class DataAggregator {
       avgSessionMinutes,
       activitiesBreakdown,
       descriptionDensity,
-      topActivities: this._getTopActivities(activitiesBreakdown, 3)
+      topActivities: this._getTopActivities(activitiesBreakdown, 3),
+      patterns,
     };
     
     // Add trends if requested
@@ -62,34 +66,45 @@ class DataAggregator {
    */
   _groupByActivity(sessions, maxSamples) {
     const grouped = {};
-    
+
     sessions.forEach(session => {
       const activity = session.activity_type;
-      
+
       if (!grouped[activity]) {
         grouped[activity] = {
           sessionCount: 0,
           totalDuration: 0,
-          descriptions: []
+          descriptions: [],
+          wentWell: [],
+          distractions: [],
+          nextSteps: [],
         };
       }
-      
+
       grouped[activity].sessionCount++;
       grouped[activity].totalDuration += session.duration;
-      
-      // Collect unique descriptions (up to maxSamples)
-      if (session.description && 
-        typeof session.description === 'string' &&     // ✅ ADDED: Type check
-        session.description.trim().length > 0 &&
-        grouped[activity].descriptions.length < maxSamples) {
-      const desc = session.description.trim();
-      // ✅ ADDED: Additional validation
-      if (desc.length > 0 && !grouped[activity].descriptions.includes(desc)) {
-        grouped[activity].descriptions.push(desc);
+
+      // Helper: add unique non-empty string up to maxSamples
+      const collect = (bucket, value) => {
+        if (
+          typeof value === 'string' &&
+          value.trim().length > 0 &&
+          bucket.length < maxSamples &&
+          !bucket.includes(value.trim())
+        ) {
+          bucket.push(value.trim());
+        }
+      };
+
+      collect(grouped[activity].descriptions, session.description);
+
+      if (session.reflection) {
+        collect(grouped[activity].wentWell,    session.reflection.wentWell);
+        collect(grouped[activity].distractions, session.reflection.distractions);
+        collect(grouped[activity].nextSteps,    session.reflection.nextStep);
       }
-    }
     });
-    
+
     // Convert to final format
     const result = {};
     Object.keys(grouped).forEach(activity => {
@@ -98,10 +113,13 @@ class DataAggregator {
         sessionCount: data.sessionCount,
         totalHours: secondsToHours(data.totalDuration),
         avgMinutes: secondsToMinutes(data.totalDuration / data.sessionCount),
-        sampleDescriptions: data.descriptions
+        sampleDescriptions: data.descriptions,
+        sampleWentWell:     data.wentWell,
+        sampleDistractions: data.distractions,
+        sampleNextSteps:    data.nextSteps,
       };
     });
-    
+
     return result;
   }
   
@@ -148,6 +166,97 @@ class DataAggregator {
   }
   
   /**
+   * Compute behavioral patterns from sessions
+   * Includes time-of-day distribution, peak time, avg duration per bucket,
+   * most common workedOn topics, and recurring distractions.
+   * @private
+   */
+  _computePatterns(sessions) {
+    const buckets = {
+      morning:   { count: 0, totalDuration: 0 }, // 05:00–11:59
+      afternoon: { count: 0, totalDuration: 0 }, // 12:00–16:59
+      evening:   { count: 0, totalDuration: 0 }, // 17:00–20:59
+      night:     { count: 0, totalDuration: 0 }, // 21:00–04:59
+    };
+
+    const workedOnFreq = {};
+    const distractionFreq = {};
+
+    sessions.forEach(session => {
+      // Time-of-day bucket
+      const hour = new Date(session.start_time).getHours();
+      let bucket;
+      if (hour >= 5 && hour < 12)        bucket = 'morning';
+      else if (hour >= 12 && hour < 17)  bucket = 'afternoon';
+      else if (hour >= 17 && hour < 21)  bucket = 'evening';
+      else                               bucket = 'night';
+
+      buckets[bucket].count++;
+      buckets[bucket].totalDuration += session.duration;
+
+      // workedOn topic frequency
+      const wo = session.description || session.reflection?.workedOn;
+      if (wo && wo.trim().length > 0) {
+        const key = wo.trim().toLowerCase();
+        workedOnFreq[key] = (workedOnFreq[key] || 0) + 1;
+      }
+
+      // Distraction frequency
+      const dist = session.reflection?.distractions;
+      if (dist && dist.trim().length > 0) {
+        const key = dist.trim().toLowerCase();
+        distractionFreq[key] = (distractionFreq[key] || 0) + 1;
+      }
+    });
+
+    // Per-bucket avg minutes
+    const timeOfDay = {};
+    Object.entries(buckets).forEach(([name, data]) => {
+      timeOfDay[name] = {
+        count: data.count,
+        avgMinutes: data.count > 0
+          ? Math.round(data.totalDuration / data.count / 60)
+          : 0,
+      };
+    });
+
+    // Peak time (most sessions)
+    const activeBuckets = Object.entries(buckets).filter(([, d]) => d.count > 0);
+    const peakTimeOfDay = activeBuckets.length > 0
+      ? activeBuckets.sort((a, b) => b[1].count - a[1].count)[0][0]
+      : null;
+
+    // Time with longest avg session
+    const longestSessionsTime = activeBuckets.length > 0
+      ? activeBuckets
+          .sort((a, b) =>
+            (b[1].totalDuration / Math.max(b[1].count, 1)) -
+            (a[1].totalDuration / Math.max(a[1].count, 1))
+          )[0][0]
+      : null;
+
+    // Top 3 workedOn topics
+    const topWorkedOn = Object.entries(workedOnFreq)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([topic]) => topic);
+
+    // Top 3 distractions
+    const topDistractions = Object.entries(distractionFreq)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([d]) => d);
+
+    return {
+      timeOfDay,
+      peakTimeOfDay,
+      longestSessionsTime,
+      topWorkedOn: topWorkedOn.length > 0 ? topWorkedOn : null,
+      topDistractions: topDistractions.length > 0 ? topDistractions : null,
+    };
+  }
+
+  /**
    * Empty aggregation for when there are no sessions
    * @private
    */
@@ -158,7 +267,8 @@ class DataAggregator {
       avgSessionMinutes: 0,
       activitiesBreakdown: {},
       descriptionDensity: 0,
-      topActivities: []
+      topActivities: [],
+      patterns: null,
     };
   }
   

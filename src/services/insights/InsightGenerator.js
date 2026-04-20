@@ -140,7 +140,7 @@ console.log('==========================================');
       );
 
       // Step 8: Cache the result
-      const cachedInsightId = await this.cacheRepo.upsert({
+      await this.cacheRepo.upsert({
         insight_type: insightType,
         generated_at: Date.now(),
         data_hash: currentDataHash,
@@ -282,13 +282,13 @@ async _generateInsightText(aggregatedData, insightType, activityType) {
         console.log(`[InsightGenerator] Using fallback: ${totalSessions} sessions, ${totalHours}h`);
         
         const hoursText = totalHours ? totalHours.toFixed(1) : '0.0';
-        return `You completed ${totalSessions} focus session${totalSessions === 1 ? '' : 's'} totaling ${hoursText} hours. Keep up the great work building your deep work habit!`;
+        return `• This period, you completed ${totalSessions} focus session${totalSessions === 1 ? '' : 's'} totaling ${hoursText} hours.\n• Keep showing up — consistency compounds faster than intensity.`;
       }
     }
-    
+
     // Last resort fallback
     console.error('[InsightGenerator] Could not extract stats, using generic message');
-    return `Keep building your deep work habit! Consistent focus sessions lead to remarkable productivity gains.`;
+    return `• This week, you showed up for your focus practice.\n• Keep logging sessions — the more data you add, the sharper your insights get.`;
   }
 }
 

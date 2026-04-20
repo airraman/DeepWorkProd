@@ -1,94 +1,99 @@
 // src/hooks/useNotificationHandlers.js
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import messaging from '@react-native-firebase/messaging';
+import { firebase } from '@react-native-firebase/app';
+import * as Notifications from 'expo-notifications';
 import { navigationRef } from '../services/navigationService';
-// import * as Haptics from 'expo-haptics';
-import { Vibration } from 'react-native';
 
-/**
- * Hook to handle incoming notifications in different app states
- * 
- * iOS/ANDROID APP STATES (Important!):
- * 
- * 1. FOREGROUND: App is visible and active
- *    - Handler: onMessage()
- *    - You control everything (show banner, navigate, etc.)
- * 
- * 2. BACKGROUND: App is suspended but process is alive
- *    - Handler: setBackgroundMessageHandler() [set at top level]
- *    - Limited to 30 seconds of execution
- *    - Can update storage, trigger haptics
- * 
- * 3. QUIT/TERMINATED: App is completely killed
- *    - Handler: setBackgroundMessageHandler() STILL FIRES!
- *    - This is the magic - APNs wakes your app briefly
- *    - This is why FCM works when local notifications don't
- */
 export function useNotificationHandlers() {
-  // const navigation = useNavigation();
+  // Tracks the last notification response to detect cold-start taps.
+  // useLastNotificationResponse is the non-deprecated replacement for
+  // the no-arg getLastNotificationResponseAsync() call.
+  const lastResponse = Notifications.useLastNotificationResponse();
+  const handledRef = useRef(null);
 
   useEffect(() => {
+    if (!lastResponse) return;
+    // Guard: only handle each response once (the value persists across re-renders)
+    const id = lastResponse.notification.request.identifier;
+    if (handledRef.current === id) return;
+    handledRef.current = id;
+
+    const type = lastResponse.notification.request.content.data?.type;
+    console.log('🔔 [LocalNotif] Cold-start or resumed tap, type:', type);
+    // Delay to allow NavigationContainer to mount if app was killed
+    setTimeout(() => handleLocalNotificationTap(type), 500);
+  }, [lastResponse]);
+
+  useEffect(() => {
+    if (!firebase.apps.length) {
+      console.warn('⚠️ [FCM] Firebase not ready, skipping notification handlers');
+      return;
+    }
+
     console.log('🔔 [FCM] Setting up notification handlers...');
 
-    // Handler 1: Foreground messages (app is open and visible)
     const unsubscribeForeground = messaging().onMessage(async (message) => {
       console.log('📱 [FCM] Foreground notification received:', message);
-      
-      // Trigger haptic feedback
-      // await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      
-      // Show in-app notification (you can customize this)
       console.log(`📱 ${message.notification?.title}: ${message.notification?.body}`);
-      
-      // Optional: Show a banner/toast here using a library like react-native-toast-message
     });
 
-    // Handler 2: Notification tap (user taps notification while app is in background)
+    // ── FCM: app was backgrounded when notification arrived ──────────────────
     messaging().onNotificationOpenedApp((message) => {
       console.log('👆 [FCM] Notification tapped (app was background):', message);
-      handleNotificationTap(message);
+      handleFCMNotificationTap(message);
     });
 
-    // Handler 3: App opened from quit state via notification tap
+    // ── FCM: app was killed when notification arrived ─────────────────────────
     messaging()
       .getInitialNotification()
       .then((message) => {
         if (message) {
           console.log('🚀 [FCM] App opened from quit state via notification:', message);
-          handleNotificationTap(message);
+          // Same delay as cold-start local notifications
+          setTimeout(() => handleFCMNotificationTap(message), 500);
         }
       });
 
+    // ── Local notification taps while app is in memory ────────────────────────
+    const localTapSub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const type = response.notification.request.content.data?.type;
+      console.log('🔔 [LocalNotif] Tapped (in-memory), type:', type);
+      handleLocalNotificationTap(type);
+    });
+
     return () => {
       unsubscribeForeground();
+      localTapSub.remove();
     };
   }, []);
 
-  function handleNotificationTap(message) {
-    // Navigate based on notification type
-    const notificationType = message.data?.type;
+  function handleLocalNotificationTap(type) {
+    switch (type) {
+      case 'streak_risk':
+      case 'reengagement':
+        navigationRef.current?.navigate('MainApp', { screen: 'Home' });
+        break;
+      default:
+        navigationRef.current?.navigate('MainApp', { screen: 'Home' });
+    }
+  }
 
+  // FCM notifications use nested navigator paths — bare screen names
+  // only work at the root stack level, not inside the MainApp tab navigator.
+  function handleFCMNotificationTap(message) {
+    const notificationType = message.data?.type;
     console.log('🧭 [FCM] Navigating based on type:', notificationType);
 
     switch (notificationType) {
       case 'session_end':
-        // Session completed - go to metrics
-        navigationRef.current?.navigate('Metrics');
-        break;
-      
-      case 're_engagement':
-        // Reminder to start session - go to home
-        navigationRef.current?.navigate('Home');
-        break;
-      
       case 'insights_ready':
-        // New insights available - go to metrics
-        navigationRef.current?.navigate('Metrics');
+        navigationRef.current?.navigate('MainApp', { screen: 'Metrics' });
         break;
-      
+      case 're_engagement':
       default:
-        // Default to home screen
-        navigationRef.current?.navigate('Home');
+        navigationRef.current?.navigate('MainApp', { screen: 'Home' });
+        break;
     }
   }
 }

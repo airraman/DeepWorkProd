@@ -11,7 +11,41 @@ import {
 } from 'react-native';
 import Purchases from 'react-native-purchases';
 
-export function PaywallModal({ visible, onClose, limitType }) {
+// Per-gate copy. `limitType` drives both title and body so each gate feels
+// contextually relevant rather than generic.
+const GATE_COPY = {
+  long_session: {
+    title: 'Go longer, go deeper',
+    body: 'Unlock longer focus sessions and build real momentum.',
+  },
+  blocking_limit: {
+    title: 'Stay focused, every session',
+    body: 'Free users can block distractions once per day. Upgrade for unlimited focus lock.',
+  },
+  post_insight: {
+    title: 'Unlock deeper insights',
+    body: 'See patterns in your focus and improve faster.',
+  },
+  historical_data: {
+    title: 'Your full focus history',
+    body: 'Unlock past months and track your long-term progress.',
+  },
+  quick_restart: {
+    title: 'Stay in the zone',
+    body: 'Free users can quickly restart once per day. Upgrade for unlimited quick restarts.',
+  },
+  // Legacy fallback
+  session: {
+    title: 'Upgrade to Premium',
+    body: 'Unlock unlimited session time.',
+  },
+  insights: {
+    title: 'Upgrade to Premium',
+    body: 'Unlock AI-powered insights.',
+  },
+};
+
+export function PaywallModal({ visible, onClose, limitType, onSecondaryAction, secondaryCtaText }) {
   const [isLoading, setIsLoading] = useState(false);
   const [packages, setPackages] = useState([]);
   const [selectedPackage, setSelectedPackage] = useState(null);
@@ -120,11 +154,7 @@ export function PaywallModal({ visible, onClose, limitType }) {
     return pkg.packageType === Purchases.PACKAGE_TYPE.ANNUAL;
   }
 
-  const limitMessages = {
-    session: 'Unlock unlimited session time',
-    activities: 'Add more than 2 activities',
-    insights: 'Unlock AI-powered insights',
-  };
+  const copy = GATE_COPY[limitType] ?? GATE_COPY.session;
 
   return (
     <Modal
@@ -136,18 +166,18 @@ export function PaywallModal({ visible, onClose, limitType }) {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Upgrade to Premium</Text>
+          <Text style={styles.title}>{copy.title}</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <Text style={styles.closeText}>✕</Text>
           </TouchableOpacity>
         </View>
 
-        <ScrollView 
+        <ScrollView
           style={styles.content}
           contentContainerStyle={styles.contentContainer}
         >
           {/* Subtitle */}
-          <Text style={styles.subtitle}>{limitMessages[limitType]}</Text>
+          <Text style={styles.subtitle}>{copy.body}</Text>
 
 {/* Benefits List */}
 <View style={styles.benefitsContainer}>
@@ -239,9 +269,18 @@ export function PaywallModal({ visible, onClose, limitType }) {
             )}
           </TouchableOpacity>
           
-          <TouchableOpacity onPress={onClose} style={styles.restoreButton}>
-            <Text style={styles.restoreButtonText}>Restore Purchases</Text>
-          </TouchableOpacity>
+          {onSecondaryAction && secondaryCtaText ? (
+            <TouchableOpacity
+              onPress={() => { onClose(); onSecondaryAction(); }}
+              style={styles.restoreButton}
+            >
+              <Text style={styles.restoreButtonText}>{secondaryCtaText}</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={onClose} style={styles.restoreButton}>
+              <Text style={styles.restoreButtonText}>Restore Purchases</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>

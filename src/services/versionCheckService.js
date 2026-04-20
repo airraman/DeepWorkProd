@@ -301,19 +301,25 @@ class VersionCheckService {
    */
   async performVersionCheck(onDismiss = null) {
     console.log('📱 [Version Check] Starting check...');
-    
+
     const updateStatus = await this.checkForUpdate();
-    
+
     if (updateStatus.updateRequired) {
       console.log('📱 [Version Check] Update required:', updateStatus);
-      this.showUpdateAlert(updateStatus, onDismiss);
-      
-      // Return true if force update (caller might want to block navigation)
-      return updateStatus.forceUpdate;
+
+      if (!updateStatus.forceUpdate) {
+        // Optional update — show the dismissible alert as before
+        this.showUpdateAlert(updateStatus, onDismiss);
+      }
+      // Force updates are handled by ForceUpdateModal in App.js
+    } else {
+      console.log('📱 [Version Check] App is up to date');
     }
-    
-    console.log('📱 [Version Check] App is up to date');
-    return false;
+
+    return {
+      forceUpdate: updateStatus.forceUpdate ?? false,
+      updateUrl: updateStatus.updateUrl ?? null,
+    };
   }
 }
 

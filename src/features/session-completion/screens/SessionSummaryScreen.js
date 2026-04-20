@@ -4,18 +4,27 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Share,
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { sessionService } from '../services/sessionService';
+import { useSubscription } from '../../../context/SubscriptionContext';
+import { PaywallModal } from '../../../components/PaywallModal';
+import {
+  getPostInsightSessionCount,
+  incrementPostInsightSessionCount,
+  resetPostInsightSessionCount,
+} from '../../../services/monetizationService';
 
 export default function SessionSummaryScreen({ navigation, route }) {
   const { sessionId } = route.params;
+  const { isPremium } = useSubscription();
+
   const [session, setSession] = useState(null);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showInsightPaywall, setShowInsightPaywall] = useState(false);
 
   useEffect(() => {
     loadSessionData();
@@ -25,25 +34,24 @@ export default function SessionSummaryScreen({ navigation, route }) {
     try {
       const sessionData = await sessionService.getSession(sessionId);
       const statsData = await sessionService.getSessionStats(sessionId);
-      
+
       setSession(sessionData);
       setStats(statsData);
+
+      // 🔒 GATE: post-insight paywall — show once every 2 sessions after the 3rd
+      if (!isPremium && statsData?.allTime >= 3) {
+        await incrementPostInsightSessionCount();
+        const count = await getPostInsightSessionCount();
+        if (count >= 2) {
+          await resetPostInsightSessionCount();
+          // Small delay so the summary screen renders fully before the modal appears
+          setTimeout(() => setShowInsightPaywall(true), 800);
+        }
+      }
     } catch (error) {
       console.error('Failed to load session data:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleShare = async () => {
-    if (!session) return;
-
-    const message = `I just completed a ${Math.round(session.duration)} minute ${session.activityName} session using DeepWork.io 🧠\n\nStay focused, stay productive.`;
-
-    try {
-      await Share.share({ message });
-    } catch (error) {
-      console.error('Share failed:', error);
     }
   };
 
@@ -84,7 +92,7 @@ export default function SessionSummaryScreen({ navigation, route }) {
 
   const getFocusRatingText = (rating) => {
     if (!rating || !rating.focus) return 'Not rated';
-    return `${rating.focus}/10`;
+    return `${rating.focus}/5`;
   };
 
   return (
@@ -112,16 +120,34 @@ export default function SessionSummaryScreen({ navigation, route }) {
 
         {/* Summary Section */}
         <Text style={styles.sectionTitle}>SUMMARY</Text>
-        
-        {session.rating?.notes && (
-          <>
-            <Text style={styles.label}>Description: <Text style={styles.value}>{session.rating.notes}</Text></Text>
-          </>
-        )}
-        
+
         <Text style={styles.label}>
           Focus Rating: <Text style={styles.value}>{getFocusRatingText(session.rating)}</Text>
         </Text>
+
+        {/* Structured reflection — falls back to legacy `notes` string */}
+        {(session.rating?.reflection?.workedOn || session.rating?.notes) && (
+          <Text style={styles.label}>
+            Worked on: <Text style={styles.value}>
+              {session.rating.reflection?.workedOn || session.rating.notes}
+            </Text>
+          </Text>
+        )}
+        {session.rating?.reflection?.wentWell ? (
+          <Text style={styles.label}>
+            Went well: <Text style={styles.value}>{session.rating.reflection.wentWell}</Text>
+          </Text>
+        ) : null}
+        {session.rating?.reflection?.distractions ? (
+          <Text style={styles.label}>
+            Distractions: <Text style={styles.value}>{session.rating.reflection.distractions}</Text>
+          </Text>
+        ) : null}
+        {session.rating?.reflection?.nextStep ? (
+          <Text style={styles.label}>
+            Next step: <Text style={styles.value}>{session.rating.reflection.nextStep}</Text>
+          </Text>
+        ) : null}
 
         {/* Stats Section */}
         {stats && (
@@ -134,24 +160,18 @@ export default function SessionSummaryScreen({ navigation, route }) {
           </>
         )}
 
-        {/* Share Buttons */}
-        <View style={styles.shareButtons}>
-          {[1, 2, 3, 4, 5].map((i) => (
-            <TouchableOpacity 
-              key={i} 
-              style={styles.shareButton}
-              onPress={handleShare}
-            >
-              <View style={styles.sharePlaceholder} />
-            </TouchableOpacity>
-          ))}
-        </View>
-
         {/* Done Button */}
         <TouchableOpacity style={styles.doneButton} onPress={handleDone}>
           <Text style={styles.doneButtonText}>Done</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* 🔒 Post-insight paywall — non-blocking, appears after summary renders */}
+      <PaywallModal
+        visible={showInsightPaywall}
+        onClose={() => setShowInsightPaywall(false)}
+        limitType="post_insight"
+      />
     </SafeAreaView>
   );
 }
@@ -219,28 +239,12 @@ const styles = StyleSheet.create({
     marginTop: 16,
     letterSpacing: 0.3,
   },
-  shareButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 32,
-    marginBottom: 24,
-  },
-  shareButton: {
-    width: 50,
-    height: 50,
-  },
-  sharePlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#DDDDDD',
-  },
   doneButton: {
     backgroundColor: '#000000',
     paddingVertical: 16,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 32,
   },
   doneButtonText: {
     color: '#FFFFFF',

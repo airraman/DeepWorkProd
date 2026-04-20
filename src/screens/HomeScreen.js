@@ -1,5 +1,5 @@
 // src/screens/HomeScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,8 @@ import {
   ScrollView,
   FlatList,
   ActivityIndicator,
-  Platform, 
+  Modal,
+  Platform,
   Alert
 } from 'react-native';
 import { Clock, Music, Pencil } from 'lucide-react-native';
@@ -18,13 +19,35 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { deepWorkStore } from '../services/deepWorkStore';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import SharedHeader from '../components/SharedHeader';
-import { useSubscription } from '../context/SubscriptionContext';  // ✅ NEW IMPORT
-import { PaywallModal } from '../components/PaywallModal';  // ✅ NEW IMPORT
+import { useSubscription } from '../context/SubscriptionContext';
+import { PaywallModal } from '../components/PaywallModal';
+import { useFocusLock } from '../context/FocusLockContext';
+import {
+  getActiveSession,
+  discardActiveSession,
+  getLastSessionConfig,
+  markRestartOffered,
+} from '../services/sessionStateService';
+import {
+  getStreak,
+  scheduleStreakRiskNotification,
+  getLastStreakModalSeen,
+  setLastStreakModalSeen,
+} from '../services/streakService';
+import { WeeklyStreakModal } from '../components/WeeklyStreakModal';
+import {
+  getBlockingUsedToday,
+  recordBlockingUsed,
+  getQuickRestartsToday,
+  incrementQuickRestarts,
+} from '../services/monetizationService';
+
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isTablet = SCREEN_WIDTH > 768 || SCREEN_HEIGHT > 768;
 const HEADER_HEIGHT = Platform.OS === 'ios' ? 60 : 50;
 const CONTENT_PADDING_TOP = HEADER_HEIGHT - (Platform.OS === 'ios' ? 0 : 20);
+
 
 const HomeScreen = () => {
   const navigation = useNavigation();
@@ -34,6 +57,16 @@ const HomeScreen = () => {
   // ✅ NEW: RevenueCat subscription state
   const { isPremium, isLoading: isSubscriptionLoading } = useSubscription();
   const [showPaywall, setShowPaywall] = useState(false);
+  const [paywallGate, setPaywallGate] = useState('session'); // which gate triggered
+  const [paywallSecondaryAction, setPaywallSecondaryAction] = useState(null);
+  const [paywallSecondaryText, setPaywallSecondaryText] = useState(null);
+
+  const showGatedPaywall = (gate, secondaryText, secondaryAction) => {
+    setPaywallGate(gate);
+    setPaywallSecondaryText(secondaryText ?? null);
+    setPaywallSecondaryAction(() => secondaryAction ?? null);
+    setShowPaywall(true);
+  };
   
   // Core state for session configuration
   const [duration, setDuration] = useState('');
@@ -43,6 +76,118 @@ const HomeScreen = () => {
   // State for managing settings loaded from deepWorkStore
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const hasInitialized = useRef(false);
+
+  // ── Session recovery + streak state ─────────────────────────────────────────
+  const [activeSession, setActiveSession]         = useState(null); // interrupted session prompt
+  const [lastSessionConfig, setLastSessionConfig] = useState(null); // quick restart prompt
+  const [streak, setStreak]                       = useState({ count: 0, lastSessionDate: null });
+
+  // ── Streak modal state ───────────────────────────────────────────────────────
+  const [showStreakModal, setShowStreakModal] = useState(false);
+  const [streakModalSessions, setStreakModalSessions] = useState({});
+
+  // ── Session recovery + streak check on every focus ────────────���──────────────
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      const checkSessionState = async () => {
+        // 1. Check for an interrupted (orphaned) session
+        const orphan = await getActiveSession();
+        if (!cancelled) setActiveSession(orphan);
+
+        // 2. Check for quick-restart opportunity (only if no orphan)
+        if (!orphan) {
+          const last = await getLastSessionConfig();
+          if (!cancelled) setLastSessionConfig(
+            last && !last.hasOfferedRestart ? last : null
+          );
+        }
+
+        // 3. Load streak + schedule tonight's risk notification if needed
+        const currentStreak = await getStreak();
+        if (!cancelled) setStreak(currentStreak);
+        scheduleStreakRiskNotification(currentStreak);
+      };
+
+      checkSessionState();
+      return () => { cancelled = true; };
+    }, [])
+  );
+
+  // ── Interrupted-session handlers ─────────────────────────────────────────────
+
+  const handleResumeSession = () => {
+    setActiveSession(null);
+    navigation.navigate('DeepWorkSession', {
+      duration:         String(activeSession.config.duration),
+      activity:         activeSession.config.activity,
+      musicChoice:      activeSession.config.musicChoice,
+      focusLockEnabled: activeSession.config.focusLockEnabled,
+    });
+  };
+
+  const handleSaveExpiredSession = async () => {
+    const config = activeSession?.config;
+    if (!config) { setActiveSession(null); return; }
+
+    try {
+      const result = await deepWorkStore.addSession({
+        activity:    config.activity,
+        duration:    parseFloat(config.duration),
+        musicChoice: config.musicChoice || 'none',
+        notes:       '',
+        timestamp:   activeSession.endTime,
+      });
+      await discardActiveSession();
+      setActiveSession(null);
+
+      if (result.success && result.session?.id) {
+        navigation.navigate('SessionRating', { sessionId: result.session.id });
+      }
+    } catch (err) {
+      console.warn('[HomeScreen] Save expired session failed:', err);
+      await discardActiveSession();
+      setActiveSession(null);
+    }
+  };
+
+  const handleAbandonSession = async () => {
+    await discardActiveSession();
+    setActiveSession(null);
+  };
+
+  // ── Quick restart handler ─────────────────────────────────────────────────────
+
+  const handleQuickRestart = async () => {
+    // 🔒 GATE: second quick restart per day requires premium
+    if (!isPremium) {
+      const restartsToday = await getQuickRestartsToday();
+      if (restartsToday >= 1) {
+        dismissQuickRestart();
+        showGatedPaywall(
+          'quick_restart',
+          'Start manually',
+          null, // fallback just leaves the user on HomeScreen to configure manually
+        );
+        return;
+      }
+    }
+
+    const cfg = lastSessionConfig;
+    markRestartOffered();
+    setLastSessionConfig(null);
+    setDuration(String(cfg.duration));
+    setActivity(cfg.activity);
+    setMusicChoice(cfg.musicChoice);
+    await incrementQuickRestarts();
+  };
+
+  const dismissQuickRestart = () => {
+    markRestartOffered();
+    setLastSessionConfig(null);
+  };
 
   // All durations available, with 15-second option in DEV mode
   const availableDurations = __DEV__ 
@@ -55,6 +200,8 @@ const HomeScreen = () => {
     { value: 'white-noise', label: 'White noise' },
     { value: 'lofi', label: 'Lo-fi' }
   ];
+  const { isAvailable, selectionCount, refreshSelection } = useFocusLock();
+const [focusLockEnabled, setFocusLockEnabled] = useState(false);
 
 
   // Load settings when component first mounts
@@ -68,6 +215,22 @@ const HomeScreen = () => {
       navigation.replace('InitialSetup');
     } else {
       loadSettings();
+      maybeShowStreakModal();
+    }
+  };
+
+  const maybeShowStreakModal = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const lastSeen = await getLastStreakModalSeen();
+      if (lastSeen === today) return;
+
+      const sessions = await deepWorkStore.getSessions();
+      setStreakModalSessions(sessions);
+      setShowStreakModal(true);
+      await setLastStreakModalSeen(today);
+    } catch (err) {
+      console.warn('[HomeScreen] maybeShowStreakModal failed:', err);
     }
   };
 
@@ -75,17 +238,20 @@ const HomeScreen = () => {
   useFocusEffect(
     React.useCallback(() => {
       loadSettings();
+      refreshSelection();
     }, [])
   );
 
   // Function to load settings from deepWorkStore
   const loadSettings = async () => {
     try {
-      setIsLoading(true);
+      if (!hasInitialized.current) {
+        setIsLoading(true);
+      }
       const settings = await deepWorkStore.getSettings();
-      
+
       setActivities(settings.activities);
-      
+
       // Validate activity selection
       if (activity && !settings.activities.some(a => a.id === activity)) {
         setActivity('');
@@ -94,6 +260,7 @@ const HomeScreen = () => {
       console.error('Failed to load settings:', error);
     } finally {
       setIsLoading(false);
+      hasInitialized.current = true;
     }
   };
 
@@ -108,24 +275,30 @@ const HomeScreen = () => {
     // Parse duration as number
     const selectedDuration = parseFloat(duration);
     
-    // 🔒 PAYWALL GATE: Check if session duration exceeds 30 minutes and user is not premium
-    if (!isPremium && selectedDuration > 30) {
-      console.log('🔒 Session limit reached - showing paywall');
-      console.log('Selected duration:', selectedDuration, 'minutes');
-      console.log('User isPremium:', isPremium);
-      
-      // Show paywall for sessions over 30 minutes
-      setShowPaywall(true);
-      return; // Block the action
+    // 🔒 GATE: long sessions (45+ min) require premium
+    if (!isPremium && selectedDuration >= 45) {
+      showGatedPaywall(
+        'long_session',
+        'Start 30 min session',
+        () => setDuration('30'),
+      );
+      return;
     }
     
     console.log('✅ Starting session - duration:', selectedDuration, 'minutes');
-    
-    // Allow session to start
+
+    const effectiveFocusLock = isAvailable && focusLockEnabled;
+
+    // Record blocking usage so the daily gate can check it on next session
+    if (effectiveFocusLock) {
+      recordBlockingUsed();
+    }
+
     navigation.navigate('DeepWorkSession', {
       duration,
       activity,
-      musicChoice
+      musicChoice,
+      focusLockEnabled: effectiveFocusLock,
     });
   };
 
@@ -209,6 +382,11 @@ const HomeScreen = () => {
       >
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Prepare Deep Work Session</Text>
+          {streak.count > 0 && (
+            <View style={homeStyles.streakBadge}>
+              <Text style={homeStyles.streakText}>🔥 {streak.count}</Text>
+            </View>
+          )}
         </View>
         
         <View style={[styles.divider, { backgroundColor: colors.divider }]} />
@@ -297,6 +475,70 @@ const HomeScreen = () => {
             ))}
           </View>
         </View>
+
+        {isAvailable && (
+  <View style={[
+    styles.section,
+    {
+      backgroundColor: isDark ? '#1f1f1f' : colors.card,
+      borderColor: focusLockEnabled ? '#6C63FF' : colors.border,
+      borderWidth: 1,
+      borderRadius: 12,
+      padding: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    }
+  ]}>
+    <View style={{ flex: 1 }}>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>
+        🔒 Focus Lock
+      </Text>
+      <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
+        Block {selectionCount} app{selectionCount !== 1 ? 's' : ''} during session
+      </Text>
+    </View>
+    <TouchableOpacity
+      style={{
+        width: 51,
+        height: 31,
+        borderRadius: 15.5,
+        backgroundColor: focusLockEnabled ? '#6C63FF' : (isDark ? '#3A3A3C' : '#E5E5EA'),
+        justifyContent: 'center',
+        paddingHorizontal: 2,
+      }}
+      onPress={async () => {
+        const next = !focusLockEnabled;
+        // 🔒 GATE: second block attempt per day requires premium
+        if (next && !isPremium) {
+          const usedToday = await getBlockingUsedToday();
+          if (usedToday) {
+            showGatedPaywall(
+              'blocking_limit',
+              'Continue without blocking',
+              () => setFocusLockEnabled(false),
+            );
+            return;
+          }
+        }
+        setFocusLockEnabled(next);
+      }}
+      activeOpacity={0.8}
+    >
+      <View style={{
+        width: 27,
+        height: 27,
+        borderRadius: 13.5,
+        backgroundColor: '#FFFFFF',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1,
+        alignSelf: focusLockEnabled ? 'flex-end' : 'flex-start',
+      }} />
+    </TouchableOpacity>
+  </View>
+)}
         
         {/* Extra padding at bottom */}
         <View style={{ height: 80 }} />
@@ -319,11 +561,110 @@ const HomeScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* ✅ NEW: Paywall Modal */}
       <PaywallModal
         visible={showPaywall}
         onClose={() => setShowPaywall(false)}
-        limitType="session"
+        limitType={paywallGate}
+        onSecondaryAction={paywallSecondaryAction}
+        secondaryCtaText={paywallSecondaryText}
+      />
+
+      {/* ── Interrupted session modal ────────────────────────────────────────── */}
+      <Modal
+        visible={!!activeSession}
+        transparent
+        animationType="fade"
+        onRequestClose={handleAbandonSession}
+      >
+        <View style={homeStyles.overlay}>
+          <View style={[homeStyles.sheet, { backgroundColor: colors.card || '#1a1a1a' }]}>
+            {activeSession?.status === 'running' ? (
+              <>
+                <Text style={[homeStyles.sheetTitle, { color: colors.text }]}>
+                  Session in progress
+                </Text>
+                <Text style={[homeStyles.sheetBody, { color: colors.textSecondary }]}>
+                  Your {activeSession.config.duration}-min{' '}
+                  {activeSession.config.activity} session is still running.
+                  Pick up where you left off?
+                </Text>
+                <TouchableOpacity
+                  style={[homeStyles.primaryBtn, { backgroundColor: '#2563EB' }]}
+                  onPress={handleResumeSession}
+                >
+                  <Text style={homeStyles.primaryBtnText}>Resume Session</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={homeStyles.ghostBtn} onPress={handleAbandonSession}>
+                  <Text style={[homeStyles.ghostBtnText, { color: colors.textSecondary }]}>
+                    Abandon
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={[homeStyles.sheetTitle, { color: colors.text }]}>
+                  Session ended while away
+                </Text>
+                <Text style={[homeStyles.sheetBody, { color: colors.textSecondary }]}>
+                  Your {activeSession?.config.duration}-min{' '}
+                  {activeSession?.config.activity} session finished while the app
+                  was closed. Save it to your history?
+                </Text>
+                <TouchableOpacity
+                  style={[homeStyles.primaryBtn, { backgroundColor: '#15803D' }]}
+                  onPress={handleSaveExpiredSession}
+                >
+                  <Text style={homeStyles.primaryBtnText}>Save Session</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={homeStyles.ghostBtn} onPress={handleAbandonSession}>
+                  <Text style={[homeStyles.ghostBtnText, { color: colors.textSecondary }]}>
+                    Skip
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Quick restart modal ──────────────────────────────────────────────── */}
+      <Modal
+        visible={!!lastSessionConfig}
+        transparent
+        animationType="fade"
+        onRequestClose={dismissQuickRestart}
+      >
+        <View style={homeStyles.overlay}>
+          <View style={[homeStyles.sheet, { backgroundColor: colors.card || '#1a1a1a' }]}>
+            <Text style={[homeStyles.sheetTitle, { color: colors.text }]}>
+              Quick restart?
+            </Text>
+            <Text style={[homeStyles.sheetBody, { color: colors.textSecondary }]}>
+              Last session:{' '}
+              {lastSessionConfig?.activityName || lastSessionConfig?.activity},{' '}
+              {lastSessionConfig?.duration} min
+            </Text>
+            <TouchableOpacity
+              style={[homeStyles.primaryBtn, { backgroundColor: '#2563EB' }]}
+              onPress={handleQuickRestart}
+            >
+              <Text style={homeStyles.primaryBtnText}>Start Same Session</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={homeStyles.ghostBtn} onPress={dismissQuickRestart}>
+              <Text style={[homeStyles.ghostBtnText, { color: colors.textSecondary }]}>
+                Set up differently
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Weekly streak modal (once per day) ──────────────────────────────── */}
+      <WeeklyStreakModal
+        visible={showStreakModal}
+        onClose={() => setShowStreakModal(false)}
+        onStartSession={() => {}}
+        sessions={streakModalSessions}
       />
     </SafeAreaView>
   );
@@ -543,6 +884,57 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontStyle: 'italic',
     textAlign: 'center',
+  },
+});
+
+const homeStyles = StyleSheet.create({
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  streakText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#f97316',
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 40,
+    gap: 12,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  sheetBody: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 4,
+  },
+  primaryBtn: {
+    paddingVertical: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  primaryBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  ghostBtn: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  ghostBtnText: {
+    fontSize: 15,
   },
 });
 

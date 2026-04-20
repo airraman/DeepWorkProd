@@ -22,3 +22,18 @@ Get unstuck with simulator and begin lite blocking implementation
 - Disk space was root cause (Time Machine snapshots eating space)
 - 95% disk full = system-wide hangs
 - Need 50GB+ free for macOS to work properly
+
+## FamilyControls Entitlement — ACTION REQUIRED
+
+- Entitlement temporarily removed from `ios/DeepWorkio/DeepWorkio.entitlements` to unblock build
+- FamilyControls request form submitted multiple times — no confirmation email received
+- Apple Developer Support contacted — awaiting response
+- **Before next Focus Lock build:** restore `com.apple.developer.family-controls` key to entitlements file once Apple confirms approval
+- File to update: `ios/DeepWorkio/DeepWorkio.entitlements`
+
+## Build Blocker — BoringSSL-GRPC '-G' flag (2026-03-23)
+- gRPC-Core and gRPC-C++ now compile successfully
+- New failure: BoringSSL-GRPC injecting unsupported '-G' flag for arm64-apple-ios
+- Fix: add BoringSSL-GRPC to Podfile target suppression block
+- Add: OTHER_CFLAGS = '$(inherited)' to reset injected flags
+- Root cause: EAS uses iOS 26 SDK which has stricter flag validation

@@ -66,16 +66,16 @@ const InitialSetupScreen = ({navigation}) => {
         try {
             // Get current settings
             const settings = await deepWorkStore.getSettings();
-            
-            // If activities exist, user has completed onboarding
-            if (settings.activities && settings.activities.length > 0) {
+
+            // Existing users: onboardingComplete flag OR activities already set up
+            if (settings.onboardingComplete || (settings.activities && settings.activities.length > 0)) {
                 console.log('Settings already exist, skipping setup');
                 navigation.replace('MainApp');
                 return;
             }
-            
-            // First-time user, start the setup process
-            startSetupProcess();
+
+            // First-time user — route to new structured onboarding
+            navigation.replace('Onboarding');
         } catch (error) {
             console.error('Error checking first time user:', error);
             setError('Failed to load settings. Please try again.');

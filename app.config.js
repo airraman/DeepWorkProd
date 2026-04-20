@@ -1,13 +1,14 @@
 // app.config.js
 export default {
   expo: {
-    name: "DeepWork.io",
+    name: "DeepWork.io (Dev)",
     slug: "DeepWorkApp",
     version: "1.0.5",
     orientation: "portrait",
     icon: "./assets/applogo.png",
     userInterfaceStyle: "light",
     newArchEnabled: false,
+    scheme: "deepworkapp",
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
@@ -30,8 +31,11 @@ export default {
         {
           ios: {
             useFrameworks: "static",
-            deploymentTarget: "15.1",
-            newArchEnabled: false
+            deploymentTarget: "16.0",
+            newArchEnabled: false,
+            entitlements: {
+              "com.apple.developer.family-controls": true
+            }
           }
         }
       ],
@@ -45,7 +49,8 @@ export default {
             useFramework: "static"
           }
         }
-      ]
+      ],
+      // "./ios-family-controls-plugin.js",
     ],
     assets: [
       "./assets/sounds/completion_alarm.wav",
@@ -58,7 +63,7 @@ export default {
     ],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.airraman.deepwork", 
+      bundleIdentifier: "com.airraman.deepwork.dev", 
       buildNumber: "30",
       googleServicesFile: "./GoogleService-Info.plist",
       infoPlist: {
@@ -72,7 +77,8 @@ export default {
           "com.expo.tasks.BACKGROUND_TIMER_TASK"
         ],
         NSUserNotificationsUsageDescription: "This app uses notifications to remind you when your deep work sessions are complete and to track session progress.",
-        CFBundleDisplayName: "DeepWork.io",
+        NSFamilyControlsUsageDescription: "DeepWork needs Screen Time access to block selected apps during your focus sessions.",
+        CFBundleDisplayName: "DeepWork.io (Dev)",
         ITSAppUsesNonExemptEncryption: false
       },
       config: {
@@ -86,6 +92,7 @@ export default {
       },
       package: "com.airraman.deepwork",
       versionCode: 1,
+      googleServicesFile: "./google-services.json", 
       permissions: [
         "NOTIFICATIONS",
         "VIBRATE",

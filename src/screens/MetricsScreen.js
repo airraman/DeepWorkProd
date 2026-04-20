@@ -575,9 +575,78 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
     weekly: null,
     monthly: null,
   });
+  const [weeklyPatterns, setWeeklyPatterns] = useState(null);
+
+  /**
+   * Compute behavioral patterns directly from the raw sessions object.
+   * Looks at the last 7 days. Sessions are stored as { 'YYYY-MM-DD': [session,...] }
+   * where session.duration is in minutes and session.timestamp is in ms.
+   */
+  const computeWeeklyPatterns = (sessionsObj) => {
+    const now = Date.now();
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+
+    const buckets = {
+      morning:   { count: 0, totalMinutes: 0 }, // 05–11
+      afternoon: { count: 0, totalMinutes: 0 }, // 12–16
+      evening:   { count: 0, totalMinutes: 0 }, // 17–20
+      night:     { count: 0, totalMinutes: 0 }, // 21–04
+    };
+    const workedOnFreq = {};
+    const distractionFreq = {};
+
+    Object.values(sessionsObj).flat().forEach(session => {
+      if ((session.timestamp || 0) < sevenDaysAgo) return;
+      const hour = new Date(session.timestamp).getHours();
+      const bucket =
+        hour >= 5 && hour < 12 ? 'morning' :
+        hour >= 12 && hour < 17 ? 'afternoon' :
+        hour >= 17 && hour < 21 ? 'evening' : 'night';
+      buckets[bucket].count++;
+      buckets[bucket].totalMinutes += (session.duration || 0);
+
+      const wo = session.rating?.reflection?.workedOn || session.notes;
+      if (wo?.trim()) {
+        const key = wo.trim().toLowerCase();
+        workedOnFreq[key] = (workedOnFreq[key] || 0) + 1;
+      }
+      const dist = session.rating?.reflection?.distractions;
+      if (dist?.trim()) {
+        const key = dist.trim().toLowerCase();
+        distractionFreq[key] = (distractionFreq[key] || 0) + 1;
+      }
+    });
+
+    const active = Object.entries(buckets).filter(([, d]) => d.count > 0);
+    const peakTimeOfDay = active.length > 0
+      ? [...active].sort((a, b) => b[1].count - a[1].count)[0][0]
+      : null;
+    const longestSessionsTime = active.length > 0
+      ? [...active].sort((a, b) =>
+          (b[1].totalMinutes / Math.max(b[1].count, 1)) -
+          (a[1].totalMinutes / Math.max(a[1].count, 1))
+        )[0][0]
+      : null;
+
+    const timeOfDay = Object.fromEntries(
+      Object.entries(buckets).map(([name, d]) => [
+        name,
+        { count: d.count, avgMinutes: d.count > 0 ? Math.round(d.totalMinutes / d.count) : 0 },
+      ])
+    );
+
+    return {
+      timeOfDay,
+      peakTimeOfDay,
+      longestSessionsTime: longestSessionsTime !== peakTimeOfDay ? longestSessionsTime : null,
+      topWorkedOn: Object.entries(workedOnFreq).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k),
+      topDistractions: Object.entries(distractionFreq).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k),
+    };
+  };
 
   const handleAnalyzeClick = async () => {
     setIsGeneratingAllInsights(true);
+    setWeeklyPatterns(computeWeeklyPatterns(sessions));
     await generateAllInsights();
     setIsGeneratingAllInsights(false);
     setHasGeneratedInsights(true);
@@ -1059,6 +1128,7 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
         visible={showInsightsModal}
         onClose={() => setShowInsightsModal(false)}
         insights={insights}
+        weeklyPatterns={weeklyPatterns}
         colors={colors}
       />
 
@@ -1078,7 +1148,7 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
 <PaywallModal
   visible={showPaywall}
   onClose={() => setShowPaywall(false)}
-  feature="previousMonths"
+  limitType="historical_data"
 />
 
     </SafeAreaView>
@@ -1663,7 +1733,89 @@ const styles = StyleSheet.create({
 
 
 // ===== INSIGHTS MODAL COMPONENT =====
-const InsightsModal = ({ visible, onClose, insights, colors }) => {
+const InsightsModal = ({ visible, onClose, insights, weeklyPatterns, colors }) => {
+  // Render one stat pill
+  const StatPill = ({ label, value }) => (
+    <View style={[insightModalStyles.statPill, { backgroundColor: colors.card || colors.cardBackground || '#1a1a1a' }]}>
+      <Text style={[insightModalStyles.statPillLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <Text style={[insightModalStyles.statPillValue, { color: colors.text }]}>{value}</Text>
+    </View>
+  );
+
+  const renderPatterns = () => {
+    if (!weeklyPatterns) return null;
+    const { timeOfDay, peakTimeOfDay, longestSessionsTime, topWorkedOn, topDistractions } = weeklyPatterns;
+
+    // Build time-of-day pills for non-zero buckets
+    const todPills = Object.entries(timeOfDay || {})
+      .filter(([, d]) => d.count > 0)
+      .sort((a, b) => b[1].count - a[1].count);
+
+    if (todPills.length === 0 && !topWorkedOn?.length) return null;
+
+    return (
+      <>
+        <View style={insightModalStyles.patternSection}>
+          <Text style={[insightModalStyles.patternTitle, { color: colors.primary }]}>
+            THIS WEEK AT A GLANCE
+          </Text>
+
+          {/* Time of day */}
+          {todPills.length > 0 && (
+            <View style={insightModalStyles.pillRow}>
+              {todPills.map(([name, d]) => (
+                <StatPill
+                  key={name}
+                  label={name.charAt(0).toUpperCase() + name.slice(1)}
+                  value={`${d.count} session${d.count === 1 ? '' : 's'} · avg ${d.avgMinutes}m`}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Peak + longest windows */}
+          {peakTimeOfDay && (
+            <View style={insightModalStyles.pillRow}>
+              <StatPill label="Peak window" value={peakTimeOfDay} />
+              {longestSessionsTime && (
+                <StatPill label="Longest sessions" value={longestSessionsTime} />
+              )}
+            </View>
+          )}
+
+          {/* Top topics */}
+          {topWorkedOn?.length > 0 && (
+            <View style={insightModalStyles.tagRow}>
+              <Text style={[insightModalStyles.tagLabel, { color: colors.textSecondary }]}>
+                Most worked on:
+              </Text>
+              {topWorkedOn.map((topic, i) => (
+                <View key={i} style={[insightModalStyles.tag, { borderColor: colors.border }]}>
+                  <Text style={[insightModalStyles.tagText, { color: colors.text }]}>{topic}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Recurring distractions */}
+          {topDistractions?.length > 0 && (
+            <View style={insightModalStyles.tagRow}>
+              <Text style={[insightModalStyles.tagLabel, { color: colors.textSecondary }]}>
+                Distractions:
+              </Text>
+              {topDistractions.map((d, i) => (
+                <View key={i} style={[insightModalStyles.tag, { borderColor: '#991B1B' }]}>
+                  <Text style={[insightModalStyles.tagText, { color: colors.text }]}>{d}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+        <View style={[styles.insightDivider, { backgroundColor: colors.border }]} />
+      </>
+    );
+  };
+
   return (
     <Modal
       visible={visible}
@@ -1679,7 +1831,7 @@ const InsightsModal = ({ visible, onClose, insights, colors }) => {
               Insight
             </Text>
             <Text style={[styles.insightModalSubtitle, { color: colors.textSecondary }]}>
-              Cached • {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </Text>
           </View>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -1688,10 +1840,13 @@ const InsightsModal = ({ visible, onClose, insights, colors }) => {
         </View>
 
         {/* Scrollable Content */}
-        <ScrollView 
+        <ScrollView
           style={styles.insightModalContent}
           showsVerticalScrollIndicator={false}
         >
+          {/* Patterns at a glance — always shown when data exists */}
+          {renderPatterns()}
+
           {/* Yesterday Insight */}
           {insights.daily?.insightText && (
             <>
@@ -1703,8 +1858,6 @@ const InsightsModal = ({ visible, onClose, insights, colors }) => {
                   {insights.daily.insightText}
                 </Text>
               </View>
-              
-              {/* Divider */}
               <View style={[styles.insightDivider, { backgroundColor: colors.border }]} />
             </>
           )}
@@ -1720,8 +1873,6 @@ const InsightsModal = ({ visible, onClose, insights, colors }) => {
                   {insights.weekly.insightText}
                 </Text>
               </View>
-              
-              {/* Divider */}
               <View style={[styles.insightDivider, { backgroundColor: colors.border }]} />
             </>
           )}
@@ -1738,12 +1889,67 @@ const InsightsModal = ({ visible, onClose, insights, colors }) => {
             </View>
           )}
 
-          {/* Bottom padding for scroll */}
           <View style={{ height: 40 }} />
         </ScrollView>
       </SafeAreaView>
     </Modal>
   );
 };
+
+const insightModalStyles = StyleSheet.create({
+  patternSection: {
+    marginBottom: 20,
+    gap: 12,
+  },
+  patternTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    marginBottom: 4,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  statPill: {
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minWidth: 100,
+  },
+  statPillLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  statPillValue: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tagLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginRight: 2,
+  },
+  tag: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  tagText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+});
 
 export default MetricsScreen;

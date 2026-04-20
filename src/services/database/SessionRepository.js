@@ -30,11 +30,17 @@ class SessionRepository {
           sessions.forEach(session => {
             flatSessions.push({
               id: session.id,
-              activity_type: session.activity, // Convert to snake_case for consistency
+              activity_type: session.activity,
               duration: session.duration * 60,
               start_time: session.timestamp,
               end_time: session.timestamp + (session.duration * 60 * 1000),
-              description: session.notes || null,
+              // Priority: structured reflection → legacy rating.notes → top-level notes
+              description: session.rating?.reflection?.workedOn
+                        || session.rating?.notes
+                        || session.notes
+                        || null,
+              // Pass full reflection through so DataAggregator can use all four fields
+              reflection: session.rating?.reflection || null,
               created_at: session.timestamp,
             });
           });
