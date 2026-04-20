@@ -459,7 +459,7 @@
 				PRODUCT_NAME = DeepWorkioDev;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "";
-				SWIFT_OBJC_BRIDGING_HEADER = "DeepWorkioDev/DeepWorkioDev-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "DeepWorkio/DeepWorkio-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -473,14 +473,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = DeepWorkioDev/DeepWorkioDev.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_ENTITLEMENTS = DeepWorkio/DeepWorkio.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = K3V5RF7F79;
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = K3V5RF7F79;
-				INFOPLIST_FILE = DeepWorkioDev/Info.plist;
+				INFOPLIST_FILE = DeepWorkio/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -493,11 +493,11 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
-				PRODUCT_BUNDLE_IDENTIFIER = com.airraman.deepwork.dev;
-				PRODUCT_NAME = DeepWorkioDev;
+				PRODUCT_BUNDLE_IDENTIFIER = com.airraman.deepwork;
+				PRODUCT_NAME = DeepWorkio;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "";
-				SWIFT_OBJC_BRIDGING_HEADER = "DeepWorkioDev/DeepWorkioDev-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "DeepWorkio/DeepWorkio-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
