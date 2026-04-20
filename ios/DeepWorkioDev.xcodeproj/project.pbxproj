@@ -431,7 +431,7 @@
 				CODE_SIGN_ENTITLEMENTS = DeepWorkioDev/DeepWorkioDev.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = K3V5RF7F79;
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = K3V5RF7F79;
@@ -455,8 +455,8 @@
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.airraman.deepwork.dev;
 				PRODUCT_NAME = DeepWorkioDev;
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "";
+				PROVISIONING_PROFILE_SPECIFIER = "DeepWork Production AppStore";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "DeepWork Production AppStore";
 				SWIFT_OBJC_BRIDGING_HEADER = "DeepWorkioDev/DeepWorkioDev-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -474,7 +474,7 @@
 				CODE_SIGN_ENTITLEMENTS = DeepWorkioDev/DeepWorkioDev.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = K3V5RF7F79;
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = K3V5RF7F79;
@@ -493,8 +493,8 @@
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.airraman.deepwork;
 				PRODUCT_NAME = DeepWorkio;
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "";
+				PROVISIONING_PROFILE_SPECIFIER = "DeepWork Production AppStore";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "DeepWork Production AppStore";
 				SWIFT_OBJC_BRIDGING_HEADER = "DeepWorkioDev/DeepWorkioDev-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
