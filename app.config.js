@@ -3,7 +3,7 @@ export default {
   expo: {
     name: "DeepWork.io (Dev)",
     slug: "DeepWorkApp",
-    version: "1.0.5",
+    version: "1.0.6",
     orientation: "portrait",
     icon: "./assets/applogo.png",
     userInterfaceStyle: "light",
@@ -64,7 +64,7 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.airraman.deepwork.dev", 
-      buildNumber: "30",
+      buildNumber: "31",
       googleServicesFile: "./GoogleService-Info.plist",
       infoPlist: {
         UIBackgroundModes: [
@@ -116,7 +116,7 @@ export default {
       firebaseAppId: process.env.FIREBASE_APP_ID,
     },
     owner: "airraman",
-    runtimeVersion: "1.0.2",
+    runtimeVersion: "1.0.6",
     updates: {
       url: "https://u.expo.dev/6154a390-07d0-416c-955b-63179fba2bc8"
     }
