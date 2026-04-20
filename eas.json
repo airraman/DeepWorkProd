@@ -13,6 +13,7 @@
       },
       "credentialsSource": "local",
       "env": {
+        "APP_VARIANT": "development",
         "EXPO_PUBLIC_OPENAI_API_KEY": "$(EXPO_PUBLIC_OPENAI_API_KEY)"
       },
       "cache": {
@@ -23,16 +24,17 @@
       "distribution": "internal",
       "channel": "preview",
       "env": {
+        "APP_VARIANT": "development",
         "EXPO_PUBLIC_OPENAI_API_KEY": "$(EXPO_PUBLIC_OPENAI_API_KEY)"
       }
     },
     "production": {
-      
       "ios": {
         "resourceClass": "m-medium"
       },
       "channel": "production",
       "env": {
+        "APP_VARIANT": "production",
         "EXPO_PUBLIC_OPENAI_API_KEY": "$(EXPO_PUBLIC_OPENAI_API_KEY)"
       }
     }

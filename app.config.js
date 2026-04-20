@@ -1,7 +1,9 @@
 // app.config.js
+const IS_PROD = process.env.APP_VARIANT === 'production';
+
 export default {
   expo: {
-    name: "DeepWork.io (Dev)",
+    name: IS_PROD ? "DeepWork.io" : "DeepWork.io (Dev)",
     slug: "DeepWorkApp",
     version: "1.0.6",
     orientation: "portrait",
@@ -64,7 +66,7 @@ export default {
     ],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.airraman.deepwork.dev", 
+      bundleIdentifier: IS_PROD ? "com.airraman.deepwork" : "com.airraman.deepwork.dev",
       buildNumber: "31",
       googleServicesFile: "./GoogleService-Info.plist",
       infoPlist: {
@@ -79,7 +81,7 @@ export default {
         ],
         NSUserNotificationsUsageDescription: "This app uses notifications to remind you when your deep work sessions are complete and to track session progress.",
         NSFamilyControlsUsageDescription: "DeepWork needs Screen Time access to block selected apps during your focus sessions.",
-        CFBundleDisplayName: "DeepWork.io (Dev)",
+        CFBundleDisplayName: IS_PROD ? "DeepWork.io" : "DeepWork.io (Dev)",
         ITSAppUsesNonExemptEncryption: false
       },
       config: {
@@ -91,7 +93,7 @@ export default {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#ffffff"
       },
-      package: "com.airraman.deepwork.dev",
+      package: IS_PROD ? "com.airraman.deepwork" : "com.airraman.deepwork.dev",
       versionCode: 1,
       googleServicesFile: "./google-services.json", 
       permissions: [
