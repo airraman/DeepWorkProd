@@ -15,6 +15,7 @@ export default {
       backgroundColor: "#ffffff"
     },
     plugins: [
+      "expo-dev-client",
       [
         "expo-notifications",
         {
@@ -90,7 +91,7 @@ export default {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#ffffff"
       },
-      package: "com.airraman.deepwork",
+      package: "com.airraman.deepwork.dev",
       versionCode: 1,
       googleServicesFile: "./google-services.json", 
       permissions: [

@@ -1,10 +1,11 @@
 import Expo
+import EXDevLauncher
 import FirebaseCore
 import React
 import ReactAppDependencyProvider
 
 @UIApplicationMain
-public class AppDelegate: ExpoAppDelegate {
+public class AppDelegate: ExpoAppDelegate, EXDevLauncherControllerDelegate {
   var window: UIWindow?
 
   var reactNativeDelegate: ExpoReactNativeFactoryDelegate?
@@ -27,6 +28,9 @@ public class AppDelegate: ExpoAppDelegate {
 // @generated begin @react-native-firebase/app-didFinishLaunchingWithOptions - expo prebuild (DO NOT MODIFY) sync-10e8520570672fd76b2403b7e1e27f5198a6349a
 FirebaseApp.configure()
 // @generated end @react-native-firebase/app-didFinishLaunchingWithOptions
+#if DEBUG
+    EXDevLauncherController.sharedInstance().start(with: window!, delegate: self, launchOptions: launchOptions)
+    #endif
     factory.startReactNative(
       withModuleName: "main",
       in: window,
@@ -54,6 +58,8 @@ FirebaseApp.configure()
     let result = RCTLinkingManager.application(application, continue: userActivity, restorationHandler: restorationHandler)
     return super.application(application, continue: userActivity, restorationHandler: restorationHandler) || result
   }
+
+  public func devLauncherController(_ developmentClientController: EXDevLauncherController, didStartWithSuccess success: Bool) {}
 }
 
 class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
