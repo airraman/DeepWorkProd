@@ -428,9 +428,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = DeepWorkio/DeepWorkio.entitlements;
+				CODE_SIGN_ENTITLEMENTS = DeepWorkioDev/DeepWorkioDev.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = K3V5RF7F79;
@@ -440,7 +440,7 @@
 					"$(inherited)",
 					"FB_SONARKIT_ENABLED=1",
 				);
-				INFOPLIST_FILE = DeepWorkio/Info.plist;
+				INFOPLIST_FILE = DeepWorkioDev/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -471,14 +471,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = DeepWorkio/DeepWorkio.entitlements;
+				CODE_SIGN_ENTITLEMENTS = DeepWorkioDev/DeepWorkioDev.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = K3V5RF7F79;
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = K3V5RF7F79;
-				INFOPLIST_FILE = DeepWorkio/Info.plist;
+				INFOPLIST_FILE = DeepWorkioDev/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -495,7 +495,7 @@
 				PRODUCT_NAME = DeepWorkio;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "";
-				SWIFT_OBJC_BRIDGING_HEADER = "DeepWorkio/DeepWorkio-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "DeepWorkioDev/DeepWorkioDev-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";

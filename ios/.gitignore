@@ -28,3 +28,6 @@ project.xcworkspace
 
 # CocoaPods
 /Pods/
+
+# Legacy untracked production target folder (build config now references DeepWorkioDev/)
+/DeepWorkio/
