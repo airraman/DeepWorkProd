@@ -21,11 +21,15 @@ class SessionRepository {
       
       // Convert object to array and filter by date range
       Object.entries(allSessions).forEach(([dateString, sessions]) => {
-        // Parse the date string to timestamp
-        const dateTimestamp = new Date(dateString).getTime();
-        
-        // Check if this date is in range
-        if (dateTimestamp >= startTime && dateTimestamp <= endTime) {
+        // Date keys are stored as UTC dates (YYYY-MM-DD from toISOString).
+        // Parse as local midnight by appending T00:00:00 without a Z suffix so
+        // the JS engine uses the device timezone, matching how InsightGenerator
+        // computes its local-midnight start/end boundaries.
+        const dateTimestamp = new Date(`${dateString}T00:00:00`).getTime();
+        const dateEndTimestamp = dateTimestamp + 24 * 60 * 60 * 1000 - 1;
+
+        // Include this date if its local day overlaps the requested range
+        if (dateEndTimestamp >= startTime && dateTimestamp <= endTime) {
           // Add all sessions from this date
           sessions.forEach(session => {
             flatSessions.push({
