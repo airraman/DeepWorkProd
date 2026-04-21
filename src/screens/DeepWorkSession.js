@@ -36,7 +36,13 @@ import {
   cancelStreakRiskNotification,
 } from '../services/streakService';
 
-// import functions from '@react-native-firebase/functions';
+import {
+  logSessionStart,
+  logSessionComplete,
+  logSessionAbandon,
+  logSessionPause,
+  logSessionResume,
+} from '../services/analyticsService';
 
 
 const { width, height } = Dimensions.get('window');
@@ -196,6 +202,12 @@ const DeepWorkSession = ({ route, navigation }) => {
         useNativeDriver: false,
       }).start();
 
+      logSessionStart(
+        parseFloat(duration),
+        musicChoice,
+        activityDetails?.name || activity
+      ).catch(() => {});
+
       // Schedule OS-level notification at endTime — fires even if app is killed/locked.
       if (endTime) {
         scheduleSessionEndNotification(
@@ -293,6 +305,7 @@ const DeepWorkSession = ({ route, navigation }) => {
       }
 
       setIsCompleted(true);
+      logSessionComplete(parseFloat(duration)).catch(() => {});
 
       // Store the timeout handle so we can cancel it on unmount.
       completionTimeoutRef.current = setTimeout(async () => {
@@ -321,6 +334,7 @@ const DeepWorkSession = ({ route, navigation }) => {
     if (isPaused) {
       // Resume — hook recomputes endTime from remaining; reschedule OS notification
       // with the new (extended) endTime so the lock-screen alert still fires correctly.
+      logSessionResume(Math.round((totalDuration - timeLeft) / 1000)).catch(() => {});
       const newEndTime = await resume();
       if (newEndTime) {
         scheduleSessionEndNotification(
@@ -353,6 +367,7 @@ const DeepWorkSession = ({ route, navigation }) => {
       }
     } else {
       // Pause — hook captures endTime → remainingAtPause, clears interval
+      logSessionPause(Math.round((totalDuration - timeLeft) / 1000)).catch(() => {});
       await pause();
       animatedHeight.stopAnimation();
 
@@ -419,6 +434,8 @@ const DeepWorkSession = ({ route, navigation }) => {
         {
           text: 'End Session',
           onPress: async () => {
+            const elapsedSeconds = Math.round((totalDuration - timeLeft) / 1000);
+            logSessionAbandon(elapsedSeconds, parseFloat(duration)).catch(() => {});
             await cleanup();
             navigation.navigate('MainApp', { screen: 'Home' });
           },
