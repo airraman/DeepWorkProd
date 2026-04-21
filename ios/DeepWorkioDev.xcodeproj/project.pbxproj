@@ -432,7 +432,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 31;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_TEAM = K3V5RF7F79;
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = K3V5RF7F79;
 				ENABLE_BITCODE = NO;
@@ -475,7 +475,7 @@
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 31;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_TEAM = K3V5RF7F79;
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = K3V5RF7F79;
 				INFOPLIST_FILE = DeepWorkioDev/Info.plist;
