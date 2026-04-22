@@ -8,7 +8,7 @@ export const setupNotificationHandler = () => {
         const data = notification.request.content.data;
         
         // Determine notification type
-        const isCompletion = data?.shouldPlayAlarm || data?.type === 'sessionComplete';
+        const isCompletion = data?.shouldPlayAlarm || data?.type === 'sessionComplete' || data?.type === 'session_end';
         const isProgress = data?.type === 'progress';
         const isReminder = data?.type === 'reminder';
         

@@ -120,13 +120,6 @@ export const scheduleSessionEndNotification = async (
           interruptionLevel: 'timeSensitive',
         }),
 
-        // iOS: vibration pattern — fires even in silent mode alongside the notification
-        // On iOS, vibration is controlled by the system when sound plays; this
-        // explicit pattern ensures it also fires when the ringer is off.
-        ...(require('react-native').Platform.OS === 'ios' && {
-          vibrate: [0, 500, 200, 500, 200, 500],
-        }),
-
         // Android: HIGH importance shows heads-up banner on lock screen + vibration
         ...(require('react-native').Platform.OS === 'android' && {
           channelId: 'session-completion', // already created in backgroundTimer.js

@@ -508,7 +508,7 @@ function MainApp() {
                 appState: AppState.currentState,
               });
 
-              if (data?.shouldPlayAlarm || data?.type === 'sessionComplete') {
+              if (data?.shouldPlayAlarm || data?.type === 'sessionComplete' || data?.type === 'session_end') {
                 const appState = AppState.currentState;
                 if (appState === 'active') {
                   console.log('🔔 App is active - playing enhanced in-app alarm');

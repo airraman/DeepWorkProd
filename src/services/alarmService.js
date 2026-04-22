@@ -1,5 +1,5 @@
 import { Audio } from 'expo-av';
-import { Vibration, Platform } from 'react-native';
+import { Vibration } from 'react-native';
 import { audioSessionManager } from './audioSessionManager';  // Add at top of file
 
 
@@ -35,12 +35,28 @@ class AlarmService {
 
   async playCompletionAlarm(options = {}) {
     const { volume = 0.8, autoStopAfter = 10 } = options;
-    
+
     try {
-      // ✅ DEFENSIVE: Re-initialize audio session right before playing
-      // WHY: iOS can revoke audio session if app was backgrounded long
-      await this.init();
-      
+      // Always re-apply audio mode immediately before playing.
+      // iOS revokes the audio session when the app is backgrounded; the
+      // shared audioSessionManager caches isInitialized=true so it would
+      // skip re-setup, silencing the alarm. Calling setAudioModeAsync here
+      // directly bypasses that cache and guarantees the mode is active.
+      // No MIXWITHOTHERS — alarm must interrupt, not mix/duck.
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        categoryIOS: Audio.AUDIO_SESSION_CATEGORY_PLAYBACK,
+        categoryOptionsIOS: [
+          Audio.CATEGORY_OPTIONS_DEFAULTTOSPEAKER,
+          Audio.CATEGORY_OPTIONS_ALLOWBLUETOOTH,
+        ],
+        interruptionModeIOS: 2,
+        interruptionModeAndroid: 2,
+        shouldDuckAndroid: false,
+        allowsRecordingIOS: false,
+      });
+
       // ✅ Load and play alarm sound
       console.log('🔔 Loading alarm sound...');
       const { sound } = await Audio.Sound.createAsync(
