@@ -35,3 +35,10 @@ export const logSessionResume = (elapsedSeconds) =>
   analytics().logEvent('session_resume', {
     elapsed_time: elapsedSeconds,
   });
+
+export const logNotificationScheduled = (label, frequency) =>
+  analytics().logEvent('notification_scheduled', {
+    time_label: sanitizeString(label),
+    frequency: sanitizeString(frequency),
+    app_version: APP_VERSION,
+  });

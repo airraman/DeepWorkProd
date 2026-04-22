@@ -56,7 +56,7 @@ const DeepWorkSession = ({ route, navigation }) => {
   const { duration, activity, musicChoice, focusLockEnabled } = route.params;
   const totalDuration = parseFloat(duration) * 60 * 1000;
 
-  const { startBlocking, stopBlocking } = useFocusLock();
+  const { startBlocking, stopBlocking, isReady: focusLockReady } = useFocusLock();
 
   // Timestamp-based timer — no drift, survives app reload
   const { timeLeft, isPaused, isExpired, start, pause, resume, stop } = useSessionTimer(totalDuration);
@@ -73,6 +73,7 @@ const DeepWorkSession = ({ route, navigation }) => {
   const isHandlingTimeoutRef    = useRef(false); // prevents double handleTimeout
   const isCleanedUpRef          = useRef(false); // prevents double cleanup
   const completionTimeoutRef    = useRef(null);  // 1500ms delay handle in handleTimeout
+  const hasStartedBlockingRef   = useRef(false); // prevents double startBlocking call
 
   // Services loaded dynamically to prevent crashes
   const [servicesReady, setServicesReady] = useState(false);
@@ -164,6 +165,18 @@ const DeepWorkSession = ({ route, navigation }) => {
     }
   }, [servicesReady]);
 
+  // Start blocking only after BOTH services and FocusLock context are ready.
+  // Avoids a race condition where startBlocking() fires before context.initialize()
+  // has resolved — which causes isAvailable to be false and blocking to silently no-op.
+  useEffect(() => {
+    if (!focusLockEnabled || !servicesReady || !focusLockReady) return;
+    if (hasStartedBlockingRef.current) return;
+    hasStartedBlockingRef.current = true;
+    startBlocking()
+      .then(() => console.log('🔒 Focus Lock blocking started'))
+      .catch(err => console.warn('🔒 Focus Lock start failed (non-critical):', err));
+  }, [focusLockEnabled, servicesReady, focusLockReady]);
+
   // Handle back button (Android)
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -239,9 +252,7 @@ const DeepWorkSession = ({ route, navigation }) => {
           .catch(err => console.warn('🔔 Alarm init failed:', err)),
 
           focusLockEnabled
-          ? startBlocking()
-              .then(() => console.log('🔒 Focus Lock blocking started'))
-              .catch(err => console.warn('🔒 Focus Lock start failed (non-critical):', err))
+          ? Promise.resolve() // startBlocking handled by dedicated useEffect below
           : Promise.resolve(),
       
       

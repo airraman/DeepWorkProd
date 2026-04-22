@@ -43,10 +43,21 @@ import {
 } from '../services/monetizationService';
 
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const isTablet = SCREEN_WIDTH > 768 || SCREEN_HEIGHT > 768;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HEADER_HEIGHT = Platform.OS === 'ios' ? 60 : 50;
 const CONTENT_PADDING_TOP = HEADER_HEIGHT - (Platform.OS === 'ios' ? 0 : 20);
+
+const getGreeting = () => {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning — ready to focus?';
+  if (h < 18) return "Good afternoon — let's get a session in";
+  return 'Good evening — finish strong';
+};
+
+const calculateTotalHours = (sessions) =>
+  Math.floor(
+    Object.values(sessions).flat().reduce((sum, s) => sum + (s.duration || 0), 0) / 60
+  );
 
 
 const HomeScreen = () => {
@@ -82,6 +93,7 @@ const HomeScreen = () => {
   const [activeSession, setActiveSession]         = useState(null); // interrupted session prompt
   const [lastSessionConfig, setLastSessionConfig] = useState(null); // quick restart prompt
   const [streak, setStreak]                       = useState({ count: 0, lastSessionDate: null });
+  const [totalHours, setTotalHours]               = useState(0);
 
   // ── Streak modal state ───────────────────────────────────────────────────────
   const [showStreakModal, setShowStreakModal] = useState(false);
@@ -256,6 +268,9 @@ const [focusLockEnabled, setFocusLockEnabled] = useState(false);
       if (activity && !settings.activities.some(a => a.id === activity)) {
         setActivity('');
       }
+
+      const sessions = await deepWorkStore.getSessions();
+      setTotalHours(calculateTotalHours(sessions));
     } catch (error) {
       console.error('Failed to load settings:', error);
     } finally {
@@ -381,12 +396,19 @@ const [focusLockEnabled, setFocusLockEnabled] = useState(false);
         contentContainerStyle={styles.contentContainer}
       >
         <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Prepare Deep Work Session</Text>
-          {streak.count > 0 && (
-            <View style={homeStyles.streakBadge}>
-              <Text style={homeStyles.streakText}>🔥 {streak.count}</Text>
+          <View style={homeStyles.headerRow}>
+            <View style={homeStyles.streakPill}>
+              <Text style={homeStyles.streakPillText}>
+                {streak.count > 0 ? `${streak.count} day focus streak` : '0 day focus streak'}
+              </Text>
             </View>
-          )}
+            {totalHours > 0 && (
+              <View style={homeStyles.hoursPill}>
+                <Text style={homeStyles.hoursPillText}>{totalHours}h total focus hours</Text>
+              </View>
+            )}
+          </View>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>{getGreeting()}</Text>
         </View>
         
         <View style={[styles.divider, { backgroundColor: colors.divider }]} />
@@ -684,13 +706,11 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
   header: {
-    alignItems: 'center',
     marginBottom: 10,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
-    textAlign: 'center',
   },
   divider: {
     height: 1,
@@ -888,15 +908,33 @@ const styles = StyleSheet.create({
 });
 
 const homeStyles = StyleSheet.create({
-  streakBadge: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    justifyContent: 'space-between',
+    marginBottom: 6,
   },
-  streakText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#f97316',
+  streakPill: {
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(234,88,12,0.12)',
+  },
+  streakPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#ea580c',
+  },
+  hoursPill: {
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(21,128,61,0.12)',
+  },
+  hoursPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#15803D',
   },
   overlay: {
     flex: 1,

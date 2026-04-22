@@ -28,33 +28,29 @@ import {
   SafeAreaView,
   Dimensions,
   Platform,
-  Linking,
+  Modal,
 } from 'react-native';
-import { useAuth } from '../context/AuthContext';
-import { signOut } from '../services/authService';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { Bell, Clock, TrendingUp, Volume2, Plus, X } from 'lucide-react-native';
+import { Volume2, Plus, X } from 'lucide-react-native';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useNavigation } from '@react-navigation/native';
 import { deepWorkStore } from '../services/deepWorkStore';
-import { alarmService } from '../services/alarmService';
-import { notificationService } from '../services/notificationService';
-import { notificationBackgroundTask } from '../services/notificationBackgroundTask';
-import notificationPreferences from '../services/notificationPreferences';
 import SharedHeader from '../components/SharedHeader';
 import { useFocusLock } from '../context/FocusLockContext';
 import focusLockService from '../services/focusLockService';
+import { useAuth } from '../context/AuthContext';
+import { signOut } from '../services/authService';
+import { PaywallModal } from '../components/PaywallModal';
 
 const isTablet = Platform.isPad || Dimensions.get('window').width > 768;
 const HEADER_HEIGHT = isTablet ? 60 : 50;
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const SettingsScreen = () => {
   const { colors, theme } = useTheme();
   const isDark = theme === THEMES.DARK;
   const navigation = useNavigation();
   const { isPremium } = useSubscription();
+  const { user } = useAuth();
   
   
   // Core state
@@ -65,15 +61,7 @@ const SettingsScreen = () => {
   
   // Alarm settings
   const [alarmEnabled, setAlarmEnabled] = useState(true);
-  const [alarmVolume, setAlarmVolume] = useState(0.8);
-  
-  // ✅ NEW: Notification preferences state
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [dailyReminderEnabled, setDailyReminderEnabled] = useState(true);
-  const [dailyReminderTime, setDailyReminderTime] = useState(new Date());
-  const [weeklySummaryEnabled, setWeeklySummaryEnabled] = useState(true);
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  
+
   // UI state
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showAlert, setShowAlert] = useState(false);
@@ -81,14 +69,14 @@ const SettingsScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [totalSessions, setTotalSessions] = useState(0);
 
   // Focus Lock
   const { isAuthorized, selectionCount, refreshSelection } = useFocusLock();
   const [focusLockSelecting, setFocusLockSelecting] = useState(false);
 
 
-  //User Profile
-  const { user, userProfile } = useAuth();
 
   const colorPalette = [
     '#ffb3ba', '#ffdfdf', '#ffcc99', '#ffd9b3',
@@ -97,39 +85,9 @@ const SettingsScreen = () => {
     '#d9baff', '#e0b3ff', '#ffb3f7', '#ffc9f0',
   ];
 
-  const durations = [5, 10, 15, 20, 30, 45];
-
   useEffect(() => {
     loadSettings();
-    loadNotificationPreferences();
   }, []);
-
-  /**
-   * ✅ NEW: Load notification preferences from Firestore
-   */
-  const loadNotificationPreferences = async () => {
-    try {
-      const prefs = await notificationPreferences.getPreferences();
-      
-      // Update state
-      setDailyReminderEnabled(prefs.dailyReminder.enabled);
-      setWeeklySummaryEnabled(prefs.weeklySummary);
-      
-      // Parse time string to Date object
-      const [hours, minutes] = prefs.dailyReminder.time.split(':').map(Number);
-      const timeDate = new Date();
-      timeDate.setHours(hours, minutes, 0, 0);
-      setDailyReminderTime(timeDate);
-      
-      // Check if notifications are enabled globally
-      const enabled = await notificationService.areNotificationsEnabled();
-      setNotificationsEnabled(enabled);
-      
-      console.log('📋 [Settings] Loaded notification preferences');
-    } catch (error) {
-      console.error('❌ [Settings] Error loading notification prefs:', error);
-    }
-  };
 
   const loadSettings = async () => {
     try {
@@ -138,7 +96,8 @@ const SettingsScreen = () => {
       setActivities(settings.activities);
       setSelectedDurations(settings.durations);
       setAlarmEnabled(settings.alarmEnabled !== undefined ? settings.alarmEnabled : true);
-      setAlarmVolume(settings.alarmVolume !== undefined ? settings.alarmVolume : 0.8);
+      const sessions = await deepWorkStore.getSessions();
+      setTotalSessions(Object.values(sessions).flat().length);
     } catch (error) {
       showFeedback('Error loading settings');
       console.error('Failed to load settings:', error);
@@ -153,129 +112,11 @@ const SettingsScreen = () => {
     setTimeout(() => setShowAlert(false), 2000);
   };
 
-  /**
-   * ✅ NEW: Handle notification toggle
-   */
-  const handleToggleNotifications = async () => {
-    if (!notificationsEnabled) {
-      // Enabling - request permissions first
-      const granted = await notificationService.requestPermissions();
-      
-      if (granted) {
-        // Schedule notifications
-        await notificationService.scheduleNotifications();
-        
-        // Register background task
-        try {
-          await notificationBackgroundTask.register();
-        } catch (bgError) {
-          console.warn('⚠️ Background task registration failed:', bgError);
-        }
-        
-        setNotificationsEnabled(true);
-        showFeedback('Notifications enabled');
-      } else {
-        Alert.alert(
-          'Notifications Disabled',
-          'Please enable notifications in Settings:\n\n1. Open Settings\n2. Find DeepWork.io\n3. Enable Notifications\n4. Enable Sound & Badges',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => Linking.openSettings() }
-          ]
-        );
-      }
-    } else {
-      // Disabling
-      try {
-        await notificationService.cancelAllNotifications();
-        await notificationBackgroundTask.unregister();
-        setNotificationsEnabled(false);
-        showFeedback('Notifications disabled');
-      } catch (error) {
-        console.error('❌ Error disabling notifications:', error);
-        showFeedback('Error disabling notifications');
-      }
-    }
-  };
-
-  /**
-   * ✅ NEW: Handle daily reminder toggle
-   */
-  const handleDailyReminderToggle = async () => {
-    const newValue = !dailyReminderEnabled;
-    setDailyReminderEnabled(newValue);
-    
-    const success = await notificationPreferences.setDailyReminderEnabled(newValue);
-    if (success) {
-      showFeedback(newValue ? 'Daily reminders enabled' : 'Daily reminders disabled');
-    } else {
-      showFeedback('Error updating preference');
-      setDailyReminderEnabled(!newValue); // Revert on error
-    }
-  };
-
-  /**
-   * ✅ NEW: Handle time change
-   */
-  const handleTimeChange = async (event, selectedTime) => {
-    setShowTimePicker(Platform.OS === 'ios'); // Keep open on iOS
-    
-    if (event.type === 'dismissed') {
-      setShowTimePicker(false);
-      return;
-    }
-    
-    if (selectedTime) {
-      setDailyReminderTime(selectedTime);
-      
-      // Format time as HH:mm
-      const hours = selectedTime.getHours().toString().padStart(2, '0');
-      const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
-      const timeString = `${hours}:${minutes}`;
-      
-      // Save to Firestore
-      const success = await notificationPreferences.setDailyReminderTime(timeString);
-      if (success) {
-        showFeedback(`Reminder time set to ${timeString}`);
-        
-        // Reschedule notifications with new time
-        if (notificationsEnabled) {
-          await notificationService.scheduleNotifications();
-        }
-      } else {
-        showFeedback('Error updating reminder time');
-      }
-      
-      // Close picker on Android
-      if (Platform.OS === 'android') {
-        setShowTimePicker(false);
-      }
-    }
-  };
-
-  /**
-   * ✅ NEW: Handle weekly summary toggle
-   */
-  const handleWeeklySummaryToggle = async () => {
-    const newValue = !weeklySummaryEnabled;
-    setWeeklySummaryEnabled(newValue);
-    
-    const success = await notificationPreferences.setWeeklySummaryEnabled(newValue);
-    if (success) {
-      showFeedback(newValue ? 'Weekly summary enabled' : 'Weekly summary disabled');
-    } else {
-      showFeedback('Error updating preference');
-      setWeeklySummaryEnabled(!newValue); // Revert on error
-    }
-  };
-
-  // ... (keep existing functions: handleAddActivity, handleDeleteActivity, etc.)
-  
   const handleAddActivity = async () => {
     if (!newActivity.trim()) return;
 
     if (!isPremium && activities.length >= 2) {
-      setShowPaywall(true);
+      showFeedback('Upgrade to premium to add more activities');
       return;
     }
 
@@ -307,15 +148,15 @@ const SettingsScreen = () => {
 
   const handleDeleteActivity = async (idToDelete) => {
     const activityToDelete = activities.find(a => a.id === idToDelete);
-    
+
     if (!activityToDelete) {
       showFeedback('Activity not found');
       return;
     }
-    
+
     Alert.alert(
       'Delete Activity?',
-      `This will delete "${activityToDelete.name}" and ALL sessions. This cannot be undone.`,
+      `"${activityToDelete.name}" will be removed from future sessions. Past session history is kept.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -324,22 +165,11 @@ const SettingsScreen = () => {
           onPress: async () => {
             try {
               setIsSaving(true);
-              
-              const { success, deletedCount } = await deepWorkStore.deleteSessionsByActivity(
-                activityToDelete.name
-              );
-              
-              if (!success) throw new Error('Failed to delete sessions');
-              
               const updatedActivities = activities.filter(a => a.id !== idToDelete);
-              const settingsSuccess = await deepWorkStore.updateActivities(updatedActivities);
-              
-              if (settingsSuccess) {
+              const success = await deepWorkStore.updateActivities(updatedActivities);
+              if (success) {
                 setActivities(updatedActivities);
-                const message = deletedCount > 0 
-                  ? `Deleted "${activityToDelete.name}" and ${deletedCount} session${deletedCount === 1 ? '' : 's'}`
-                  : `Deleted "${activityToDelete.name}"`;
-                showFeedback(message);
+                showFeedback(`Deleted "${activityToDelete.name}"`);
               } else {
                 throw new Error('Failed to update settings');
               }
@@ -363,40 +193,6 @@ const SettingsScreen = () => {
     });
     if (success) {
       showFeedback(value ? 'Alarm enabled' : 'Alarm disabled');
-    }
-  };
-
-  const handleAlarmVolumeChange = async (volume) => {
-    setAlarmVolume(volume);
-    const success = await deepWorkStore.updateSettings({
-      ...(await deepWorkStore.getSettings()),
-      alarmVolume: volume,
-    });
-    if (success) {
-      showFeedback(`Volume set to ${Math.round(volume * 100)}%`);
-    }
-  };
-
-  const handleTestAlarm = async () => {
-    try {
-      setIsSaving(true);
-      const played = await alarmService.playCompletionAlarm({ 
-        volume: alarmVolume,
-        autoStopAfter: 3
-      });
-      
-      if (played) {
-        setTimeout(() => {
-          showFeedback('Alarm test successful 🔔');
-        }, 1000);
-      } else {
-        showFeedback('Alarm test failed - check device settings');
-      }
-    } catch (error) {
-      console.error('Error testing alarm:', error);
-      showFeedback('Alarm test failed');
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -425,18 +221,14 @@ const SettingsScreen = () => {
   };
 
   const handleSaveSettings = async () => {
-    if (selectedDurations.length !== 3) {
-      showFeedback('Please select exactly 3 durations');
-      return;
-    }
-
     try {
       setIsSaving(true);
+      const currentSettings = await deepWorkStore.getSettings();
       const success = await deepWorkStore.updateSettings({
+        ...currentSettings,
         activities,
         durations: selectedDurations,
         alarmEnabled,
-        alarmVolume,
       });
 
       if (success) {
@@ -496,162 +288,46 @@ const SettingsScreen = () => {
         style={[styles.scrollView]}
         contentContainerStyle={{ paddingTop: HEADER_HEIGHT, paddingHorizontal: 12 }}
       >
-        <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Customize Your DeepWork Experience
-          </Text>
-        </View>
-        
-        <View style={[styles.divider, { backgroundColor: colors.divider }]} />
-        
-        {/* ✅ NEW: Enhanced Notification Section */}
-        <View style={[
-          styles.section,
-          {
-            backgroundColor: isDark ? '#1f1f1f' : colors.card,
-            borderColor: colors.border,
-            borderWidth: 1,
-            borderRadius: 12,
-          }
-        ]}>
-          <View style={styles.sectionHeader}>
-            <Bell stroke={colors.textSecondary} size={20} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Notifications
+        {/* Membership Status Card */}
+        <TouchableOpacity
+          style={[
+            styles.membershipCard,
+            {
+              backgroundColor: isPremium ? 'rgba(21,128,61,0.08)' : 'rgba(234,88,12,0.08)',
+              borderColor:     isPremium ? 'rgba(21,128,61,0.3)'  : 'rgba(234,88,12,0.3)',
+            }
+          ]}
+          onPress={() => setShowPaywall(true)}
+          activeOpacity={0.8}
+        >
+          <Text style={{ fontSize: 26 }}>{isPremium ? '💎' : '⭐'}</Text>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={[styles.membershipTitle, { color: isPremium ? '#15803D' : '#ea580c' }]}>
+              {isPremium ? 'Pro Member' : 'Free Plan'}
+            </Text>
+            <Text style={[styles.membershipSub, { color: colors.textSecondary }]}>
+              {isPremium ? 'All features unlocked' : 'Upgrade to unlock all features'}
             </Text>
           </View>
-          
-          {/* Master notification toggle */}
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Text style={[styles.settingLabel, { color: colors.text }]}>
-                Enable notifications
-              </Text>
-              <Text style={[styles.helpText, { color: colors.textSecondary, marginTop: 4 }]}>
-                Get alerts for sessions and reminders
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[
-                styles.toggle,
-                notificationsEnabled && { backgroundColor: colors.primary }
-              ]}
-              onPress={handleToggleNotifications}
-            >
-              <View style={[
-                styles.toggleCircle,
-                notificationsEnabled && styles.toggleCircleActive
-              ]} />
-            </TouchableOpacity>
-          </View>
-          
-          {/* Daily reminder settings */}
-          {notificationsEnabled && (
-            <>
-              <View style={[styles.divider, { backgroundColor: colors.divider, marginVertical: 12 }]} />
-              
-              <View style={styles.settingRow}>
-                <View style={styles.settingInfo}>
-                  <Clock stroke={colors.textSecondary} size={18} style={{ marginRight: 8 }} />
-                  <Text style={[styles.settingLabel, { color: colors.text }]}>
-                    Daily reminder
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.toggle,
-                    dailyReminderEnabled && { backgroundColor: colors.primary }
-                  ]}
-                  onPress={handleDailyReminderToggle}
-                >
-                  <View style={[
-                    styles.toggleCircle,
-                    dailyReminderEnabled && styles.toggleCircleActive
-                  ]} />
-                </TouchableOpacity>
-              </View>
-              
-              {/* Time picker */}
-              {dailyReminderEnabled && (
-                <TouchableOpacity
-                  style={[styles.timePickerButton, { borderColor: colors.border }]}
-                  onPress={() => setShowTimePicker(true)}
-                >
-                  <Text style={[styles.timePickerLabel, { color: colors.textSecondary }]}>
-                    Reminder time
-                  </Text>
-                  <Text style={[styles.timePickerValue, { color: colors.text }]}>
-                    {dailyReminderTime.toLocaleTimeString('en-US', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </Text>
-                </TouchableOpacity>
-              )}
-              
-              {/* iOS Time Picker Modal */}
-              {showTimePicker && Platform.OS === 'ios' && (
-                <View style={[styles.timePickerContainer, { backgroundColor: colors.card }]}>
-                  <DateTimePicker
-                    value={dailyReminderTime}
-                    mode="time"
-                    display="spinner"
-                    onChange={handleTimeChange}
-                    textColor={colors.text}
-                  />
-                  <TouchableOpacity
-                    style={[styles.timePickerDone, { backgroundColor: colors.primary }]}
-                    onPress={() => setShowTimePicker(false)}
-                  >
-                    <Text style={styles.timePickerDoneText}>Done</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              
-              {/* Android Time Picker */}
-              {showTimePicker && Platform.OS === 'android' && (
-                <DateTimePicker
-                  value={dailyReminderTime}
-                  mode="time"
-                  display="default"
-                  onChange={handleTimeChange}
-                />
-              )}
-              
-              {/* Weekly summary toggle */}
-              <View style={[styles.divider, { backgroundColor: colors.divider, marginVertical: 12 }]} />
-              
-              <View style={styles.settingRow}>
-                <View style={styles.settingInfo}>
-                  <TrendingUp stroke={colors.textSecondary} size={18} style={{ marginRight: 8 }} />
-                  <Text style={[styles.settingLabel, { color: colors.text }]}>
-                    Weekly summary
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.toggle,
-                    weeklySummaryEnabled && { backgroundColor: colors.primary }
-                  ]}
-                  onPress={handleWeeklySummaryToggle}
-                >
-                  <View style={[
-                    styles.toggleCircle,
-                    weeklySummaryEnabled && styles.toggleCircleActive
-                  ]} />
-                </TouchableOpacity>
-              </View>
-              
-              {weeklySummaryEnabled && (
-                <Text style={[styles.helpText, { color: colors.textSecondary, marginTop: 8 }]}>
-                  Sent every Monday at 9:00 AM
-                </Text>
-              )}
-            </>
+          {!isPremium && (
+            <Text style={{ color: '#ea580c', fontWeight: '700', fontSize: 13 }}>Upgrade →</Text>
           )}
-        </View>
+        </TouchableOpacity>
 
-        {/* Activities Section - UNCHANGED */}
+        {/* Account Row */}
+        <TouchableOpacity
+          style={[styles.accountRow, { backgroundColor: isDark ? '#1f1f1f' : colors.card, borderColor: colors.border }]}
+          onPress={() => setShowProfileModal(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={{ fontSize: 18 }}>👤</Text>
+          <Text style={[styles.accountRowLabel, { color: colors.text }]}>Account</Text>
+          <Text style={[styles.accountRowChevron, { color: colors.textSecondary }]}>›</Text>
+        </TouchableOpacity>
+
+        <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+
+        {/* Activities Section */}
         <View style={[
           styles.section,
           {
@@ -672,31 +348,12 @@ const SettingsScreen = () => {
             )}
           </View>
           
+          <View style={{ zIndex: 100 }}>
           <View style={styles.inputContainer}>
-            <View style={styles.colorPickerContainer}>
-              <TouchableOpacity
-                style={[styles.colorPreview, { backgroundColor: selectedColor }]}
-                onPress={() => setShowColorPicker(!showColorPicker)}
-              />
-              {showColorPicker && (
-                <View style={[styles.colorGrid, { backgroundColor: colors.card }]}>
-                  {colorPalette.map(color => (
-                    <TouchableOpacity
-                      key={color}
-                      style={[
-                        styles.colorOption,
-                        { backgroundColor: color },
-                        selectedColor === color && styles.colorOptionSelected
-                      ]}
-                      onPress={() => {
-                        setSelectedColor(color);
-                        setShowColorPicker(false);
-                      }}
-                    />
-                  ))}
-                </View>
-              )}
-            </View>
+            <TouchableOpacity
+              style={[styles.colorPreview, { backgroundColor: selectedColor }]}
+              onPress={() => setShowColorPicker(!showColorPicker)}
+            />
             
             <TextInput
               style={[
@@ -733,7 +390,33 @@ const SettingsScreen = () => {
               )}
             </TouchableOpacity>
           </View>
-          
+
+          {showColorPicker && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={[styles.colorGrid, { backgroundColor: colors.card }]}
+              contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingRight: 8 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              {colorPalette.map(color => (
+                <TouchableOpacity
+                  key={color}
+                  style={[
+                    styles.colorOption,
+                    { backgroundColor: color },
+                    selectedColor === color && styles.colorOptionSelected
+                  ]}
+                  onPress={() => {
+                    setSelectedColor(color);
+                    setShowColorPicker(false);
+                  }}
+                />
+              ))}
+            </ScrollView>
+          )}
+          </View>
+
           {activities.length > 0 && (
             <FlatList
               data={activities}
@@ -786,118 +469,7 @@ const SettingsScreen = () => {
             </TouchableOpacity>
           </View>
           
-          {alarmEnabled && (
-            <>
-              <View style={styles.settingRow}>
-                <Text style={[styles.settingLabel, { color: colors.text }]}>
-                  Volume
-                </Text>
-                <View style={styles.volumeControls}>
-                  {[0.3, 0.5, 0.8, 1.0].map(vol => (
-                    <TouchableOpacity
-                      key={vol}
-                      style={[
-                        styles.volumeButton,
-                        {
-                          backgroundColor: alarmVolume === vol ? colors.primary : colors.border
-                        }
-                      ]}
-                      onPress={() => handleAlarmVolumeChange(vol)}
-                    >
-                      <Text style={[
-                        styles.volumeButtonText,
-                        { color: alarmVolume === vol ? '#FFFFFF' : colors.text }
-                      ]}>
-                        {Math.round(vol * 100)}%
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-              
-              <TouchableOpacity
-                style={[styles.testAlarmButton, { backgroundColor: colors.primary }]}
-                onPress={handleTestAlarm}
-                disabled={isSaving}
-              >
-                {isSaving ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text style={styles.testAlarmButtonText}>Test Alarm</Text>
-                )}
-              </TouchableOpacity>
-            </>
-          )}
         </View>
-
-        {/* ── Profile Section ──────────────────────────────────────── */}
-<View style={[
-  styles.section,
-  {
-    backgroundColor: isDark ? '#1f1f1f' : colors.card,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 12,
-  }
-]}>
-  <View style={styles.sectionHeader}>
-    <Text style={[styles.sectionTitle, { color: colors.text }]}>
-      Account
-    </Text>
-  </View>
-
-  {user ? (
-    // ── Logged in state ──────────────────────────────────────
-    <>
-      <View style={styles.settingRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.settingLabel, { color: colors.text }]}>
-            {userProfile?.displayName || user.displayName || 'DeepWorker'}
-          </Text>
-          <Text style={[styles.helpText, { color: colors.textSecondary, marginTop: 2 }]}>
-            {user.email}
-          </Text>
-        </View>
-      </View>
-
-      <TouchableOpacity
-        style={[
-          styles.profileButton,
-          { borderColor: colors.primary || colors.accent }
-        ]}
-        onPress={() => navigation.navigate('Profile')}
-      >
-        <Text style={[
-          styles.profileButtonText,
-          { color: colors.primary || colors.accent }
-        ]}>
-          View Profile & Stats
-        </Text>
-      </TouchableOpacity>
-    </>
-  ) : (
-    // ── Logged out state ─────────────────────────────────────
-    <>
-      <Text style={[styles.helpText, { color: colors.textSecondary, marginBottom: 12 }]}>
-        Sign in to back up your sessions and sync across devices.
-      </Text>
-      <TouchableOpacity
-        style={[
-          styles.profileButton,
-          { borderColor: colors.primary || colors.accent }
-        ]}
-        onPress={() => navigation.navigate('Login')}
-      >
-        <Text style={[
-          styles.profileButtonText,
-          { color: colors.primary || colors.accent }
-        ]}>
-          Sign In / Create Account
-        </Text>
-      </TouchableOpacity>
-    </>
-  )}
-</View>
 
         {/* Focus Lock Section */}
         {focusLockService.isSupported && (
@@ -913,7 +485,7 @@ const SettingsScreen = () => {
             <View style={styles.sectionHeader}>
               <Text style={{ fontSize: 20 }}>📵</Text>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Focus Lock
+                App Blocking
               </Text>
             </View>
 
@@ -1010,12 +582,54 @@ const SettingsScreen = () => {
 )}
 
 </ScrollView>
-{/* Alert Toast */}
+      {/* Alert Toast */}
       {showAlert && (
         <View style={[styles.alert, { backgroundColor: colors.primary }]}>
           <Text style={styles.alertText}>{alertMessage}</Text>
         </View>
       )}
+
+      {/* Profile Modal */}
+      <Modal
+        visible={showProfileModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowProfileModal(false)}
+      >
+        <SafeAreaView style={[styles.profileModal, { backgroundColor: colors.background }]}>
+          <View style={[styles.profileModalHeader, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.profileModalTitle, { color: colors.text }]}>Account</Text>
+            <TouchableOpacity onPress={() => setShowProfileModal(false)}>
+              <Text style={[styles.profileModalClose, { color: colors.textSecondary }]}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.profileModalBody}>
+            <Text style={[styles.profileEmail, { color: colors.textSecondary }]}>
+              {user?.email || 'No email on file'}
+            </Text>
+            <View style={[styles.profileStat, { backgroundColor: isDark ? '#1f1f1f' : colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.profileStatLabel, { color: colors.textSecondary }]}>Total sessions</Text>
+              <Text style={[styles.profileStatValue, { color: colors.text }]}>{totalSessions}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.signOutBtn}
+              onPress={async () => {
+                setShowProfileModal(false);
+                await signOut();
+              }}
+            >
+              <Text style={styles.signOutBtnText}>Sign Out</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Paywall Modal */}
+      <PaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        limitType="pro_membership"
+      />
     </SafeAreaView>
   );
 };
@@ -1162,12 +776,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50,
     left: 0,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    right: 0,
     padding: 12,
     borderRadius: 12,
-    width: 200,
     zIndex: 1000,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -1320,6 +931,91 @@ const styles = StyleSheet.create({
   },
   profileButtonText: {
     fontSize: 15,
+    fontWeight: '600',
+  },
+  membershipCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 10,
+  },
+  membershipTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  membershipSub: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    gap: 10,
+  },
+  accountRowLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  accountRowChevron: {
+    fontSize: 20,
+  },
+  profileModal: {
+    flex: 1,
+  },
+  profileModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  profileModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  profileModalClose: {
+    fontSize: 16,
+    padding: 4,
+  },
+  profileModalBody: {
+    padding: 20,
+    gap: 14,
+  },
+  profileEmail: {
+    fontSize: 14,
+  },
+  profileStat: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  profileStatLabel: {
+    fontSize: 14,
+  },
+  profileStatValue: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  signOutBtn: {
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 10,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+  },
+  signOutBtnText: {
+    color: 'white',
+    fontSize: 16,
     fontWeight: '600',
   },
 });

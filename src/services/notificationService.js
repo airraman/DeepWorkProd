@@ -2,6 +2,7 @@
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deepWorkStore } from './deepWorkStore';
+import { logNotificationScheduled } from './analyticsService';
 
 
 // Configure notification handler
@@ -518,8 +519,10 @@ class NotificationService {
         identifier: identifier
       });
       
+      logNotificationScheduled(nextLabel, frequency);
+
       return identifier;
-      
+
     } catch (error) {
       console.error('❌ Error scheduling next notification:', error);
       return null;

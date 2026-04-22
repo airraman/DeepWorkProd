@@ -12,6 +12,7 @@ import {
   PanResponder,
   ActivityIndicator,
   Modal,
+  Share,
 } from 'react-native';
 import ActivitySummaryModal from '../components/modals/ActivitySummaryModal';
 import { useFocusEffect } from '@react-navigation/native';
@@ -120,43 +121,36 @@ const WeeklyFocusChart = ({ sessions }) => {
   );
 };
 
-const TotalTimeCard = ({ totalHours }) => {
-  const { colors } = useTheme();
-  
-  const getBackgroundColorForTime = (hours) => {
-    if (hours <= 5) return '#D1FADF';   
-    if (hours <= 20) return '#A6F4C5';  
-    if (hours <= 50) return '#4ADE80';  
-    return '#22C55E';                   
+const TotalTimeCard = ({ sessions, selectedMonth }) => {
+  const computeMonthHours = () => {
+    if (!selectedMonth || !sessions) return 0;
+    const [year, month] = selectedMonth.split('-').map(Number);
+    let totalMins = 0;
+    Object.entries(sessions).forEach(([dateStr, daySessions]) => {
+      const d = new Date(`${dateStr}T00:00:00`);
+      if (d.getFullYear() === year && d.getMonth() + 1 === month) {
+        daySessions.forEach(s => { totalMins += s.duration || 0; });
+      }
+    });
+    return Math.round((totalMins / 60) * 10) / 10;
   };
 
-  const getTextColorForTime = (hours) => {
-    if (hours <= 20) return '#1E3A29';
-    return '#FFFFFF';
-  };
-
-  const backgroundColor = getBackgroundColorForTime(totalHours);
-  const textColor = getTextColorForTime(totalHours);
+  const monthHours = computeMonthHours();
+  const monthLabel = selectedMonth
+    ? MONTHS[parseInt(selectedMonth.split('-')[1], 10) - 1]
+    : 'Month';
 
   return (
-    <View style={[
-      styles.totalTimeContainer,
-      { backgroundColor }
-    ]}>
-      <Text style={[styles.totalTimeLabel, { color: textColor }]}>
+    <View style={[styles.totalTimeContainer, { backgroundColor: 'rgba(21,128,61,0.12)' }]}>
+      <Text style={[styles.totalTimeLabel, { color: '#15803D' }]}>
         Focus Time
       </Text>
-      <Text style={[styles.totalTimeValue, { color: textColor }]}>
-        {totalHours}h
+      <Text style={[styles.totalTimeValue, { color: '#15803D' }]}>
+        {monthHours}h
       </Text>
-      <Text style={[styles.totalTimeSubtext, { color: textColor }]}>
-        All-time
+      <Text style={[styles.totalTimeSubtext, { color: '#15803D' }]}>
+        {monthLabel}
       </Text>
-      {totalHours > 50 && (
-        <View style={styles.achievementContainer}>
-          <Text style={styles.achievementIcon}></Text>
-        </View>
-      )}
     </View>
   );
 };
@@ -428,7 +422,7 @@ const MonthSelector = ({ selectedMonth, onMonthSelect, sessions }) => {
   );
 };
 
-const SessionList = ({ sessions, activities, onSessionPress, selectedMonth,  onActivityPress }) => {
+const SessionList = ({ sessions, activities, onSessionPress, selectedMonth, onActivityPress, onScrollY }) => {
   const { colors } = useTheme();
   
   const generateDaysList = () => {
@@ -470,9 +464,11 @@ for (let d = 1; d <= lastDay.getDate(); d++) {
   
   return (
     <View style={styles.sessionListContainer}>
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
+        onScroll={onScrollY}
+        scrollEventThrottle={16}
       >
         {days.map((day) => {
           const dayTotal = calculateDayTotal(day.sessions);
@@ -553,9 +549,40 @@ const MetricsScreen = () => {
   //   canGenerateInsights, // ← Remove ": actualCanGenerateInsights"
   // } = useSubscription();
 
-  const { isPremium: _orig, canGenerateInsights: _origCan } = useSubscription();
-const isPremium = true; // 🧪 TEST MODE
-const canGenerateInsights = true; // 🧪 TEST MODE
+  const { isPremium, canGenerateInsights } = useSubscription();
+
+  const scrollY   = useRef(new Animated.Value(0)).current;
+  const cardScale = useRef(new Animated.Value(1)).current;
+
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, 60],
+    outputRange: [52, 0],
+    extrapolate: 'clamp',
+  });
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 40],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+  const monthSelectorHeight = scrollY.interpolate({
+    inputRange: [0, 60],
+    outputRange: [58, 0],
+    extrapolate: 'clamp',
+  });
+  const monthSelectorOpacity = scrollY.interpolate({
+    inputRange: [0, 50],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  const TEASER_TEXTS = [
+    'Focus patterns available…',
+    'See what distracted you this week…',
+    'Your peak hours are in…',
+    'Discover your best focus window…',
+    'Analyze your consistency…',
+  ];
+  const teaserText = TEASER_TEXTS[new Date().getDay() % TEASER_TEXTS.length];
 
   const [sessions, setSessions] = useState({});
   const [activities, setActivities] = useState([]);
@@ -954,16 +981,6 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
     }
   };
 
-  const calculateTotalHours = () => {
-    let totalMinutes = 0;
-    Object.values(sessions).forEach(daySessions => {
-      daySessions.forEach(session => {
-        totalMinutes += session.duration;
-      });
-    });
-    return Math.round(totalMinutes / 60);
-  };
-
   const handleSessionPress = (session) => {
     setSelectedSession(session);
   };
@@ -988,97 +1005,77 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
     setSelectedMonth(value);
   };
 
-  const totalHours = calculateTotalHours();
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
+      <Animated.View style={[styles.header, { borderBottomColor: colors.border, height: headerHeight, overflow: 'hidden' }]}>
+        <Animated.Text style={[styles.headerTitle, { color: colors.text, opacity: headerOpacity }]}>
           DeepWork.io
-        </Text>
-        <Text style={[styles.headerSubtitle, { color: colors.text }]}>
+        </Animated.Text>
+        <Animated.Text style={[styles.headerSubtitle, { color: colors.text, opacity: headerOpacity }]}>
           Metrics
-        </Text>
-      </View>
+        </Animated.Text>
+      </Animated.View>
 
       <View style={styles.content}>
         {/* Fixed Section: Insights + Metrics + Month Selector */}
         <View style={styles.fixedSection}>
-{/* AI Insights Section - Gate for Premium */}
-{!isPremium ? (
-  // FREE USER: Show locked insight button
+{/* AI Insights — analyze button (pre-generation) or preview card (post-generation) */}
+{!hasGeneratedInsights ? (
   <TouchableOpacity
     style={[styles.analyzeButton, { backgroundColor: colors.cardBackground }]}
-    onPress={() => setShowPaywall(true)}
+    onPress={canGenerateInsights ? handleAnalyzeClick : () => setShowPaywall(true)}
+    disabled={isGeneratingAllInsights}
   >
-    <Text style={[styles.analyzeButtonIcon, { color: colors.primary }]}>
-      ✨
-    </Text>
-    <Text style={[styles.analyzeButtonText, { color: colors.text }]}>
-      Analyze my focus patterns
-    </Text>
+    {isGeneratingAllInsights ? (
+      <View style={styles.buttonContent}>
+        <ActivityIndicator size="small" color={colors.primary} />
+        <Text style={[styles.analyzeButtonText, { color: colors.text }]}>
+          Generating insights...
+        </Text>
+      </View>
+    ) : (
+      <View style={styles.buttonContent}>
+        <Text style={[styles.analyzeButtonIcon, { color: colors.primary }]}>✨</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.analyzeButtonText, { color: colors.text }]}>
+            Analyze my focus patterns
+          </Text>
+          <Text style={[styles.analyzeButtonTeaser, { color: colors.textSecondary }]}>
+            {teaserText}
+          </Text>
+        </View>
+        {!isPremium && (
+          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>Pro</Text>
+        )}
+      </View>
+    )}
   </TouchableOpacity>
 ) : (
-  // PREMIUM USER: Show button or preview card
-  <>
-    {!hasGeneratedInsights ? (
-      // BEFORE GENERATION: Show button
-      <TouchableOpacity
-        style={[styles.analyzeButton, { backgroundColor: colors.cardBackground }]}
-        onPress={handleAnalyzeClick}
-        disabled={isGeneratingAllInsights}
-      >
-        {isGeneratingAllInsights ? (
-          <View style={styles.buttonContent}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={[styles.analyzeButtonText, { color: colors.text }]}>
-              Generating insights...
-            </Text>
-          </View>
-        ) : (
-          <>
-            <Text style={[styles.analyzeButtonIcon, { color: colors.primary }]}>
-              ✨
-            </Text>
-            <Text style={[styles.analyzeButtonText, { color: colors.text }]}>
-              Analyze my focus patterns
-            </Text>
-          </>
-        )}
-      </TouchableOpacity>
-    ) : (
-      // AFTER GENERATION: Show inline preview card
-      <TouchableOpacity
-        style={[styles.insightPreviewCard, { backgroundColor: colors.cardBackground }]}
-        onPress={handleInsightCardClick}
-        activeOpacity={0.7}
-      >
-        <View style={styles.insightPreviewHeader}>
-          <Text style={[styles.insightPreviewTitle, { color: colors.text }]}>
-            INSIGHT
+  <TouchableOpacity
+    activeOpacity={1}
+    onPressIn={() => Animated.spring(cardScale, { toValue: 0.97, useNativeDriver: true }).start()}
+    onPressOut={() => Animated.spring(cardScale, { toValue: 1, useNativeDriver: true }).start()}
+    onPress={handleInsightCardClick}
+  >
+    <Animated.View style={[
+      styles.insightPreviewCard,
+      { backgroundColor: colors.cardBackground, transform: [{ scale: cardScale }] }
+    ]}>
+      <View style={styles.insightPreviewHeader}>
+        <Text style={[styles.insightPreviewTitle, { color: colors.text }]}>INSIGHT</Text>
+        <View style={styles.insightDateBadge}>
+          <Text style={styles.insightDateIcon}>✨</Text>
+          <Text style={[styles.insightDateText, { color: colors.textSecondary }]}>
+            {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </Text>
-          <View style={styles.insightDateBadge}>
-            <Text style={styles.insightDateIcon}>📦</Text>
-            <Text style={[styles.insightDateText, { color: colors.textSecondary }]}>
-              {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </Text>
-          </View>
         </View>
-        
-        {/* Show preview of first available insight */}
-        <Text 
-          style={[styles.insightPreviewText, { color: colors.text }]}
-          numberOfLines={3}
-        >
-          {insights.monthly?.insightText || insights.weekly?.insightText || insights.daily?.insightText || 'Tap to view insights'}
-        </Text>
-        
-        <Text style={[styles.tapToSeeMore, { color: colors.primary }]}>
-          Tap to see more
-        </Text>
-      </TouchableOpacity>
-    )}
-  </>
+      </View>
+      <Text style={[styles.insightPreviewText, { color: colors.text }]} numberOfLines={3}>
+        {insights.weekly?.insightText || insights.daily?.insightText || 'Tap to view insights'}
+      </Text>
+      <Text style={[styles.tapToSeeMore, { color: colors.primary }]}>Tap to see more →</Text>
+    </Animated.View>
+  </TouchableOpacity>
 )}
 
 
@@ -1094,25 +1091,35 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
             </View>
             
             <View style={styles.totalTimeSection}>
-              <TotalTimeCard totalHours={totalHours} />
+              <TotalTimeCard sessions={sessions} selectedMonth={selectedMonth} />
             </View>
           </View>
 
-          {/* Month Selector */}
-          <MonthSelector 
-            selectedMonth={selectedMonth}
-            onMonthSelect={handleMonthSelect}
-            sessions={sessions}
-          />
+          {/* Month Selector — collapses on scroll */}
+          <Animated.View style={{
+            height: monthSelectorHeight,
+            opacity: monthSelectorOpacity,
+            overflow: 'hidden',
+          }}>
+            <MonthSelector
+              selectedMonth={selectedMonth}
+              onMonthSelect={handleMonthSelect}
+              sessions={sessions}
+            />
+          </Animated.View>
         </View>
 
         {/* Scrollable Section: Session List Only */}
-        <SessionList 
-          sessions={sessions} 
+        <SessionList
+          sessions={sessions}
           activities={activities}
           onSessionPress={handleSessionPress}
           selectedMonth={selectedMonth}
-          onActivityPress={handleActivityPress}  // ✅ NEW: Pass the handler
+          onActivityPress={handleActivityPress}
+          onScrollY={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: false }
+          )}
         />
       </View>
 
@@ -1124,12 +1131,14 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
       />
 
            {/* Insights Modal */}
-           <InsightsModal
+      <InsightsModal
         visible={showInsightsModal}
         onClose={() => setShowInsightsModal(false)}
         insights={insights}
         weeklyPatterns={weeklyPatterns}
         colors={colors}
+        isPremium={isPremium}
+        onUpgrade={() => { setShowInsightsModal(false); setShowPaywall(true); }}
       />
 
 {selectedActivity && (
@@ -1633,12 +1642,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  analyzeButtonTeaser: {
+    fontSize: 12,
+    marginTop: 2,
+  },
   buttonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  
+
   // Inline Preview Card (After Generation)
   insightPreviewCard: {
     backgroundColor: '#1a1a1a',
@@ -1646,6 +1659,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginHorizontal: 16,
     marginVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
   },
   insightPreviewHeader: {
     flexDirection: 'row',
@@ -1678,6 +1696,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     marginTop: 4,
+  },
+  lockedInsightBlock: {
+    padding: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(150,150,150,0.25)',
+    alignItems: 'center',
+    gap: 6,
+  },
+  lockedInsightText: {
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  lockedInsightSub: {
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  lockedUpgradeBtn: {
+    marginTop: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  lockedUpgradeBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   
   // Modal Styles
@@ -1733,7 +1779,17 @@ const styles = StyleSheet.create({
 
 
 // ===== INSIGHTS MODAL COMPONENT =====
-const InsightsModal = ({ visible, onClose, insights, weeklyPatterns, colors }) => {
+const InsightsModal = ({ visible, onClose, insights, weeklyPatterns, colors, isPremium, onUpgrade }) => {
+  const handleShare = async () => {
+    const parts = [];
+    if (insights.daily?.insightText)   parts.push(`Yesterday:\n${insights.daily.insightText}`);
+    if (insights.weekly?.insightText)  parts.push(`Last 7 Days:\n${insights.weekly.insightText}`);
+    if (insights.monthly?.insightText && isPremium) parts.push(`Last 30 Days:\n${insights.monthly.insightText}`);
+    if (parts.length === 0) return;
+    try {
+      await Share.share({ message: parts.join('\n\n---\n\n') + '\n\nTracked with DeepWork.io' });
+    } catch (_) {}
+  };
   // Render one stat pill
   const StatPill = ({ label, value }) => (
     <View style={[insightModalStyles.statPill, { backgroundColor: colors.card || colors.cardBackground || '#1a1a1a' }]}>
@@ -1834,9 +1890,14 @@ const InsightsModal = ({ visible, onClose, insights, weeklyPatterns, colors }) =
               {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </Text>
           </View>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Text style={[styles.closeButtonText, { color: colors.text }]}>✕</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+            <TouchableOpacity onPress={handleShare} style={styles.closeButton}>
+              <Text style={[styles.closeButtonText, { color: colors.primary }]}>↑</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Text style={[styles.closeButtonText, { color: colors.text }]}>✕</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Scrollable Content */}
@@ -1877,15 +1938,39 @@ const InsightsModal = ({ visible, onClose, insights, weeklyPatterns, colors }) =
             </>
           )}
 
-          {/* Last 30 Days Insight */}
-          {insights.monthly?.insightText && (
+          {/* Last 30 Days Insight — locked for free users */}
+          {isPremium ? (
+            insights.monthly?.insightText ? (
+              <View style={styles.insightSection}>
+                <Text style={[styles.insightSectionLabel, { color: colors.primary }]}>
+                  LAST 30 DAYS
+                </Text>
+                <Text style={[styles.insightSectionText, { color: colors.text }]}>
+                  {insights.monthly.insightText}
+                </Text>
+              </View>
+            ) : null
+          ) : (
             <View style={styles.insightSection}>
               <Text style={[styles.insightSectionLabel, { color: colors.primary }]}>
                 LAST 30 DAYS
               </Text>
-              <Text style={[styles.insightSectionText, { color: colors.text }]}>
-                {insights.monthly.insightText}
-              </Text>
+              <View style={styles.lockedInsightBlock}>
+                <Text style={[styles.lockedInsightText, { color: colors.text }]}>
+                  See your long-term focus patterns
+                </Text>
+                <Text style={[styles.lockedInsightSub, { color: colors.textSecondary }]}>
+                  Upgrade to unlock 30-day insights
+                </Text>
+                <TouchableOpacity
+                  style={[styles.lockedUpgradeBtn, { borderColor: colors.primary }]}
+                  onPress={onUpgrade}
+                >
+                  <Text style={[styles.lockedUpgradeBtnText, { color: colors.primary }]}>
+                    Upgrade to Pro →
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
 
