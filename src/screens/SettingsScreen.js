@@ -30,7 +30,7 @@ import {
   Platform,
   Modal,
 } from 'react-native';
-import { Volume2, Plus, X } from 'lucide-react-native';
+import { Plus, X } from 'lucide-react-native';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useNavigation } from '@react-navigation/native';
@@ -41,6 +41,7 @@ import focusLockService from '../services/focusLockService';
 import { useAuth } from '../context/AuthContext';
 import { signOut } from '../services/authService';
 import { PaywallModal } from '../components/PaywallModal';
+import * as Updates from 'expo-updates';
 
 const isTablet = Platform.isPad || Dimensions.get('window').width > 768;
 const HEADER_HEIGHT = isTablet ? 60 : 50;
@@ -59,9 +60,6 @@ const SettingsScreen = () => {
   const [selectedColor, setSelectedColor] = useState('#c8b2d6');
   const [selectedDurations, setSelectedDurations] = useState([]);
   
-  // Alarm settings
-  const [alarmEnabled, setAlarmEnabled] = useState(true);
-
   // UI state
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showAlert, setShowAlert] = useState(false);
@@ -95,7 +93,6 @@ const SettingsScreen = () => {
       const settings = await deepWorkStore.getSettings();
       setActivities(settings.activities);
       setSelectedDurations(settings.durations);
-      setAlarmEnabled(settings.alarmEnabled !== undefined ? settings.alarmEnabled : true);
       const sessions = await deepWorkStore.getSessions();
       setTotalSessions(Object.values(sessions).flat().length);
     } catch (error) {
@@ -185,17 +182,6 @@ const SettingsScreen = () => {
     );
   };
 
-  const handleAlarmEnabledChange = async (value) => {
-    setAlarmEnabled(value);
-    const success = await deepWorkStore.updateSettings({
-      ...(await deepWorkStore.getSettings()),
-      alarmEnabled: value,
-    });
-    if (success) {
-      showFeedback(value ? 'Alarm enabled' : 'Alarm disabled');
-    }
-  };
-
   const handleChangeBlockedApps = async () => {
     if (!focusLockService.isSupported) return;
     setFocusLockSelecting(true);
@@ -228,7 +214,6 @@ const SettingsScreen = () => {
         ...currentSettings,
         activities,
         durations: selectedDurations,
-        alarmEnabled,
       });
 
       if (success) {
@@ -429,48 +414,6 @@ const SettingsScreen = () => {
           )}
         </View>
 
-        {/* Alarm Settings Section - UNCHANGED */}
-        <View style={[
-          styles.section,
-          {
-            backgroundColor: isDark ? '#1f1f1f' : colors.card,
-            borderColor: colors.border,
-            borderWidth: 1,
-            borderRadius: 12,
-          }
-        ]}>
-          <View style={styles.sectionHeader}>
-            <Volume2 stroke={colors.textSecondary} size={20} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Alarm Settings
-            </Text>
-          </View>
-          
-          <View style={styles.settingRow}>
-            <Text style={[styles.settingLabel, { color: colors.text }]}>
-              Enable Alarm
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.toggleButton,
-                { backgroundColor: alarmEnabled ? colors.primary : colors.border }
-              ]}
-              onPress={() => handleAlarmEnabledChange(!alarmEnabled)}
-            >
-              <View 
-                style={[
-                  styles.toggleIndicator,
-                  {
-                    backgroundColor: '#FFFFFF',
-                    alignSelf: alarmEnabled ? 'flex-end' : 'flex-start'
-                  }
-                ]}
-              />
-            </TouchableOpacity>
-          </View>
-          
-        </View>
-
         {/* Focus Lock Section */}
         {focusLockService.isSupported && (
           <View style={[
@@ -545,6 +488,10 @@ const SettingsScreen = () => {
             <Text style={styles.updateButtonText}>Save Settings</Text>
           )}
         </TouchableOpacity>
+
+<Text style={[styles.bundleInfo, { color: colors.textSecondary }]}>
+  {Updates.isEmbeddedLaunch ? 'embedded' : (Updates.updateId?.slice(0, 8) ?? 'unknown')} · {Updates.runtimeVersion ?? '—'} · {Updates.channel ?? '—'}
+</Text>
 
 {__DEV__ && (
   <>
@@ -1017,6 +964,12 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  bundleInfo: {
+    fontSize: 10,
+    textAlign: 'center',
+    marginBottom: 16,
+    opacity: 0.4,
   },
 });
 

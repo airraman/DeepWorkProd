@@ -104,12 +104,25 @@ class FocusLockModule: NSObject {
       let pickerView = FamilyActivityPicker(
         selection: Binding(
           get: { self.activitySelection },
-          set: { newSelection in self.activitySelection = newSelection }
+          set: { self.activitySelection = $0 }
         )
       )
 
       let hostingVC = PickerHostingController(rootView: pickerView)
-      hostingVC.modalPresentationStyle = .formSheet
+
+      // Wrap in UINavigationController so the Done button sits in the UIKit
+      // nav bar — guaranteed to render above whatever FamilyActivityPicker
+      // does with its own SwiftUI navigation stack.
+      let navController = UINavigationController(rootViewController: hostingVC)
+      navController.modalPresentationStyle = .formSheet
+
+      hostingVC.navigationItem.rightBarButtonItem = UIBarButtonItem(
+        title: "Done",
+        primaryAction: UIAction { [weak navController] _ in
+          navController?.dismiss(animated: true)
+        }
+      )
+
       hostingVC.onDismiss = {
         self.persistSelection()
         if UserDefaults.standard.bool(forKey: self.isBlockingKey) {
@@ -118,7 +131,7 @@ class FocusLockModule: NSObject {
         resolve(self.selectionSummary())
       }
 
-      rootVC.present(hostingVC, animated: true)
+      rootVC.present(navController, animated: true)
     }
   }
 

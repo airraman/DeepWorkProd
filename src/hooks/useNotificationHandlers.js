@@ -70,6 +70,10 @@ export function useNotificationHandlers() {
 
   function handleLocalNotificationTap(type) {
     switch (type) {
+      case 'session_end':
+      case 'sessionComplete':
+        // Handled by App.js addNotificationResponseReceivedListener — do not navigate here
+        break;
       case 'streak_risk':
       case 'reengagement':
         navigationRef.current?.navigate('MainApp', { screen: 'Home' });
