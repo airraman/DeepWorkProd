@@ -5,7 +5,7 @@ export default {
   expo: {
     name: IS_PROD ? "DeepWork.io" : "DeepWork.io (Dev)",
     slug: "DeepWorkApp",
-    version: "1.0.7",
+    version: "1.0.8",
     orientation: "portrait",
     icon: "./assets/applogo.png",
     userInterfaceStyle: "light",
@@ -116,7 +116,7 @@ export default {
       firebaseAppId: process.env.FIREBASE_APP_ID,
     },
     owner: "airraman",
-    runtimeVersion: "1.0.7",
+    runtimeVersion: "1.0.8",
     updates: {
       url: "https://u.expo.dev/6154a390-07d0-416c-955b-63179fba2bc8"
     }
