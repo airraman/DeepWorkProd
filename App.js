@@ -483,7 +483,7 @@ function MainApp() {
                 handlePauseResumeAction();
               } else if (data.action === 'endSession') {
                 handleEndSession();
-              } else if (data.type === 'sessionComplete') {
+              } else if (data.type === 'sessionComplete' || data.type === 'session_end') {
                 await handleCompletionAlarmFromNotification(data);
               } else if (data.action === 'navigateToSession') {
                 safeNavigate('DeepWorkSession');
