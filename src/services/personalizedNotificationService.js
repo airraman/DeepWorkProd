@@ -83,9 +83,17 @@ async function schedulePayload(payload, delaySeconds = 0) {
   console.log('  body: ', payload.body);
   console.log('  data: ', JSON.stringify(payload.data));
 
+  // { seconds: N } without a 'type' field throws TypeError in expo-notifications >= 0.20
+  // and is silently caught by the outer try/catch — notifications never schedule.
   const trigger = delaySeconds > 0
-    ? { seconds: delaySeconds }
-    : null; // null = immediate (for manual test triggers)
+    ? {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: delaySeconds,
+        repeats: false,
+      }
+    : null; // null = fire immediately
+
+  console.log(`  trigger: ${trigger ? `TIME_INTERVAL ${delaySeconds}s` : 'immediate (null)'}`);
 
   const id = await Notifications.scheduleNotificationAsync({
     content: {
@@ -98,7 +106,12 @@ async function schedulePayload(payload, delaySeconds = 0) {
     trigger,
   });
 
-  console.log(`  scheduled id: ${id}\n`);
+  console.log(`  scheduled id: ${id}`);
+
+  const pending = await Notifications.getAllScheduledNotificationsAsync();
+  const confirmed = pending.some(n => n.identifier === id);
+  console.log(`  confirmed in OS queue: ${confirmed} | total pending: ${pending.length}\n`);
+
   return id;
 }
 

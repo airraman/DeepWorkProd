@@ -90,6 +90,13 @@ console.log('📱 Device Info:', {
   hasAlarmService: !!alarmService
 });
 
+console.log('📦 Updates status:', {
+  isEmbeddedLaunch: Updates.isEmbeddedLaunch,
+  updateId: Updates.updateId,
+  runtimeVersion: Updates.runtimeVersion,
+  channel: Updates.channel,
+});
+
 // ─── Migration Handler ────────────────────────────────────────────────────────
 // Stub for now — Session 2 wires this to migrationService
 const handleMigrationNeeded = async (firebaseUser) => {
@@ -474,6 +481,26 @@ function MainApp() {
       try {
         console.log('🔔 Setting up notification listeners...');
 
+        // FIX_4: Recover notification tap that launched the app from a killed state.
+        // getLastNotificationResponseAsync() returns the response that cold-launched
+        // the app. Must be read here — by the time addNotificationResponseReceivedListener
+        // fires it is too late for a killed-app launch.
+        try {
+          const lastResponse = Notifications.getLastNotificationResponse();
+          if (lastResponse) {
+            const coldData = lastResponse.notification.request.content.data;
+            console.log('[App] 🔔 Cold-launch notification detected, type:', coldData?.type);
+            if (coldData?.type === 'session_end' || coldData?.type === 'sessionComplete') {
+              console.log('[App] 🔔 Triggering alarm from cold-launch tap');
+              await handleCompletionAlarmFromNotification(coldData);
+            }
+          } else {
+            console.log('[App] 🔔 No cold-launch notification (normal launch)');
+          }
+        } catch (coldErr) {
+          console.warn('[App] getLastNotificationResponseAsync failed:', coldErr);
+        }
+
         const responseSubscription = Notifications.addNotificationResponseReceivedListener(
           async response => {
             try {
@@ -577,7 +604,37 @@ function MainApp() {
 
     setTimeout(setupNotifications, isTablet ? 4000 : 2000);
 
+    // When the app returns to foreground (or launches fresh), check whether a
+    // session timer expired while the JS thread was suspended / the app was killed.
+    // useSessionTimer handles this when DeepWorkSession is mounted, but if the app
+    // was killed the session screen never mounts and the alarm is never played.
+    // SESSION_END_TIME_KEY is cleared by cancelSessionEndNotification() on normal
+    // completion, so a stale key with an elapsed endTime means we missed it.
+    const checkMissedCompletion = async () => {
+      try {
+        const endTimeStr = await AsyncStorage.getItem('@session_end_time');
+        if (!endTimeStr) return;
+        const endTime = parseInt(endTimeStr, 10);
+        if (endTime < Date.now()) {
+          console.log('🔔 Missed session completion detected — playing alarm');
+          await AsyncStorage.removeItem('@session_end_time');
+          await alarmService.playCompletionAlarm({ volume: 0.9, autoStopAfter: 10 });
+        }
+      } catch (err) {
+        console.warn('🔔 Missed completion check failed (non-critical):', err);
+      }
+    };
+
+    checkMissedCompletion();
+
+    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        checkMissedCompletion();
+      }
+    });
+
     return () => {
+      appStateSubscription.remove();
       console.log('🚀 App.js: Cleaning up...');
       if (notificationSubscription) {
         try {

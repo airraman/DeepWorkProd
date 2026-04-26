@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { seedData, clearSeedData } from '../utils/seedData';
 import { useTheme } from '../context/ThemeContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import InsightGenerator from '../services/insights/InsightGenerator';
 import SessionRepository from '../services/database/SessionRepository';
 import DataAggregator from '../services/insights/DataAggregator';
@@ -28,6 +29,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DevToolsScreen = ({ navigation }) => {
   const { colors } = useTheme();
+  const { isPremium, setIsPremium } = useSubscription();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [insight, setInsight] = useState(null);
@@ -705,6 +707,37 @@ const DevToolsScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
+        {/* Subscription */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Subscription
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary, marginBottom: 12 }]}>
+            Override premium status for this session. Resets on app restart.
+          </Text>
+
+          <TouchableOpacity
+            style={[
+              styles.toggleRow,
+              { backgroundColor: colors.cardBackground, borderColor: colors.border },
+            ]}
+            onPress={() => setIsPremium(!isPremium)}
+            activeOpacity={0.7}
+          >
+            <View>
+              <Text style={[styles.toggleLabel, { color: colors.text }]}>
+                Premium Access
+              </Text>
+              <Text style={[styles.toggleSub, { color: colors.textSecondary }]}>
+                {isPremium ? 'Enabled — all features unlocked' : 'Disabled — free tier'}
+              </Text>
+            </View>
+            <View style={[styles.pill, { backgroundColor: isPremium ? '#10b981' : '#6b7280' }]}>
+              <Text style={styles.pillText}>{isPremium ? 'ON' : 'OFF'}</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* Navigation */}
         <TouchableOpacity
           style={[styles.button, { backgroundColor: colors.border }]}
@@ -789,6 +822,32 @@ const styles = StyleSheet.create({
   },
   insightMeta: {
     fontSize: 12,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  toggleLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  toggleSub: {
+    fontSize: 13,
+  },
+  pill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  pillText: {
+    color: 'white',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
 

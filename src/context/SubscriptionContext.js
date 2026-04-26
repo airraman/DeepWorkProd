@@ -58,7 +58,8 @@ export function SubscriptionProvider({ children }) {
     isPremium,
     isLoading,
     checkSubscriptionStatus,
-    
+    setIsPremium, // exposed for dev tooling only
+
     // Add these for MetricsScreen compatibility
     isSubscribed: isPremium,        // Alias for isPremium
     canGenerateInsights: isPremium, // AI insights are premium-only

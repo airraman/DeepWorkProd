@@ -36,9 +36,8 @@ class OpenAIService {
    * @returns {Promise<string>} - Generated insight text
    */
   async generateInsight(prompt, options = {}) {
-    // Fallback if API not configured
     if (!this.client) {
-      return this._getFallbackInsight();
+      throw new Error('OpenAI API key not configured');
     }
 
     const {
@@ -122,9 +121,9 @@ Response length: 2-3 sentences maximum (under 100 words).`,
       });
     }
 
-    // Max retries exceeded or non-retryable error
-    console.error('[OpenAI] ❌ Failed after retries, using fallback');
-    return this._getFallbackInsight();
+    // Max retries exceeded or non-retryable error — throw so callers don't cache the failure
+    console.error('[OpenAI] ❌ Failed after retries');
+    throw error;
   }
 
   /**
@@ -177,14 +176,6 @@ Response length: 2-3 sentences maximum (under 100 words).`,
     }
     
     this.lastRequestTime = Date.now();
-  }
-
-  /**
-   * Fallback insight when API fails
-   * @private
-   */
-  _getFallbackInsight() {
-    return `Unable to generate insight at this time. Please check your API configuration.`;
   }
 
   /**

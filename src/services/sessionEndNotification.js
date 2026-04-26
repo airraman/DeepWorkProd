@@ -39,22 +39,35 @@ const NOTIFICATION_ID_KEY = '@session_end_notification_id';
  */
 export const ensureNotificationPermissions = async () => {
   try {
-    const { status: existing } = await Notifications.getPermissionsAsync();
-    if (existing === 'granted') return true;
+    const existing = await Notifications.getPermissionsAsync();
+    console.log('[SessionEnd] Permission check — status:', existing.status,
+      '| allowsAlert:', existing.ios?.allowsAlert,
+      '| allowsSound:', existing.ios?.allowsSound,
+      '| allowsBadge:', existing.ios?.allowsBadge,
+      '| allowsLockScreen:', existing.ios?.allowsDisplayOnLockScreen);
 
-    const { status } = await Notifications.requestPermissionsAsync({
+    if (existing.status === 'granted') return true;
+
+    console.log('[SessionEnd] Requesting notification permissions...');
+    const requested = await Notifications.requestPermissionsAsync({
       ios: {
         allowAlert: true,
         allowSound: true,
         allowBadge: true,
-        // Request critical alerts — requires Apple entitlement; silently ignored
-        // if not provisioned, but harmless to request.
         allowCriticalAlerts: false,
       },
     });
 
-    console.log('[SessionEnd] Notification permission status:', status);
-    return status === 'granted';
+    console.log('[SessionEnd] Permission request result:', requested.status,
+      '| ios:', JSON.stringify(requested.ios ?? {}));
+
+    if (requested.status !== 'granted') {
+      console.error('[SessionEnd] CRITICAL: Notification permission denied —',
+        'no session-end notification will be scheduled.',
+        'User must enable in iOS Settings → DeepWork → Notifications');
+    }
+
+    return requested.status === 'granted';
   } catch (error) {
     console.warn('[SessionEnd] Permission check failed:', error);
     return false;

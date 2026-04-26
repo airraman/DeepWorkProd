@@ -5,6 +5,7 @@ import {
   scheduleSessionEndNotification,
   cancelSessionEndNotification,
 } from '../services/sessionEndNotification';
+import * as Notifications from 'expo-notifications';
 import {
   View,
   Text,
@@ -223,11 +224,29 @@ const DeepWorkSession = ({ route, navigation }) => {
 
       // Schedule OS-level notification at endTime — fires even if app is killed/locked.
       if (endTime) {
-        scheduleSessionEndNotification(
-          endTime,
-          activityDetails?.name || 'Focus Session',
-          parseFloat(duration)
-        );
+        try {
+          console.log('[Session] Scheduling OS notification for', new Date(endTime).toLocaleTimeString(),
+            '| in', Math.round((endTime - Date.now()) / 1000), 's');
+          const notifId = await scheduleSessionEndNotification(
+            endTime,
+            activityDetails?.name || 'Focus Session',
+            parseFloat(duration)
+          );
+          if (notifId) {
+            console.log('[Session] OS notification scheduled, id:', notifId);
+            const pending = await Notifications.getAllScheduledNotificationsAsync();
+            const confirmed = pending.some(n => n.identifier === notifId);
+            console.log('[Session] Notification confirmed in OS queue:', confirmed,
+              '| total pending:', pending.length);
+            if (!confirmed) {
+              console.error('[Session] CRITICAL: id returned but not found in OS queue');
+            }
+          } else {
+            console.error('[Session] CRITICAL: notification scheduling failed — scheduleSessionEndNotification returned null (check permissions)');
+          }
+        } catch (schedErr) {
+          console.error('[Session] CRITICAL: scheduleSessionEndNotification threw:', schedErr);
+        }
       }
 
       // Persist config so HomeScreen can offer resume if app is killed mid-session
