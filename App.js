@@ -629,6 +629,11 @@ function MainApp() {
 
     const appStateSubscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
+        // iOS deactivates AVAudioSession when app is backgrounded — reset the cache
+        // so the next audio call re-initializes the session rather than using stale state.
+        audioSessionManager.reset();
+        // Clear the notification badge now that the user has opened the app.
+        Notifications.setBadgeCountAsync(0).catch(() => {});
         checkMissedCompletion();
       }
     });

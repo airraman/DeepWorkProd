@@ -320,6 +320,10 @@ const DeepWorkSession = ({ route, navigation }) => {
 
     try {
       await cancelSessionEndNotification();
+      // Set badge to 1 for in-app completions — the OS notification was just cancelled
+      // so the badge from its content payload will never fire. Without this the badge
+      // never appears when the session ends while the app is foreground.
+      Notifications.setBadgeCountAsync(1).catch(() => {});
 
       if (servicesRef.current.audioService) {
         await servicesRef.current.audioService.stopMusic();

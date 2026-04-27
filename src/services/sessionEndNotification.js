@@ -150,6 +150,9 @@ export const scheduleSessionEndNotification = async (
     });
 
     await AsyncStorage.setItem(NOTIFICATION_ID_KEY, id);
+    // Written here so checkMissedCompletion() in App.js can detect a session that
+    // ended while the app was backgrounded/killed and the user never tapped the notification.
+    await AsyncStorage.setItem('@session_end_time', String(endTimeMs));
 
     console.log(
       `[SessionEnd] Notification scheduled for ${endDate.toLocaleTimeString()}, ` +
@@ -180,6 +183,7 @@ export const cancelSessionEndNotification = async () => {
       await AsyncStorage.removeItem(NOTIFICATION_ID_KEY);
       console.log('[SessionEnd] Scheduled notification cancelled');
     }
+    await AsyncStorage.removeItem('@session_end_time');
   } catch (error) {
     // Non-critical — worst case the notification fires after session already ended
     console.warn('[SessionEnd] Cancel failed (non-critical):', error);

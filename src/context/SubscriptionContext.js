@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Platform } from 'react-native';
 import Purchases from 'react-native-purchases';
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 
 const SubscriptionContext = createContext();
 
@@ -22,11 +24,17 @@ export function SubscriptionProvider({ children }) {
     try {
       const apiKey = Platform.select(REVENUE_CAT_KEYS);
       await Purchases.configure({ apiKey });
-      
-      // Check initial status
+
+      // Option B: identify this user to RevenueCat by Firebase UID so they are
+      // findable in the RevenueCat dashboard and entitlements can be granted there.
+      const uid = auth().currentUser?.uid;
+      if (uid) {
+        await Purchases.logIn(uid);
+        console.log('[Subscription] RevenueCat logged in with uid:', uid.substring(0, 8) + '...');
+      }
+
       await checkSubscriptionStatus();
-      
-      // Listen for purchase updates
+
       Purchases.addCustomerInfoUpdateListener((customerInfo) => {
         updateSubscriptionStatus(customerInfo);
       });
@@ -39,7 +47,23 @@ export function SubscriptionProvider({ children }) {
   async function checkSubscriptionStatus() {
     try {
       const customerInfo = await Purchases.getCustomerInfo();
-      updateSubscriptionStatus(customerInfo);
+      const hasRevenueCat = customerInfo.entitlements.active['Pro'] !== undefined;
+
+      // Option A: Firestore override for comped users. Add a doc at
+      // premium_overrides/{email} (e.g. "jane@example.com") via Firebase Console
+      // to grant free premium. Keyed by email so you can pre-populate the list
+      // before the user has signed up — takes effect the moment they create an account.
+      let hasOverride = false;
+      const email = auth().currentUser?.email;
+      if (email) {
+        const doc = await firestore().collection('premium_overrides').doc(email).get();
+        hasOverride = doc.exists;
+        if (hasOverride) {
+          console.log('[Subscription] Premium granted via Firestore override');
+        }
+      }
+
+      setIsPremium(hasRevenueCat || hasOverride);
     } catch (error) {
       console.error('Error checking subscription:', error);
       setIsPremium(false);
@@ -49,9 +73,11 @@ export function SubscriptionProvider({ children }) {
   }
 
   function updateSubscriptionStatus(customerInfo) {
-    // 'premium' is your entitlement identifier - we'll set this up in dashboard next
     const hasAccess = customerInfo.entitlements.active['Pro'] !== undefined;
-    setIsPremium(hasAccess);
+    // Note: updateSubscriptionStatus is called by the RevenueCat listener only —
+    // it does not re-check the Firestore override. checkSubscriptionStatus() handles
+    // the full check including the override on app launch.
+    setIsPremium(prev => prev || hasAccess);
   }
 
   const value = {

@@ -61,7 +61,7 @@ class AudioService {
       
     } catch (error) {
       console.error('🎵 Audio initialization error:', error);
-      this.isInitialized = true;
+      this.isInitialized = false;
       return false;
     }
   }
