@@ -46,6 +46,13 @@ try {
   console.warn('FCM background handler registration failed:', e);
 }
 
+// S1-1: Register notification handler at module level — must run before any
+// component renders so that notifications arriving during cold launch are
+// handled correctly (shouldShowAlert/shouldPlaySound respected).
+// setupNotificationHandler() is also called inside MainApp's useEffect as a
+// belt-and-suspenders fallback; the module-level call is the authoritative one.
+setupNotificationHandler();
+
 const DevToolsScreen = __DEV__
   ? require('./src/screens/DevToolsScreen').default
   : () => null;

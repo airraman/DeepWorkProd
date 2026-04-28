@@ -802,6 +802,7 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
       console.log(`   Activities: ${loadedActivities.length}`);
       
       setSessions(loadedSessions);
+      setWeeklyPatterns(computeWeeklyPatterns(loadedSessions));
       setActivities(loadedActivities);
     } catch (error) {
       console.error('❌ [MetricsScreen] Error loading:', error.message);

@@ -33,7 +33,7 @@
     "expo-file-system": "~19.0.17",
     "expo-haptics": "^15.0.8",
     "expo-notifications": "~0.32.16",
-    "expo-sqlite": "~16.0.8",
+    "expo-sqlite": "~16.0.10",
     "expo-status-bar": "~3.0.8",
     "expo-task-manager": "~14.0.9",
     "expo-updates": "~29.0.12",
@@ -51,7 +51,8 @@
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",
     "react-native-view-shot": "^4.0.3",
-    "undefined": "^0.1.0"
+    "undefined": "^0.1.0",
+    "use-sync-external-store": "^1.6.0"
   },
   "devDependencies": {
     "@babel/code-frame": "^7.27.1",

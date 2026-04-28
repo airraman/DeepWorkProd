@@ -273,18 +273,12 @@ const sendCompletionNotification = async () => {
       debugLog('⚠️ FCM HTTP error (falling back to local):', fetchError);
     }
     
-    // BACKUP: Local notification
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: '🎉 Session Complete!',
-        body: `Your ${sessionInfo.duration}-minute ${sessionInfo.activity} session has finished.`,
-        sound: 'completion_alarm.wav',
-        badge: 1,
-      },
-      trigger: null,
-    });
-    
-    debugLog('✅ Notifications sent (FCM + local backup)');
+    // S1-3: Local backup notification removed. sessionEndNotification.js pre-schedules
+    // an OS-level notification at session start — it fires reliably without network,
+    // without a running JS thread, and without BackgroundFetch timing luck. A second
+    // local notification here would cause duplicate alerts when BackgroundFetch fires
+    // near the same moment as the pre-scheduled OS notification.
+    debugLog('✅ FCM triggered (OS notification handles local alarm delivery)');
     return true;
   } catch (error) {
     debugLog('❌ Failed to send notification:', error);

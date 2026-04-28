@@ -19,7 +19,7 @@ import Constants from 'expo-constants';
  * - Error handling and user experience considerations
  */
 
-const VERSION_CHECK_URL = 'https://deepwork.io/version.json';
+const VERSION_CHECK_URL = 'https://www.deep-work.io/version.json';
 const CHECK_TIMEOUT = 5000; // 5 seconds
 
 class VersionCheckService {

@@ -14,6 +14,7 @@ import {
   Dimensions,
   SafeAreaView,
   Alert,
+  AppState,
   BackHandler,
   ActivityIndicator,
   TouchableOpacity,
@@ -329,13 +330,19 @@ const DeepWorkSession = ({ route, navigation }) => {
         await servicesRef.current.audioService.stopMusic();
       }
 
-      if (servicesRef.current.alarmService) {
+      // S1-2: Gate expo-av alarm to foreground only. When the app is active the
+      // OS notification was cancelled above, so expo-av is the alarm. When the
+      // app is backgrounded/killed the OS notification delivers sound on its own
+      // — playing expo-av here would be inaudible anyway (audio session revoked).
+      if (servicesRef.current.alarmService && AppState.currentState === 'active') {
         try {
           await servicesRef.current.alarmService.playCompletionAlarm();
-          console.log('🔔 Completion alarm played');
+          console.log('🔔 Completion alarm played (foreground)');
         } catch (alarmError) {
           console.warn('🔔 Alarm failed (non-critical):', alarmError);
         }
+      } else {
+        console.log('🔔 App not active — OS notification sound is the alarm');
       }
 
       setIsCompleted(true);
@@ -404,6 +411,10 @@ const DeepWorkSession = ({ route, navigation }) => {
       logSessionPause(Math.round((totalDuration - timeLeft) / 1000)).catch(() => {});
       await pause();
       animatedHeight.stopAnimation();
+      // S1-4: Cancel the OS notification so it doesn't fire at the original end
+      // time while the session is paused. scheduleSessionEndNotification() will
+      // re-cancel + reschedule with the correct new endTime on resume.
+      cancelSessionEndNotification().catch(() => {});
 
       if (servicesRef.current.backgroundTimer) {
         try {

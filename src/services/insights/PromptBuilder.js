@@ -109,12 +109,11 @@ ${patternBlock}
 Write exactly 3 bullet points. Each bullet must:
 - Start with "• This week, you" or "• You" (second person, personal)
 - Be one sentence, specific to the data above
-- Reference actual work, wins, or patterns where available
 
-The three bullets should cover:
-1. Volume or consistency (sessions completed, total time)
-2. A specific observation about what they worked on or their peak focus window (time-of-day pattern)
-3. One concrete, data-driven suggestion based on their distractions, session timing, or next steps
+The three bullets must follow this exact order:
+1. The activity with the most focus time — name it and state how many hours were spent on it
+2. Total sessions completed, average session length, and total focus time
+3. Accomplishments — briefly summarize what was worked on or what went well from the reflection data above (if no reflection data is present, nudge the user to add reflections next time); end with one behavioral observation such as recurring distractions, peak focus window, or a notable pattern
 
 Tone: direct, warm, specific. No generic motivation. No paragraph text — bullets only.`;
   }
@@ -145,14 +144,14 @@ ${activityText}
 BEHAVIORAL PATTERNS:
 ${patternBlock}
 
-Write exactly 2 bullet points. Each bullet must:
+Write exactly 3 bullet points. Each bullet must:
 - Start with "• Yesterday, you" (second person, personal)
 - Be one sentence, specific to the data above
-- Reference actual work content, time of day, or wins where available
 
-The two bullets should cover:
-1. What they accomplished (volume + what they worked on, and when — morning/afternoon/evening)
-2. One observation about quality or a pattern worth noting (session length, distractions, or a next step)
+The three bullets must follow this exact order:
+1. The activity with the most focus time — name it and state how many hours/minutes were spent on it
+2. Total sessions completed, average session length, and total focus time
+3. Accomplishments — briefly summarize what was worked on or what went well from the reflection data above (if no reflection data is present, nudge the user to add a reflection next time); end with one behavioral observation such as distractions noted, time of day, or a pattern worth calling out
 
 Tone: direct, warm, specific. No generic motivation. No paragraph text — bullets only.`;
   }
@@ -186,12 +185,11 @@ ${patternBlock}
 Write exactly 3 bullet points. Each bullet must:
 - Start with "• This month, you" or "• You" (second person, personal)
 - Be one sentence, specific to the data above
-- Reference actual projects, time-of-day patterns, or recurring distractions where available
 
-The three bullets should cover:
-1. Overall volume and consistency across the month
-2. A behavioral pattern — when they focused most (morning/afternoon/evening), what topics came up most, or how session length varied by time of day
-3. One concrete suggestion based on recurring distractions or next steps
+The three bullets must follow this exact order:
+1. The activity with the most focus time — name it and state how many hours were spent on it
+2. Total sessions completed, average session length, and total focus time
+3. Accomplishments — briefly summarize what was worked on or what went well from the reflection data above (if no reflection data is present, nudge the user to add reflections next time); end with one behavioral observation such as recurring distractions, time-of-day pattern, or consistency across the month
 
 Tone: direct, warm, specific. No generic motivation. No paragraph text — bullets only.`;
   }
