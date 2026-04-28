@@ -64,7 +64,7 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: IS_PROD ? "com.airraman.deepwork" : "com.airraman.deepwork.dev",
-      buildNumber: "39",
+      buildNumber: "40",
       googleServicesFile: "./ios/DeepWorkioDev/GoogleService-Info.plist",
       infoPlist: {
         UIBackgroundModes: [
