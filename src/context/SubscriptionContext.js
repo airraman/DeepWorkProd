@@ -17,32 +17,34 @@ export function SubscriptionProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    initializePurchases();
-  }, []);
+    let rcInitialized = false;
 
-  async function initializePurchases() {
-    try {
-      const apiKey = Platform.select(REVENUE_CAT_KEYS);
-      await Purchases.configure({ apiKey });
+    // Wait for Firebase Auth to restore the session before checking entitlements.
+    // auth().currentUser is null on cold start, so checking synchronously would
+    // skip the UID login and return no entitlements for an anonymous RevenueCat user.
+    const unsubscribeAuth = auth().onAuthStateChanged(async (user) => {
+      try {
+        if (!rcInitialized) {
+          const apiKey = Platform.select(REVENUE_CAT_KEYS);
+          Purchases.configure({ apiKey });
+          Purchases.addCustomerInfoUpdateListener(updateSubscriptionStatus);
+          rcInitialized = true;
+        }
 
-      // Option B: identify this user to RevenueCat by Firebase UID so they are
-      // findable in the RevenueCat dashboard and entitlements can be granted there.
-      const uid = auth().currentUser?.uid;
-      if (uid) {
-        await Purchases.logIn(uid);
-        console.log('[Subscription] RevenueCat logged in with uid:', uid.substring(0, 8) + '...');
+        if (user?.uid) {
+          await Purchases.logIn(user.uid);
+          console.log('[Subscription] RevenueCat logged in with uid:', user.uid.substring(0, 8) + '...');
+        }
+
+        await checkSubscriptionStatus();
+      } catch (error) {
+        console.error('RevenueCat initialization error:', error);
+        setIsLoading(false);
       }
+    });
 
-      await checkSubscriptionStatus();
-
-      Purchases.addCustomerInfoUpdateListener((customerInfo) => {
-        updateSubscriptionStatus(customerInfo);
-      });
-    } catch (error) {
-      console.error('RevenueCat initialization error:', error);
-      setIsLoading(false);
-    }
-  }
+    return () => unsubscribeAuth();
+  }, []);
 
   async function checkSubscriptionStatus() {
     try {
