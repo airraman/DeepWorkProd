@@ -1,6 +1,6 @@
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import { Vibration } from 'react-native';
-import { audioSessionManager } from './audioSessionManager';  // Add at top of file
+import { audioSessionManager } from './audioSessionManager';
 
 
 class AlarmService {
@@ -16,16 +16,15 @@ class AlarmService {
   async init() {
     try {
       console.log('🔔 Initializing alarm service...');
-      
-      // Use the shared session manager
+
       if (!audioSessionManager.isReady()) {
         await audioSessionManager.initialize();
       }
-      
+
       this.isInitialized = true;
       console.log('🔔 Alarm service initialized successfully');
       return true;
-      
+
     } catch (error) {
       console.error('🔔 Alarm init error:', error);
       this.isInitialized = false;
@@ -42,53 +41,43 @@ class AlarmService {
       // shared audioSessionManager caches isInitialized=true so it would
       // skip re-setup, silencing the alarm. Calling setAudioModeAsync here
       // directly bypasses that cache and guarantees the mode is active.
-      // No MIXWITHOTHERS — alarm must interrupt, not mix/duck.
+      // DoNotMix — alarm must interrupt, not duck, other audio.
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
-        categoryIOS: Audio.AUDIO_SESSION_CATEGORY_PLAYBACK,
-        categoryOptionsIOS: [
-          Audio.CATEGORY_OPTIONS_DEFAULTTOSPEAKER,
-          Audio.CATEGORY_OPTIONS_ALLOWBLUETOOTH,
-        ],
-        interruptionModeIOS: 2,
-        interruptionModeAndroid: 2,
-        shouldDuckAndroid: false,
         allowsRecordingIOS: false,
+        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+        shouldDuckAndroid: false,
       });
 
-      // ✅ Load and play alarm sound
       console.log('🔔 Loading alarm sound...');
       const { sound } = await Audio.Sound.createAsync(
-        require('../../assets/sounds/completion_alarm.wav'),  // ✅ CORRECT FILE
-        { 
-          shouldPlay: true, 
+        require('../../assets/sounds/completion_alarm.wav'),
+        {
+          shouldPlay: true,
           volume,
-          // ✅ CRITICAL: Don't loop (one-shot alarm)
           isLooping: false,
         },
-        this.onPlaybackStatusUpdate.bind(this)  // Track playback status
+        this.onPlaybackStatusUpdate.bind(this)
       );
-      
+
       this.alarmSound = sound;
       this.isPlaying = true;
-      
-      // ✅ Trigger vibration for multi-sensory alert
+
       Vibration.vibrate([0, 500, 200, 500]);
-      
-      // ✅ Auto-stop timer
+
       this.autoStopTimer = setTimeout(() => {
         this.stopAlarm();
       }, autoStopAfter * 1000);
-      
+
       return true;
     } catch (error) {
       console.error('🔔 Alarm play error:', error);
       return false;
     }
   }
-  
-  // ✅ NEW: Track playback status for debugging
+
   onPlaybackStatusUpdate(status) {
     if (status.didJustFinish) {
       console.log('🔔 Alarm finished naturally');
@@ -105,13 +94,13 @@ class AlarmService {
         clearTimeout(this.autoStopTimer);
         this.autoStopTimer = null;
       }
-      
+
       if (this.alarmSound) {
         await this.alarmSound.stopAsync();
         await this.alarmSound.unloadAsync();
         this.alarmSound = null;
       }
-      
+
       this.isPlaying = false;
       console.log('🔔 Alarm stopped');
       return true;
