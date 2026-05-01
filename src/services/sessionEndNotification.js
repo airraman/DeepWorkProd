@@ -17,16 +17,17 @@
 //   - Device is in Do Not Disturb with no exceptions — mitigated by
 //     interruptionLevel: 'timeSensitive' which iOS allows through most Focus modes
 //
-// This is categorically different from the Firebase FCM path in backgroundTimer.js:
-//   FCM:    JS detects expiry → HTTP call → Firebase → APNs → device  (needs network + JS)
-//   This:   OS fires at endTime, no intermediaries                     (needs nothing)
-//
-// Both can coexist: this fires reliably; FCM is kept for analytics.
+// PHASE 3: the parallel Firebase FCM completion path (backgroundTimer.js +
+// triggerSessionEndNotification Cloud Function) has been removed. This OS
+// scheduled local notification is now the sole background completion mechanism.
 
 import * as Notifications from 'expo-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getActiveSession, updateActiveSession } from './sessionStateService';
 
-const NOTIFICATION_ID_KEY = '@session_end_notification_id';
+// PHASE 2: notificationId is now stored inside @active_session_config via
+// sessionStateService — no more standalone @session_end_notification_id key,
+// no more @session_end_time mirror. The active session record is the single
+// source of truth for both timing and the OS notification handle.
 
 // ---------------------------------------------------------------------------
 // Permission helper
@@ -135,7 +136,7 @@ export const scheduleSessionEndNotification = async (
 
         // Android: HIGH importance shows heads-up banner on lock screen + vibration
         ...(require('react-native').Platform.OS === 'android' && {
-          channelId: 'session-completion', // already created in backgroundTimer.js
+          channelId: 'session-completion', // created in App.js initializeBackgroundServices (Phase 3)
           priority: Notifications.AndroidNotificationPriority.HIGH,
           vibrate: [0, 500, 200, 500, 200, 500],
         }),
@@ -149,10 +150,9 @@ export const scheduleSessionEndNotification = async (
       },
     });
 
-    await AsyncStorage.setItem(NOTIFICATION_ID_KEY, id);
-    // Written here so checkMissedCompletion() in App.js can detect a session that
-    // ended while the app was backgrounded/killed and the user never tapped the notification.
-    await AsyncStorage.setItem('@session_end_time', String(endTimeMs));
+    // PHASE 2: persist the OS notification id inside the active session record.
+    // No more @session_end_notification_id or @session_end_time keys.
+    await updateActiveSession({ notificationId: id });
 
     console.log(
       `[SessionEnd] Notification scheduled for ${endDate.toLocaleTimeString()}, ` +
@@ -177,13 +177,15 @@ export const scheduleSessionEndNotification = async (
  */
 export const cancelSessionEndNotification = async () => {
   try {
-    const id = await AsyncStorage.getItem(NOTIFICATION_ID_KEY);
+    // PHASE 2: read the id from the single source of truth (the active session
+    // record), not from the retired @session_end_notification_id key.
+    const active = await getActiveSession();
+    const id = active?.config?.notificationId;
     if (id) {
       await Notifications.cancelScheduledNotificationAsync(id);
-      await AsyncStorage.removeItem(NOTIFICATION_ID_KEY);
+      await updateActiveSession({ notificationId: null });
       console.log('[SessionEnd] Scheduled notification cancelled');
     }
-    await AsyncStorage.removeItem('@session_end_time');
   } catch (error) {
     // Non-critical — worst case the notification fires after session already ended
     console.warn('[SessionEnd] Cancel failed (non-critical):', error);

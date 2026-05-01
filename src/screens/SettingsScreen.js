@@ -428,7 +428,7 @@ const SettingsScreen = () => {
             <View style={styles.sectionHeader}>
               <Text style={{ fontSize: 20 }}>📵</Text>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                App Blocking
+                App Blocking + OTA TEST 2
               </Text>
             </View>
 

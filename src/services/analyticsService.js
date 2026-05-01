@@ -1,6 +1,6 @@
 import analytics from '@react-native-firebase/analytics';
 
-const APP_VERSION = '1.0.6';
+const APP_VERSION = Constants.expoConfig?.version ?? 'unknown';
 
 const sanitizeString = (str, maxLen = 40) =>
   (str || 'unknown').toLowerCase().replace(/[\s-]+/g, '_').substring(0, maxLen);
@@ -13,11 +13,12 @@ export const logSessionStart = (duration, musicChoice, activityName) =>
     app_version: APP_VERSION,
   });
 
-export const logSessionComplete = (duration) =>
-  analytics().logEvent('session_complete', {
-    session_length: parseFloat(duration),
-    app_version: APP_VERSION,
-  });
+  export const logSessionComplete = (duration, source = 'foreground') =>
+    analytics().logEvent('session_complete', {
+      session_length: parseFloat(duration),
+      completion_source: source,
+      app_version: APP_VERSION,
+    });
 
 export const logSessionAbandon = (elapsedSeconds, duration) =>
   analytics().logEvent('session_abandon', {

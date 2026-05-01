@@ -1,74 +1,17 @@
-// functions/index.js - Enhanced Cloud Functions for DeepWork Notifications (V2)
-const {onCall} = require("firebase-functions/v2/https");
+// functions/index.js - Cloud Functions for DeepWork re-engagement notifications
+//
+// PHASE 3: triggerSessionEndNotification removed. Session completion is no
+// longer routed through Firebase — the OS-scheduled local notification fires
+// reliably at endTime regardless of network or JS state. Firebase is now
+// scoped exclusively to re-engagement (dailyRemindersBatch, weeklySummaryBatch)
+// and FCM token registration (registerToken). The onCall import was only used
+// by the deleted function and has been removed.
 const {onRequest} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
-
-/**
- * ============================================================================
- * SESSION COMPLETE NOTIFICATION (Event-Driven)
- * ============================================================================
- * 
- * WHEN: Triggered when a session completes
- * HOW: Called from client app (backgroundTimer.js)
- * RELIABILITY: 95%+ (cloud-based, works even when app killed)
- */
-exports.triggerSessionEndNotification = onCall(
-    async (request) => {
-      const {userId, sessionDuration, activityName} = request.data;
-
-      console.log(`🔔 Session end notification for user: ${userId}`);
-
-      try {
-        // Get user's FCM token
-        const tokenDoc = await admin.firestore()
-            .collection("fcm_tokens").doc(userId).get();
-
-        if (!tokenDoc.exists) {
-          console.warn(`⚠️ No FCM token for user: ${userId}`);
-          throw new Error("No FCM token found for this user");
-        }
-
-        const fcmToken = tokenDoc.data().token;
-
-        // Build notification payload
-        const message = {
-          token: fcmToken,
-          notification: {
-            title: "🎉 Session Complete!",
-            body: `Great job! ${sessionDuration} minutes of focused work.`,
-          },
-          data: {
-            type: "session_complete",
-            duration: sessionDuration.toString(),
-            activity: activityName,
-            timestamp: Date.now().toString(),
-          },
-          apns: {
-            payload: {
-              aps: {
-                sound: "completion_alarm.wav",
-                badge: 1,
-                category: "session-complete",
-              },
-            },
-          },
-        };
-
-        // Send via FCM
-        await admin.messaging().send(message);
-        console.log(`✅ Session complete notification sent to: ${userId}`);
-
-        return {success: true, message: "Notification sent"};
-      } catch (error) {
-        console.error(`❌ Error sending notification to ${userId}:`, error);
-        throw new Error(`Failed to send notification: ${error.message}`);
-      }
-    },
-);
 
 /**
  * ============================================================================

@@ -51,12 +51,13 @@ export function SubscriptionProvider({ children }) {
       const customerInfo = await Purchases.getCustomerInfo();
       const hasRevenueCat = customerInfo.entitlements.active['Pro'] !== undefined;
 
-      // Option A: Firestore override for comped users. Add a doc at
-      // premium_overrides/{email} (e.g. "jane@example.com") via Firebase Console
-      // to grant free premium. Keyed by email so you can pre-populate the list
-      // before the user has signed up — takes effect the moment they create an account.
+      // Firestore override for comped users. Add a doc at
+      // premium_overrides/{email} via Firebase Console to grant free premium.
+      // Keyed by email (lowercased) so overrides can be pre-created before the
+      // user signs up. Store document IDs in lowercase — Firebase Auth always
+      // returns email in lowercase, so mixed-case keys will never match.
       let hasOverride = false;
-      const email = auth().currentUser?.email;
+      const email = auth().currentUser?.email?.toLowerCase();
       if (email) {
         const doc = await firestore().collection('premium_overrides').doc(email).get();
         hasOverride = doc.exists;
