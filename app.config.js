@@ -5,7 +5,7 @@ export default {
   expo: {
     name: IS_PROD ? "DeepWork.io" : "DeepWork.io (Dev)",
     slug: "DeepWorkApp",
-    version: "1.0.9",
+    version: "1.0.10",
     orientation: "portrait",
     icon: "./assets/applogo.png",
     userInterfaceStyle: "light",
@@ -67,7 +67,7 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: IS_PROD ? "com.airraman.deepwork" : "com.airraman.deepwork.dev",
-      buildNumber: "40",
+      buildNumber: "43",
       googleServicesFile: "./ios/DeepWorkioDev/GoogleService-Info.plist",
       infoPlist: {
         // PHASE 4: dropped "fetch" and "processing" — no BackgroundFetch tasks
@@ -121,9 +121,7 @@ export default {
       firebaseAppId: process.env.FIREBASE_APP_ID,
     },
     owner: "airraman",
-    runtimeVersion: {
-      policy: "appVersion"
-    },
+    runtimeVersion: "1.0.10",
     updates: {
       url: "https://u.expo.dev/6154a390-07d0-416c-955b-63179fba2bc8"
     }

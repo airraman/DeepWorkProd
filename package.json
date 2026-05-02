@@ -1,6 +1,6 @@
 {
   "name": "deepworkprod",
-  "version": "1.0.4",
+  "version": "1.0.10",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
