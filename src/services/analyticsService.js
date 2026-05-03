@@ -1,4 +1,5 @@
 import analytics from '@react-native-firebase/analytics';
+import Constants from 'expo-constants';
 
 const APP_VERSION = Constants.expoConfig?.version ?? 'unknown';
 

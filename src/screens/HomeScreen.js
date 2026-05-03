@@ -685,7 +685,7 @@ const [focusLockEnabled, setFocusLockEnabled] = useState(false);
       <WeeklyStreakModal
         visible={showStreakModal}
         onClose={() => setShowStreakModal(false)}
-        onStartSession={() => {}}
+        onStartSession={null}
         sessions={streakModalSessions}
       />
     </SafeAreaView>
