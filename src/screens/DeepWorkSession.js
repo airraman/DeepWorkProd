@@ -213,6 +213,10 @@ const DeepWorkSession = ({ route, navigation }) => {
         : null;
       const startTime        = existing?.config?.startTime ?? Date.now();
 
+      console.log('[Session] Init —', existing
+        ? `restoring session | endTime: ${restoredEndTime ? new Date(restoredEndTime).toLocaleTimeString() : 'null'} | paused: ${restoredPaused != null}`
+        : 'fresh start');
+
       // start() now takes restored state and returns the effective endTime
       // (or null when paused / already-expired).
       const endTime = start(
@@ -221,17 +225,21 @@ const DeepWorkSession = ({ route, navigation }) => {
         : undefined
       );
 
+      console.log('[Session] endTime from start():', endTime
+        ? new Date(endTime).toLocaleTimeString()
+        : 'null — notification will NOT be scheduled (paused or already expired)');
+
       Animated.timing(animatedHeight, {
         toValue: 1,
         duration: totalDuration,
         useNativeDriver: false,
       }).start();
 
-      logSessionStart(
-        parseFloat(duration),
-        musicChoice,
-        activityDetails?.name || activity
-      ).catch(() => {});
+      try {
+        logSessionStart(parseFloat(duration), musicChoice, activityDetails?.name || activity).catch(() => {});
+      } catch (analyticsErr) {
+        console.warn('[Session] logSessionStart failed (non-critical):', analyticsErr.message);
+      }
 
       // PHASE 2: persist the full session record before scheduling the OS
       // notification — scheduleSessionEndNotification writes notificationId via
@@ -302,18 +310,22 @@ const DeepWorkSession = ({ route, navigation }) => {
   
   // ✅ Helper function for music initialization
   const initializeMusic = async () => {
+    console.log(`🎵 initializeMusic — choice from home screen: "${musicChoice}"`);
+
     if (musicChoice === 'none') {
-      console.log('🎵 No background music selected');
+      console.log('🎵 No background music selected — skipping audio init');
       return;
     }
-    
+
     if (!servicesRef.current.audioService) {
-      console.warn('🎵 Audio service not available');
+      console.warn('🎵 Audio service not available — cannot start music');
       return;
     }
-    
+
     try {
       console.log(`🎵 Starting background music: ${musicChoice}`);
+      const alreadyReady = servicesRef.current.audioService.isInitialized;
+      console.log(`🎵 audioService.isInitialized before init(): ${alreadyReady}`);
       await servicesRef.current.audioService.init();
       await servicesRef.current.audioService.playMusic(musicChoice);
       console.log('🎵 Background music started successfully');
@@ -330,7 +342,7 @@ const DeepWorkSession = ({ route, navigation }) => {
       return;
     }
     isHandlingTimeoutRef.current = true;
-    console.log('⏰ Session completed!');
+    console.log('⏰ Session completed! AppState:', AppState.currentState, '| time:', new Date().toLocaleTimeString());
 
     try {
       if (servicesRef.current.audioService) {

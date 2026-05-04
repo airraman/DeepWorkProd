@@ -67,7 +67,7 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: IS_PROD ? "com.airraman.deepwork" : "com.airraman.deepwork.dev",
-      buildNumber: "44",
+      buildNumber: "45",
       googleServicesFile: "./ios/DeepWorkioDev/GoogleService-Info.plist",
       infoPlist: {
         // PHASE 4: dropped "fetch" and "processing" — no BackgroundFetch tasks

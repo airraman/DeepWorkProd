@@ -118,35 +118,32 @@ export const scheduleSessionEndNotification = async (
       ? `${Math.round(durationMinutes)}-minute `
       : '';
 
+    const secondsUntilEnd = Math.max(1, Math.round((endTimeMs - Date.now()) / 1000));
+    console.log('[SessionEnd] Scheduling TIME_INTERVAL trigger — seconds:', secondsUntilEnd,
+      '| endTime:', endDate.toLocaleTimeString(),
+      '| sound: completion_alarm.wav');
+
     const id = await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Session Complete 🎉',
         body: `Great work! Your ${durationLabel}${activityName} session is done.`,
-        // The .wav file is bundled via app.config.js expo-notifications sounds array
         sound: 'completion_alarm.wav',
         data: { type: 'session_end' },
         badge: 1,
 
-        // iOS: 'timeSensitive' breaks through Focus modes (Airplane, Do Not Disturb)
-        // without requiring the Critical Alerts entitlement.
-        // 'active' (default) would be silenced by Focus modes.
-        ...(require('react-native').Platform.OS === 'ios' && {
-          interruptionLevel: 'timeSensitive',
-        }),
-
         // Android: HIGH importance shows heads-up banner on lock screen + vibration
         ...(require('react-native').Platform.OS === 'android' && {
-          channelId: 'session-completion', // created in App.js initializeBackgroundServices (Phase 3)
+          channelId: 'session-completion',
           priority: Notifications.AndroidNotificationPriority.HIGH,
           vibrate: [0, 500, 200, 500, 200, 500],
         }),
       },
       trigger: {
-        // `date` trigger → handed to OS scheduler, fires regardless of JS state
-        // expo-notifications 0.20+ requires explicit `type` field — omitting it
-        // throws a TypeError that is silently caught, preventing scheduling.
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: endDate,
+        // TIME_INTERVAL is simpler and more reliable than DATE trigger.
+        // Once registered, iOS fires this regardless of app state (background/killed/locked).
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: secondsUntilEnd,
+        repeats: false,
       },
     });
 
@@ -156,7 +153,7 @@ export const scheduleSessionEndNotification = async (
 
     console.log(
       `[SessionEnd] Notification scheduled for ${endDate.toLocaleTimeString()}, ` +
-      `in ${Math.round((endTimeMs - Date.now()) / 1000)}s, id: ${id}`
+      `in ${secondsUntilEnd}s, id: ${id}`
     );
     return id;
 
@@ -184,7 +181,9 @@ export const cancelSessionEndNotification = async () => {
     if (id) {
       await Notifications.cancelScheduledNotificationAsync(id);
       await updateActiveSession({ notificationId: null });
-      console.log('[SessionEnd] Scheduled notification cancelled');
+      console.log('[SessionEnd] Scheduled notification cancelled, id:', id);
+    } else {
+      console.log('[SessionEnd] cancelSessionEndNotification — no id found, nothing to cancel');
     }
   } catch (error) {
     // Non-critical — worst case the notification fires after session already ended

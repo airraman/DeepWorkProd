@@ -7,7 +7,7 @@ const sanitizeString = (str, maxLen = 40) =>
   (str || 'unknown').toLowerCase().replace(/[\s-]+/g, '_').substring(0, maxLen);
 
 export const logSessionStart = (duration, musicChoice, activityName) =>
-  analytics().logEvent('session_start', {
+  analytics().logEvent('dw_session_start', {
     session_length: parseFloat(duration),
     music_selected: sanitizeString(musicChoice || 'none'),
     activity_name: sanitizeString(activityName),

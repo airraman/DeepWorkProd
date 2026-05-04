@@ -133,32 +133,23 @@ class AudioService {
         allowsRecordingIOS: false,
         playThroughEarpieceAndroid: false,
       });
+      console.log('🎵 Audio mode set — playsInSilentMode: true, staysActiveInBackground: true');
 
       const { sound } = await Audio.Sound.createAsync(
         soundSource,
         {
-          // Start playing immediately after loading
           shouldPlay: true,
-          
-          // Loop the music continuously
-          // IMPORTANT: Background music should loop until session ends
           isLooping: true,
-          
-          // Set volume (0.0 to 1.0)
-          // Using 0.5 so it's not overwhelming
           volume: 0.5,
         },
-        // Status update callback (called when playback state changes)
-        // We use this to track when playback finishes or errors occur
         this.onPlaybackStatusUpdate
       );
-      
-      // Store the sound object so we can control it later (pause/stop)
-      // CRITICAL: Without this, we'd have no way to stop the music!
+      console.log(`🎵 Sound object created for: ${musicChoice}`);
+
       this.currentSound = sound;
       this.currentMusicChoice = musicChoice;
       this.isPlaying = true;
-      
+
       console.log(`🎵 Successfully playing: ${musicChoice}`);
       return true;
       

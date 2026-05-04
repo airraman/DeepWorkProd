@@ -51,7 +51,7 @@ class AlarmService {
         shouldDuckAndroid: false,
       });
 
-      console.log('🔔 Loading alarm sound...');
+      console.log('🔔 Loading alarm sound — completion_alarm.wav...');
       const { sound } = await Audio.Sound.createAsync(
         require('../../assets/sounds/completion_alarm.wav'),
         {
@@ -64,6 +64,7 @@ class AlarmService {
 
       this.alarmSound = sound;
       this.isPlaying = true;
+      console.log('🔔 Alarm sound loaded and playing');
 
       Vibration.vibrate([0, 500, 200, 500]);
 
