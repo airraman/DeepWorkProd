@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>DeepWork.io</string>
+	<string>DeepWork.io (Dev)</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -27,8 +27,7 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>deepworkapp</string>
-				<string>com.airraman.deepwork.dev</string>
+				<string>com.googleusercontent.apps.545504050117-31k18tdlf5ihn8et9hdh1nijoggp8ume</string>
 			</array>
 		</dict>
 		<dict>
@@ -65,6 +64,7 @@
 	<array>
 		<string>audio</string>
 		<string>remote-notification</string>
+		<string>fetch</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>SplashScreen</string>
