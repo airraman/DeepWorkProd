@@ -1,23 +1,27 @@
 // src/services/personalizedNotificationService.js
 //
 // Builds and fires personalized re-engagement notifications based on the
-// user's most recent session reflection data.
+// user's most recent session data.
 //
 // Notification priority chain:
-//   1. nextStep  — "Yesterday you wrote: 'finish draft'. Ready to start?"
-//   2. workedOn  — "Yesterday you worked on coding. Ready to continue?"
-//   3. fallback  — "Ready to focus?"
+//   1. aiSuggestion — AI-generated insight text (same pipeline as the in-app
+//                      Insights card), e.g. "Yesterday you focused best in
+//                      the morning. Ready to start there again?"
+//   2. workedOn     — "Yesterday you worked on coding. Ready to continue?"
+//   3. fallback     — "Ready to focus?"
 //
 // All payloads are logged to console before scheduling so they can be
 // inspected from the Dev Tools screen.
 
 import * as Notifications from 'expo-notifications';
 import { deepWorkStore } from './deepWorkStore';
+import InsightGenerator from './insights/InsightGenerator';
+import { truncate } from './insights/cardBuilders';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Returns the most recent session that has a non-empty reflection field.
+ * Returns the most recent session that has a non-empty `workedOn` reflection.
  * Searches up to `lookbackDays` days back (default 14).
  */
 async function getMostRecentReflection(lookbackDays = 14) {
@@ -29,19 +33,28 @@ async function getMostRecentReflection(lookbackDays = 14) {
     .filter(s => s.timestamp >= cutoff)
     .sort((a, b) => b.timestamp - a.timestamp);
 
-  // Find first session that has at least a non-empty workedOn or nextStep
   for (const session of flat) {
-    const r = session.rating?.reflection;
-    const workedOn = r?.workedOn?.trim() || null;
-    const nextStep = r?.nextStep?.trim() || null;
-    if (workedOn || nextStep) {
+    const workedOn = session.rating?.reflection?.workedOn?.trim() || null;
+    if (workedOn) {
       return {
         workedOn,
-        nextStep,
         activity: session.activity || null,
         timestamp: session.timestamp,
       };
     }
+  }
+  return null;
+}
+
+/**
+ * Reuses the same daily AI insight the in-app Insights card generates
+ * (cached, ~1 call/day via InsightGenerator's CacheManager). Returns null
+ * if generation failed or there's no data to generate from.
+ */
+async function getAiSuggestion() {
+  const insight = await InsightGenerator.generate('daily', { referenceDate: new Date() }).catch(() => null);
+  if (insight?.success && !insight.metadata?.isEmpty) {
+    return insight.insightText;
   }
   return null;
 }
@@ -57,12 +70,13 @@ function buildWorkedOnPayload(workedOn) {
   };
 }
 
-function buildNextStepPayload(nextStep) {
+function buildAiSuggestionPayload(insightText) {
+  const body = truncate(insightText, 120);
   return {
-    type: 'nextStep',
-    title: 'Your next step is waiting.',
-    body:  `You wrote: "${nextStep}". Start your session now.`,
-    data:  { type: 'reengagement', subtype: 'nextStep', nextStep },
+    type: 'aiSuggestion',
+    title: 'Your focus insight is ready.',
+    body,
+    data:  { type: 'reengagement', subtype: 'aiSuggestion', insightText: body },
   };
 }
 
@@ -106,18 +120,21 @@ async function schedulePayload(payload, delaySeconds = 0) {
 
 /**
  * Schedule the best available personalized re-engagement notification.
- * Priority: nextStep → workedOn → fallback.
+ * Priority: aiSuggestion → workedOn → fallback.
  * Used by the background task / daily reminder scheduler.
  *
  * @param {number} delaySeconds - seconds until notification fires (0 = immediate)
  */
 export async function schedulePersonalizedNotification(delaySeconds = 0) {
   try {
-    const reflection = await getMostRecentReflection();
+    const [reflection, aiSuggestion] = await Promise.all([
+      getMostRecentReflection(),
+      getAiSuggestion(),
+    ]);
     let payload;
 
-    if (reflection?.nextStep) {
-      payload = buildNextStepPayload(reflection.nextStep);
+    if (aiSuggestion) {
+      payload = buildAiSuggestionPayload(aiSuggestion);
     } else if (reflection?.workedOn) {
       payload = buildWorkedOnPayload(reflection.workedOn);
     } else {
@@ -135,7 +152,7 @@ export async function schedulePersonalizedNotification(delaySeconds = 0) {
  * Immediately fire a specific notification type for manual testing.
  * Logs the full payload before sending.
  *
- * @param {'workedOn'|'nextStep'|'fallback'} type
+ * @param {'workedOn'|'aiSuggestion'|'fallback'} type
  */
 export async function testNotification(type) {
   try {
@@ -143,17 +160,14 @@ export async function testNotification(type) {
 
     if (type === 'fallback') {
       payload = buildFallbackPayload();
+    } else if (type === 'aiSuggestion') {
+      const aiSuggestion = await getAiSuggestion();
+      payload = buildAiSuggestionPayload(aiSuggestion || 'You showed up for your focus practice yesterday.');
     } else {
+      // workedOn
       const reflection = await getMostRecentReflection();
-
-      if (type === 'nextStep') {
-        const nextStep = reflection?.nextStep || 'finish your task';
-        payload = buildNextStepPayload(nextStep);
-      } else {
-        // workedOn
-        const workedOn = reflection?.workedOn || 'your project';
-        payload = buildWorkedOnPayload(workedOn);
-      }
+      const workedOn = reflection?.workedOn || 'your project';
+      payload = buildWorkedOnPayload(workedOn);
     }
 
     return await schedulePayload(payload, 0); // immediate
@@ -169,11 +183,11 @@ export async function testNotification(type) {
  */
 export async function previewNotificationPayload(type) {
   try {
-    const reflection = await getMostRecentReflection();
-
-    if (type === 'nextStep') {
-      return buildNextStepPayload(reflection?.nextStep || 'finish your task');
+    if (type === 'aiSuggestion') {
+      const aiSuggestion = await getAiSuggestion();
+      return buildAiSuggestionPayload(aiSuggestion || 'You showed up for your focus practice yesterday.');
     }
+    const reflection = await getMostRecentReflection();
     if (type === 'workedOn') {
       return buildWorkedOnPayload(reflection?.workedOn || 'your project');
     }
@@ -181,7 +195,8 @@ export async function previewNotificationPayload(type) {
       return buildFallbackPayload();
     }
     // Auto — pick best available
-    if (reflection?.nextStep) return buildNextStepPayload(reflection.nextStep);
+    const aiSuggestion = await getAiSuggestion();
+    if (aiSuggestion) return buildAiSuggestionPayload(aiSuggestion);
     if (reflection?.workedOn) return buildWorkedOnPayload(reflection.workedOn);
     return buildFallbackPayload();
   } catch (error) {

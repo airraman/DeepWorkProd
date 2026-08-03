@@ -114,7 +114,7 @@ Write exactly 3 bullet points. Each bullet must:
 The three bullets should cover:
 1. Volume or consistency (sessions completed, total time)
 2. A specific observation about what they worked on or their peak focus window (time-of-day pattern)
-3. One concrete, data-driven suggestion based on their distractions, session timing, or next steps
+3. One concrete, data-driven suggestion based on session timing, workload volume, or what they worked on
 
 Tone: direct, warm, specific. No generic motivation. No paragraph text — bullets only.`;
   }
@@ -191,7 +191,7 @@ Write exactly 3 bullet points. Each bullet must:
 The three bullets should cover:
 1. Overall volume and consistency across the month
 2. A behavioral pattern — when they focused most (morning/afternoon/evening), what topics came up most, or how session length varied by time of day
-3. One concrete suggestion based on recurring distractions or next steps
+3. One concrete suggestion based on session timing, workload volume, or what they worked on
 
 Tone: direct, warm, specific. No generic motivation. No paragraph text — bullets only.`;
   }
@@ -226,7 +226,7 @@ Write exactly 2 bullet points. Each bullet must:
 
 The two bullets should cover:
 1. Volume, what they specifically worked on, and when (morning/afternoon/evening)
-2. A pattern, win, or blocker worth noting — reference distractions or next steps if available
+2. A pattern, win, or blocker worth noting — reference session timing or what they worked on if available
 
 Tone: direct, warm, specific. No paragraph text — bullets only.`;
   }

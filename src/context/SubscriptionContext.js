@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Platform } from 'react-native';
 import Purchases from 'react-native-purchases';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SubscriptionContext = createContext();
 
@@ -10,13 +11,36 @@ const REVENUE_CAT_KEYS = {
   android: 'goog_YOUR_ANDROID_KEY',
 };
 
+const DEV_PREMIUM_OVERRIDE_KEY = '@dev_premium_override';
+
 export function SubscriptionProvider({ children }) {
   const [isPremium, setIsPremium] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [devPremiumOverride, setDevPremiumOverrideState] = useState(null); // null | true | false
 
   useEffect(() => {
     initializePurchases();
+    if (__DEV__) {
+      loadDevPremiumOverride();
+    }
   }, []);
+
+  async function loadDevPremiumOverride() {
+    const stored = await AsyncStorage.getItem(DEV_PREMIUM_OVERRIDE_KEY);
+    if (stored !== null) {
+      setDevPremiumOverrideState(stored === 'true');
+    }
+  }
+
+  async function setDevPremiumOverride(value) {
+    if (!__DEV__) return;
+    if (value === null) {
+      await AsyncStorage.removeItem(DEV_PREMIUM_OVERRIDE_KEY);
+    } else {
+      await AsyncStorage.setItem(DEV_PREMIUM_OVERRIDE_KEY, String(value));
+    }
+    setDevPremiumOverrideState(value);
+  }
 
   async function initializePurchases() {
     try {
@@ -54,16 +78,22 @@ export function SubscriptionProvider({ children }) {
     setIsPremium(hasAccess);
   }
 
+  const effectiveIsPremium = __DEV__ && devPremiumOverride !== null ? devPremiumOverride : isPremium;
+
   const value = {
-    isPremium,
+    isPremium: effectiveIsPremium,
     isLoading,
     checkSubscriptionStatus,
-    
+
     // Add these for MetricsScreen compatibility
-    isSubscribed: isPremium,        // Alias for isPremium
-    canGenerateInsights: isPremium, // AI insights are premium-only
+    isSubscribed: effectiveIsPremium,        // Alias for isPremium
+    canGenerateInsights: effectiveIsPremium, // AI insights are premium-only
+
+    // Dev-only premium testing override (no-op outside __DEV__)
+    devPremiumOverride,
+    setDevPremiumOverride,
   };
-  
+
 
   return (
     <SubscriptionContext.Provider value={value}>

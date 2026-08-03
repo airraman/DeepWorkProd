@@ -1,7 +1,7 @@
 // src/utils/seedData.js
-// Seeds 120 days of realistic session data with full reflection fields.
-// Sessions include rating.reflection.workedOn/nextStep/wentWell/distractions
-// so the AI insight pipeline and personalized notifications have real data.
+// Seeds 120 days of realistic session data with reflection fields.
+// Sessions include rating.reflection.workedOn — the single field SessionRatingScreen
+// collects — so the AI insight pipeline and personalized notifications have real data.
 
 import { deepWorkStore } from '../services/deepWorkStore';
 import { saveSessionToFirestore } from '../services/firestoreSessionService';
@@ -45,43 +45,6 @@ const WORKED_ON = {
   ],
 };
 
-const NEXT_STEPS = {
-  'deep-work': [
-    'finish draft', 'continue feature', 'refactor code',
-    'write tests', 'review PR', 'fix edge cases', 'deploy to staging',
-  ],
-  'reading': [
-    'review notes', 'finish chapter', 'summarise key points',
-    'apply concept in code', 'share with team',
-  ],
-  'learning': [
-    'complete next module', 'build practice project', 'revisit flashcards',
-    'implement what I learned', 'watch follow-up lecture',
-  ],
-  'writing': [
-    'edit draft', 'add citations', 'finish introduction',
-    'send for review', 'publish post', 'incorporate feedback',
-  ],
-  'planning': [
-    'assign tasks', 'schedule follow-up', 'update Notion',
-    'share with team', 'review with manager', 'set deadlines',
-  ],
-};
-
-const WENT_WELL = [
-  'stayed focused the whole session', 'hit flow state quickly',
-  'finished more than expected', 'no phone distractions',
-  'clear thinking throughout', 'good energy level',
-  'completed the main goal', 'got unstuck on a hard problem',
-];
-
-const DISTRACTIONS = [
-  'phone notifications', 'Slack messages', 'background noise',
-  'wandering thoughts', 'email checking', 'social media urge',
-  'unexpected interruptions', 'low energy mid-session',
-  '', '', '', // ~30% chance of no distraction
-];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -103,10 +66,7 @@ function buildReflection(activityId) {
     productivity: randBetween(3, 5),
     ratedAt:     new Date().toISOString(),
     reflection: {
-      workedOn:    pick(WORKED_ON[activityId] || WORKED_ON['deep-work']),
-      wentWell:    Math.random() > 0.2 ? pick(WENT_WELL)       : '',
-      distractions: Math.random() > 0.3 ? pick(DISTRACTIONS)   : '',
-      nextStep:    Math.random() > 0.25 ? pick(NEXT_STEPS[activityId] || NEXT_STEPS['deep-work']) : '',
+      workedOn: pick(WORKED_ON[activityId] || WORKED_ON['deep-work']),
     },
   };
 }

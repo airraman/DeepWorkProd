@@ -1,10 +1,12 @@
 // App.js - Production Version with iOS Notification Fix + Database + RevenueCat + Auth
 import '@react-native-firebase/app'; // MUST be absolute first
+import 'react-native-gesture-handler'; // Required side-effect import for react-native-gesture-handler
 
 import './src/config/firebaseConfig';
 
 import messaging from '@react-native-firebase/messaging';
 import React, { useEffect, useState, useCallback } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -659,29 +661,31 @@ function MainApp() {
   }
 
   return (
-    <ErrorBoundary>
-      <SubscriptionProvider>
-        <FocusLockProvider>
-          <ThemeProvider>
-            {/* ✅ AuthProvider wraps NavigationContainer so useAuth() works in all screens */}
-            <AuthProvider onMigrationNeeded={handleMigrationNeeded}>
-              <StatusBar
-                barStyle="dark-content"
-                backgroundColor="transparent"
-                translucent={false}
-              />
-              <NavigationContainer ref={navigationRef}>
-                <AppNavigator />
-              </NavigationContainer>
-              <WhatsNewModal
-                visible={showWhatsNew || showWhatsNewDebug}
-                onComplete={handleWhatsNewComplete}
-              />
-            </AuthProvider>
-          </ThemeProvider>
-        </FocusLockProvider>
-      </SubscriptionProvider>
-    </ErrorBoundary>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ErrorBoundary>
+        <SubscriptionProvider>
+          <FocusLockProvider>
+            <ThemeProvider>
+              {/* ✅ AuthProvider wraps NavigationContainer so useAuth() works in all screens */}
+              <AuthProvider onMigrationNeeded={handleMigrationNeeded}>
+                <StatusBar
+                  barStyle="dark-content"
+                  backgroundColor="transparent"
+                  translucent={false}
+                />
+                <NavigationContainer ref={navigationRef}>
+                  <AppNavigator />
+                </NavigationContainer>
+                <WhatsNewModal
+                  visible={showWhatsNew || showWhatsNewDebug}
+                  onComplete={handleWhatsNewComplete}
+                />
+              </AuthProvider>
+            </ThemeProvider>
+          </FocusLockProvider>
+        </SubscriptionProvider>
+      </ErrorBoundary>
+    </GestureHandlerRootView>
   );
 }
 

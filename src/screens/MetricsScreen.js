@@ -14,16 +14,16 @@ import {
   Modal,
 } from 'react-native';
 import ActivitySummaryModal from '../components/modals/ActivitySummaryModal';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { deepWorkStore } from '../services/deepWorkStore';
 import SessionDetailsModal from '../components/modals/SessionDetailsModal';
 import { useTheme } from '../context/ThemeContext';
-import InsightGenerator from '../services/insights/InsightGenerator';
-import ExpandableInsight from '../components/ExpandableInsight';
+import InsightsSection from '../components/insights/InsightsSection';
 import { useSubscription } from '../context/SubscriptionContext';
 import { PaywallModal } from '../components/PaywallModal';
 // At the top of src/screens/MetricsScreen.js
 import { getStartOfWeek } from '../utils/dateHelpers';
+import { generateWeeklyChartData } from '../utils/weeklyChartData';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BOX_SIZE = 24;
@@ -35,37 +35,6 @@ const MONTHS = [
   'Sep', 'Oct', 'Nov', 'Dec'
 ];
 
-const generateWeeklyChartData = (sessions) => {
-  const today = new Date();
-  const weekData = [];
-
-
-
-  
-  
-  // ✅ Single-letter day names to prevent bunching
-  const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-  
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - i);
-    const dateString = date.toISOString().split('T')[0];
-    
-    const daySessions = sessions[dateString] || [];
-    const totalMinutes = daySessions.reduce((sum, session) => sum + session.duration, 0);
-    const totalHours = parseFloat((totalMinutes / 60).toFixed(1));
-    
-    weekData.push({
-      day: dayNames[date.getDay()],  // ✅ Single letter (S, M, T, W, T, F, S)
-      fullDate: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      hours: totalHours,
-      date: dateString,
-      sessionsCount: daySessions.length
-    });
-  }
-  
-  return weekData;
-};
 const WeeklyFocusChart = ({ sessions }) => {
   const { colors } = useTheme();
   const [selectedBar, setSelectedBar] = useState(null);
@@ -547,207 +516,16 @@ for (let d = 1; d <= lastDay.getDate(); d++) {
 
 const MetricsScreen = () => {
   const { colors, isDarkMode } = useTheme();
+  const navigation = useNavigation();
 
-  // const { 
-  //   isPremium,           // ← Remove ": actualIsPremium"
-  //   canGenerateInsights, // ← Remove ": actualCanGenerateInsights"
-  // } = useSubscription();
-
-  const { isPremium: _orig, canGenerateInsights: _origCan } = useSubscription();
-const isPremium = true; // 🧪 TEST MODE
-const canGenerateInsights = true; // 🧪 TEST MODE
+  const { isPremium, canGenerateInsights } = useSubscription();
 
   const [sessions, setSessions] = useState({});
   const [activities, setActivities] = useState([]);
   const [selectedSession, setSelectedSession] = useState(null);
-  const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
-  const [currentInsight, setCurrentInsight] = useState(null);
-  const [insightError, setInsightError] = useState(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [selectedActivity, setSelectedActivity] = useState(null);
-  const [isGeneratingAllInsights, setIsGeneratingAllInsights] = useState(false);
-const [showInsightsModal, setShowInsightsModal] = useState(false);
-const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
-
-  const [insights, setInsights] = useState({
-    daily: null,
-    weekly: null,
-    monthly: null,
-  });
-  const [weeklyPatterns, setWeeklyPatterns] = useState(null);
-
-  /**
-   * Compute behavioral patterns directly from the raw sessions object.
-   * Looks at the last 7 days. Sessions are stored as { 'YYYY-MM-DD': [session,...] }
-   * where session.duration is in minutes and session.timestamp is in ms.
-   */
-  const computeWeeklyPatterns = (sessionsObj) => {
-    const now = Date.now();
-    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-
-    const buckets = {
-      morning:   { count: 0, totalMinutes: 0 }, // 05–11
-      afternoon: { count: 0, totalMinutes: 0 }, // 12–16
-      evening:   { count: 0, totalMinutes: 0 }, // 17–20
-      night:     { count: 0, totalMinutes: 0 }, // 21–04
-    };
-    const workedOnFreq = {};
-    const distractionFreq = {};
-
-    Object.values(sessionsObj).flat().forEach(session => {
-      if ((session.timestamp || 0) < sevenDaysAgo) return;
-      const hour = new Date(session.timestamp).getHours();
-      const bucket =
-        hour >= 5 && hour < 12 ? 'morning' :
-        hour >= 12 && hour < 17 ? 'afternoon' :
-        hour >= 17 && hour < 21 ? 'evening' : 'night';
-      buckets[bucket].count++;
-      buckets[bucket].totalMinutes += (session.duration || 0);
-
-      const wo = session.rating?.reflection?.workedOn || session.notes;
-      if (wo?.trim()) {
-        const key = wo.trim().toLowerCase();
-        workedOnFreq[key] = (workedOnFreq[key] || 0) + 1;
-      }
-      const dist = session.rating?.reflection?.distractions;
-      if (dist?.trim()) {
-        const key = dist.trim().toLowerCase();
-        distractionFreq[key] = (distractionFreq[key] || 0) + 1;
-      }
-    });
-
-    const active = Object.entries(buckets).filter(([, d]) => d.count > 0);
-    const peakTimeOfDay = active.length > 0
-      ? [...active].sort((a, b) => b[1].count - a[1].count)[0][0]
-      : null;
-    const longestSessionsTime = active.length > 0
-      ? [...active].sort((a, b) =>
-          (b[1].totalMinutes / Math.max(b[1].count, 1)) -
-          (a[1].totalMinutes / Math.max(a[1].count, 1))
-        )[0][0]
-      : null;
-
-    const timeOfDay = Object.fromEntries(
-      Object.entries(buckets).map(([name, d]) => [
-        name,
-        { count: d.count, avgMinutes: d.count > 0 ? Math.round(d.totalMinutes / d.count) : 0 },
-      ])
-    );
-
-    return {
-      timeOfDay,
-      peakTimeOfDay,
-      longestSessionsTime: longestSessionsTime !== peakTimeOfDay ? longestSessionsTime : null,
-      topWorkedOn: Object.entries(workedOnFreq).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k),
-      topDistractions: Object.entries(distractionFreq).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k),
-    };
-  };
-
-  const handleAnalyzeClick = async () => {
-    setIsGeneratingAllInsights(true);
-    setWeeklyPatterns(computeWeeklyPatterns(sessions));
-    await generateAllInsights();
-    setIsGeneratingAllInsights(false);
-    setHasGeneratedInsights(true);
-  };
-  
-  const handleInsightCardClick = () => {
-    setShowInsightsModal(true);
-  };
-  
-  const generateAllInsights = async () => {
-    try {
-      setInsightError(null); // Clear previous errors
-      
-      // ✅ FIX 1: Always use current date for insights
-      // "Monthly" means "last 30 days from today", not "selected month"
-      const now = new Date();
-      
-      console.log('🤖 [Metrics] Starting insight generation:', {
-        timestamp: now.toISOString(),
-        selectedMonth: selectedMonth ? new Date(selectedMonth).toISOString() : 'current'
-      });
-      
-      // ✅ Generate all three insights in parallel for better UX
-      const [dailyInsight, weeklyInsight, monthlyInsight] = await Promise.allSettled([
-        InsightGenerator.generate('daily', {
-          referenceDate: now,
-          forceRegenerate: false,
-        }),
-        InsightGenerator.generate('weekly', {
-          referenceDate: now,
-          forceRegenerate: false,
-        }),
-        InsightGenerator.generate('monthly', {
-          referenceDate: now,  // ← Always use now, not selectedMonth
-          forceRegenerate: false,
-        })
-      ]);
-      
-      // ✅ FIX 2: Better error handling with specific messages
-      const newInsights = {
-        daily: dailyInsight.status === 'fulfilled' ? dailyInsight.value : null,
-        weekly: weeklyInsight.status === 'fulfilled' ? weeklyInsight.value : null,
-        monthly: monthlyInsight.status === 'fulfilled' ? monthlyInsight.value : null,
-      };
-      
-      // Check if any succeeded
-      const hasAnySuccess = newInsights.daily || newInsights.weekly || newInsights.monthly;
-      
-      if (!hasAnySuccess) {
-        // All failed - show specific error
-        const errors = [
-          dailyInsight.status === 'rejected' ? `Daily: ${dailyInsight.reason?.message}` : null,
-          weeklyInsight.status === 'rejected' ? `Weekly: ${weeklyInsight.reason?.message}` : null,
-          monthlyInsight.status === 'rejected' ? `Monthly: ${monthlyInsight.reason?.message}` : null,
-        ].filter(Boolean);
-        
-        const errorMessage = errors.length > 0 
-          ? errors.join('\n') 
-          : 'Unknown error generating insights';
-        
-        console.error('🤖 [Metrics] All insights failed:', {
-          daily: dailyInsight.reason,
-          weekly: weeklyInsight.reason,
-          monthly: monthlyInsight.reason
-        });
-        
-        // ✅ IMPROVED: More helpful error message
-        setInsightError(
-          __DEV__ 
-            ? `Debug Errors:\n${errorMessage}` 
-            : 'Unable to generate insights. Please try again in a few moments.'
-        );
-        
-        return;
-      }
-      
-      // At least one succeeded
-      setInsights(newInsights);
-      
-      console.log('✅ [Metrics] Insights generated:', {
-        daily: !!newInsights.daily,
-        weekly: !!newInsights.weekly,
-        monthly: !!newInsights.monthly
-      });
-      
-    } catch (error) {
-      console.error('🤖 [Metrics] Error generating insights:', error);
-      setInsightError(
-        __DEV__ 
-          ? `Debug: ${error.message}` 
-          : 'Unable to generate insights. Please check your OpenAI API key in settings.'
-      );
-    }
-  };
-  
-  const [isGeneratingInsights, setIsGeneratingInsights] = useState({
-    daily: false,
-    weekly: false,
-    monthly: false,
-  });
-
 
   useFocusEffect(
     React.useCallback(() => {
@@ -826,12 +604,6 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
           return;
         }
 
-        const hasAnyInsights = () => {
-          return insights.daily || insights.weekly || insights.monthly;
-        };
-        
-
-        
         const dateKeys = Object.keys(parsed);
         console.log(`📊 [MetricsScreen] Found ${dateKeys.length} date keys`);
         
@@ -924,35 +696,6 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
     }
   };
 
-  const handleGenerateInsight = async () => {
-    if (!canGenerateInsights) {
-      setShowPaywall(true);
-      return;
-    }
-  
-    setIsGeneratingInsight(true);
-    setInsightError(null);
-    setCurrentInsight(null);
-  
-    try {
-      console.log('📊 Generating insight for selected month:', selectedMonth);
-      
-      // ✅ FIX: Use correct API - generate(insightType, options)
-      const insight = await InsightGenerator.generate('monthly', {
-        referenceDate: selectedMonth ? new Date(selectedMonth) : new Date(),
-        forceRegenerate: false,
-      });
-      
-      console.log('✅ Insight generated:', insight);
-      setCurrentInsight(insight);
-      
-    } catch (error) {
-      console.error('Error generating insight:', error);
-      setInsightError('Unable to generate insight. Please try again.');
-    } finally {
-      setIsGeneratingInsight(false);
-    }
-  };
 
   const calculateTotalHours = () => {
     let totalMinutes = 0;
@@ -1005,82 +748,7 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
         {/* Fixed Section: Insights + Metrics + Month Selector */}
         <View style={styles.fixedSection}>
 {/* AI Insights Section - Gate for Premium */}
-{!isPremium ? (
-  // FREE USER: Show locked insight button
-  <TouchableOpacity
-    style={[styles.analyzeButton, { backgroundColor: colors.cardBackground }]}
-    onPress={() => setShowPaywall(true)}
-  >
-    <Text style={[styles.analyzeButtonIcon, { color: colors.primary }]}>
-      ✨
-    </Text>
-    <Text style={[styles.analyzeButtonText, { color: colors.text }]}>
-      Analyze my focus patterns
-    </Text>
-  </TouchableOpacity>
-) : (
-  // PREMIUM USER: Show button or preview card
-  <>
-    {!hasGeneratedInsights ? (
-      // BEFORE GENERATION: Show button
-      <TouchableOpacity
-        style={[styles.analyzeButton, { backgroundColor: colors.cardBackground }]}
-        onPress={handleAnalyzeClick}
-        disabled={isGeneratingAllInsights}
-      >
-        {isGeneratingAllInsights ? (
-          <View style={styles.buttonContent}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={[styles.analyzeButtonText, { color: colors.text }]}>
-              Generating insights...
-            </Text>
-          </View>
-        ) : (
-          <>
-            <Text style={[styles.analyzeButtonIcon, { color: colors.primary }]}>
-              ✨
-            </Text>
-            <Text style={[styles.analyzeButtonText, { color: colors.text }]}>
-              Analyze my focus patterns
-            </Text>
-          </>
-        )}
-      </TouchableOpacity>
-    ) : (
-      // AFTER GENERATION: Show inline preview card
-      <TouchableOpacity
-        style={[styles.insightPreviewCard, { backgroundColor: colors.cardBackground }]}
-        onPress={handleInsightCardClick}
-        activeOpacity={0.7}
-      >
-        <View style={styles.insightPreviewHeader}>
-          <Text style={[styles.insightPreviewTitle, { color: colors.text }]}>
-            INSIGHT
-          </Text>
-          <View style={styles.insightDateBadge}>
-            <Text style={styles.insightDateIcon}>📦</Text>
-            <Text style={[styles.insightDateText, { color: colors.textSecondary }]}>
-              {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </Text>
-          </View>
-        </View>
-        
-        {/* Show preview of first available insight */}
-        <Text 
-          style={[styles.insightPreviewText, { color: colors.text }]}
-          numberOfLines={3}
-        >
-          {insights.monthly?.insightText || insights.weekly?.insightText || insights.daily?.insightText || 'Tap to view insights'}
-        </Text>
-        
-        <Text style={[styles.tapToSeeMore, { color: colors.primary }]}>
-          Tap to see more
-        </Text>
-      </TouchableOpacity>
-    )}
-  </>
-)}
-
+<InsightsSection isPremium={isPremium} onLockedPress={() => setShowPaywall(true)} navigation={navigation} />
 
 
           {/* Metrics Row */}
@@ -1123,15 +791,6 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
         onClose={handleCloseModal}
       />
 
-           {/* Insights Modal */}
-           <InsightsModal
-        visible={showInsightsModal}
-        onClose={() => setShowInsightsModal(false)}
-        insights={insights}
-        weeklyPatterns={weeklyPatterns}
-        colors={colors}
-      />
-
 {selectedActivity && (
         <ActivitySummaryModal
         visible={!!selectedActivity}
@@ -1156,6 +815,8 @@ const [hasGeneratedInsights, setHasGeneratedInsights] = useState(false);
   
   ;
 };
+
+export default MetricsScreen;
 
 const styles = StyleSheet.create({
   container: {
@@ -1731,225 +1392,3 @@ const styles = StyleSheet.create({
   }
 });
 
-
-// ===== INSIGHTS MODAL COMPONENT =====
-const InsightsModal = ({ visible, onClose, insights, weeklyPatterns, colors }) => {
-  // Render one stat pill
-  const StatPill = ({ label, value }) => (
-    <View style={[insightModalStyles.statPill, { backgroundColor: colors.card || colors.cardBackground || '#1a1a1a' }]}>
-      <Text style={[insightModalStyles.statPillLabel, { color: colors.textSecondary }]}>{label}</Text>
-      <Text style={[insightModalStyles.statPillValue, { color: colors.text }]}>{value}</Text>
-    </View>
-  );
-
-  const renderPatterns = () => {
-    if (!weeklyPatterns) return null;
-    const { timeOfDay, peakTimeOfDay, longestSessionsTime, topWorkedOn, topDistractions } = weeklyPatterns;
-
-    // Build time-of-day pills for non-zero buckets
-    const todPills = Object.entries(timeOfDay || {})
-      .filter(([, d]) => d.count > 0)
-      .sort((a, b) => b[1].count - a[1].count);
-
-    if (todPills.length === 0 && !topWorkedOn?.length) return null;
-
-    return (
-      <>
-        <View style={insightModalStyles.patternSection}>
-          <Text style={[insightModalStyles.patternTitle, { color: colors.primary }]}>
-            THIS WEEK AT A GLANCE
-          </Text>
-
-          {/* Time of day */}
-          {todPills.length > 0 && (
-            <View style={insightModalStyles.pillRow}>
-              {todPills.map(([name, d]) => (
-                <StatPill
-                  key={name}
-                  label={name.charAt(0).toUpperCase() + name.slice(1)}
-                  value={`${d.count} session${d.count === 1 ? '' : 's'} · avg ${d.avgMinutes}m`}
-                />
-              ))}
-            </View>
-          )}
-
-          {/* Peak + longest windows */}
-          {peakTimeOfDay && (
-            <View style={insightModalStyles.pillRow}>
-              <StatPill label="Peak window" value={peakTimeOfDay} />
-              {longestSessionsTime && (
-                <StatPill label="Longest sessions" value={longestSessionsTime} />
-              )}
-            </View>
-          )}
-
-          {/* Top topics */}
-          {topWorkedOn?.length > 0 && (
-            <View style={insightModalStyles.tagRow}>
-              <Text style={[insightModalStyles.tagLabel, { color: colors.textSecondary }]}>
-                Most worked on:
-              </Text>
-              {topWorkedOn.map((topic, i) => (
-                <View key={i} style={[insightModalStyles.tag, { borderColor: colors.border }]}>
-                  <Text style={[insightModalStyles.tagText, { color: colors.text }]}>{topic}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Recurring distractions */}
-          {topDistractions?.length > 0 && (
-            <View style={insightModalStyles.tagRow}>
-              <Text style={[insightModalStyles.tagLabel, { color: colors.textSecondary }]}>
-                Distractions:
-              </Text>
-              {topDistractions.map((d, i) => (
-                <View key={i} style={[insightModalStyles.tag, { borderColor: '#991B1B' }]}>
-                  <Text style={[insightModalStyles.tagText, { color: colors.text }]}>{d}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-        <View style={[styles.insightDivider, { backgroundColor: colors.border }]} />
-      </>
-    );
-  };
-
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
-      <SafeAreaView style={[styles.insightModalContainer, { backgroundColor: colors.background }]}>
-        {/* Header */}
-        <View style={[styles.insightModalHeader, { borderBottomColor: colors.border }]}>
-          <View>
-            <Text style={[styles.insightModalTitle, { color: colors.text }]}>
-              Insight
-            </Text>
-            <Text style={[styles.insightModalSubtitle, { color: colors.textSecondary }]}>
-              {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </Text>
-          </View>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Text style={[styles.closeButtonText, { color: colors.text }]}>✕</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Scrollable Content */}
-        <ScrollView
-          style={styles.insightModalContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Patterns at a glance — always shown when data exists */}
-          {renderPatterns()}
-
-          {/* Yesterday Insight */}
-          {insights.daily?.insightText && (
-            <>
-              <View style={styles.insightSection}>
-                <Text style={[styles.insightSectionLabel, { color: colors.primary }]}>
-                  YESTERDAY
-                </Text>
-                <Text style={[styles.insightSectionText, { color: colors.text }]}>
-                  {insights.daily.insightText}
-                </Text>
-              </View>
-              <View style={[styles.insightDivider, { backgroundColor: colors.border }]} />
-            </>
-          )}
-
-          {/* Last 7 Days Insight */}
-          {insights.weekly?.insightText && (
-            <>
-              <View style={styles.insightSection}>
-                <Text style={[styles.insightSectionLabel, { color: colors.primary }]}>
-                  LAST 7 DAYS
-                </Text>
-                <Text style={[styles.insightSectionText, { color: colors.text }]}>
-                  {insights.weekly.insightText}
-                </Text>
-              </View>
-              <View style={[styles.insightDivider, { backgroundColor: colors.border }]} />
-            </>
-          )}
-
-          {/* Last 30 Days Insight */}
-          {insights.monthly?.insightText && (
-            <View style={styles.insightSection}>
-              <Text style={[styles.insightSectionLabel, { color: colors.primary }]}>
-                LAST 30 DAYS
-              </Text>
-              <Text style={[styles.insightSectionText, { color: colors.text }]}>
-                {insights.monthly.insightText}
-              </Text>
-            </View>
-          )}
-
-          <View style={{ height: 40 }} />
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
-  );
-};
-
-const insightModalStyles = StyleSheet.create({
-  patternSection: {
-    marginBottom: 20,
-    gap: 12,
-  },
-  patternTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    marginBottom: 4,
-  },
-  pillRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  statPill: {
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    minWidth: 100,
-  },
-  statPillLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  statPillValue: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 6,
-  },
-  tagLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginRight: 2,
-  },
-  tag: {
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  tagText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-});
-
-export default MetricsScreen;

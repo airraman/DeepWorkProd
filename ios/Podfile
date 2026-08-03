@@ -20,8 +20,23 @@ platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
 
 prepare_react_native_project!
 
+use_modular_headers!
+
 target 'DeepWorkio' do
+  project 'DeepWorkio.xcodeproj'
   use_expo_modules!
+
+  pre_install do |installer|
+    swift_firebase_pods = ['FirebaseAuth', 'FirebaseFirestore', 'FirebaseDatabase', 'FirebaseFirestoreInternal', 'FirebaseSharedSwift']
+    installer.pod_targets.each do |pod|
+      next if swift_firebase_pods.include?(pod.name)
+      if pod.name.start_with?('Firebase') || pod.name.start_with?('RNFB') || pod.name.start_with?('Google') || pod.name == 'GTMSessionFetcher' || pod.name == 'GoogleUtilities' || pod.name == 'FirebaseCoreExtension' || pod.name == 'FirebaseCoreInternal' || pod.name == 'nanopb' || pod.name == 'leveldb-library'
+        def pod.build_type
+          Pod::BuildType.static_library
+        end
+      end
+    end
+  end
 
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
     config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Animated,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,55 +15,6 @@ import { sessionService } from '../services/sessionService';
 
 const ACCENT_DEFAULT = '#991B1B'; // dark red — urgency signal
 const ACCENT_SUCCESS = '#15803D'; // green — success state at ≥3 chars
-
-// ─── Progressive prompt ───────────────────────────────────────────────────────
-// Renders hidden until `visible` becomes true, then fades in once and stays.
-// Exposes focus() via ref so the parent controls when keyboard advances.
-const ProgressivePrompt = forwardRef(function ProgressivePrompt(
-  { visible, label, placeholder, value, onChangeText, onLayout, returnKeyType, onSubmitEditing },
-  ref
-) {
-  const [revealed, setRevealed] = useState(false);
-  const opacity = useRef(new Animated.Value(0)).current;
-  const inputRef = useRef(null);
-
-  useImperativeHandle(ref, () => ({
-    focus: () => inputRef.current?.focus(),
-  }));
-
-  useEffect(() => {
-    if (visible && !revealed) {
-      setRevealed(true);
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (!revealed) return null;
-
-  return (
-    <Animated.View style={[styles.promptBlock, { opacity }]} onLayout={onLayout}>
-      <Text style={styles.promptLabel}>{label}</Text>
-      <TextInput
-        ref={inputRef}
-        style={styles.promptInput}
-        placeholder={placeholder}
-        placeholderTextColor="#9CA3AF"
-        value={value}
-        onChangeText={onChangeText}
-        multiline
-        numberOfLines={2}
-        textAlignVertical="top"
-        returnKeyType={returnKeyType || 'default'}
-        onSubmitEditing={onSubmitEditing}
-        submitBehavior="newline"
-      />
-    </Animated.View>
-  );
-});
 
 // ─── Custom slider ────────────────────────────────────────────────────────────
 function CustomSlider({ value, onValueChange, min = 1, max = 5 }) {
@@ -100,64 +50,12 @@ export default function SessionRatingScreen({ navigation, route }) {
   const [productivityRating, setProductivityRating] = useState(3);
   const [slidersTouched, setSlidersTouched] = useState(false);
 
-  // Reflection fields
+  // Reflection — single field, source of truth for all downstream AI insights
   const [workedOn, setWorkedOn] = useState('');
-  const [wentWell, setWentWell] = useState('');
-  const [distractions, setDistractions] = useState('');
-  const [nextStep, setNextStep] = useState('');
 
-  const scrollRef    = useRef(null);
-  const workedOnRef  = useRef(null);
-  const wentWellRef  = useRef(null);
-  const distractRef  = useRef(null);
-  const nextStepRef  = useRef(null);
+  const workedOnRef = useRef(null);
 
-  // y-offsets of each prompt, measured via onLayout, used for targeted scrolling
-  const promptOffsets = useRef({});
-
-  // Progressive disclosure: each prompt unlocks when the prior has content
-  const workedOnReady    = workedOn.length >= 3;
-  const showWentWell     = workedOnReady;
-  const showDistractions = wentWell.length >= 1;
-  const showNextStep     = distractions.length >= 1;
-
-  // Scroll just enough to reveal the newly-appeared prompt — no full scrollToEnd
-  const scrollToPrompt = (key) => {
-    const offset = promptOffsets.current[key];
-    if (offset != null) {
-      setTimeout(() => scrollRef.current?.scrollTo({ y: offset - 24, animated: true }), 100);
-    }
-  };
-
-  // When wentWell first appears, scroll to it but do NOT steal focus from workedOn
-  const prevShowWentWell = useRef(false);
-  useEffect(() => {
-    if (showWentWell && !prevShowWentWell.current) {
-      prevShowWentWell.current = true;
-      scrollToPrompt('wentWell');
-    }
-  }, [showWentWell]);
-
-  // For subsequent prompts, advance focus automatically since the prior field is done
-  const prevShowDistractions = useRef(false);
-  useEffect(() => {
-    if (showDistractions && !prevShowDistractions.current) {
-      prevShowDistractions.current = true;
-      scrollToPrompt('distractions');
-      setTimeout(() => distractRef.current?.focus(), 150);
-    }
-  }, [showDistractions]);
-
-  const prevShowNextStep = useRef(false);
-  useEffect(() => {
-    if (showNextStep && !prevShowNextStep.current) {
-      prevShowNextStep.current = true;
-      scrollToPrompt('nextStep');
-      setTimeout(() => nextStepRef.current?.focus(), 150);
-    }
-  }, [showNextStep]);
-
-  // Accent color on the primary input: dark red → green at ≥3 chars
+  const workedOnReady = workedOn.length >= 3;
   const workedOnBorderColor = workedOnReady ? ACCENT_SUCCESS : ACCENT_DEFAULT;
 
   const handleSliderChange = (setter) => (val) => {
@@ -173,9 +71,6 @@ export default function SessionRatingScreen({ navigation, route }) {
         productivity: productivityRating,
         reflection: {
           workedOn: workedOn.trim(),
-          wentWell: wentWell.trim(),
-          distractions: distractions.trim(),
-          nextStep: nextStep.trim(),
         },
         ratedAt: new Date().toISOString(),
       });
@@ -212,7 +107,6 @@ export default function SessionRatingScreen({ navigation, route }) {
         style={styles.flex}
       >
         <ScrollView
-          ref={scrollRef}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -260,47 +154,11 @@ export default function SessionRatingScreen({ navigation, route }) {
             onChangeText={setWorkedOn}
             autoFocus
             maxLength={120}
-            returnKeyType="next"
-            onSubmitEditing={() => wentWellRef.current?.focus()}
-            submitBehavior="submit"
+            returnKeyType="done"
           />
           {workedOn.length > 0 && workedOn.length < 3 && (
             <Text style={styles.hintText}>Keep going — 1–5 words works great</Text>
           )}
-
-          {/* ── Progressive follow-up prompts ── */}
-          <ProgressivePrompt
-            ref={wentWellRef}
-            visible={showWentWell}
-            label="What went well?"
-            placeholder="What went well?"
-            value={wentWell}
-            onChangeText={setWentWell}
-            returnKeyType="next"
-            onSubmitEditing={() => distractRef.current?.focus()}
-            onLayout={(e) => { promptOffsets.current.wentWell = e.nativeEvent.layout.y; }}
-          />
-          <ProgressivePrompt
-            ref={distractRef}
-            visible={showDistractions}
-            label="What distracted you?"
-            placeholder="What distracted you?"
-            value={distractions}
-            onChangeText={setDistractions}
-            returnKeyType="next"
-            onSubmitEditing={() => nextStepRef.current?.focus()}
-            onLayout={(e) => { promptOffsets.current.distractions = e.nativeEvent.layout.y; }}
-          />
-          <ProgressivePrompt
-            ref={nextStepRef}
-            visible={showNextStep}
-            label="What will you do next?"
-            placeholder="What will you do next?"
-            value={nextStep}
-            onChangeText={setNextStep}
-            returnKeyType="done"
-            onLayout={(e) => { promptOffsets.current.nextStep = e.nativeEvent.layout.y; }}
-          />
 
           {/* ── Actions ── */}
           <View style={styles.buttonContainer}>
@@ -389,28 +247,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     marginTop: 4,
-  },
-  // Progressive prompt
-  promptBlock: {
-    marginTop: 20,
-  },
-  promptLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 6,
-  },
-  promptInput: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#111827',
-    backgroundColor: '#FAFAFA',
-    minHeight: 60,
-    textAlignVertical: 'top',
   },
   // Actions
   buttonContainer: {

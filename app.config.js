@@ -7,7 +7,7 @@ export default {
     orientation: "portrait",
     icon: "./assets/applogo.png",
     userInterfaceStyle: "light",
-    newArchEnabled: false,
+    newArchEnabled: true,
     scheme: "deepworkapp",
     splash: {
       image: "./assets/splash-icon.png",
@@ -32,7 +32,7 @@ export default {
           ios: {
             useFrameworks: "static",
             deploymentTarget: "16.0",
-            newArchEnabled: false,
+            newArchEnabled: true,
             entitlements: {
               "com.apple.developer.family-controls": true
             }
@@ -50,6 +50,7 @@ export default {
           }
         }
       ],
+      "@react-native-firebase/analytics",
       // "./ios-family-controls-plugin.js",
     ],
     assets: [

@@ -25,9 +25,11 @@ import {
 } from '../services/personalizedNotificationService';
 import { devModalService } from '../services/devModalService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSubscription } from '../context/SubscriptionContext';
 
 const DevToolsScreen = ({ navigation }) => {
   const { colors } = useTheme();
+  const { isPremium, devPremiumOverride, setDevPremiumOverride } = useSubscription();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [insight, setInsight] = useState(null);
@@ -631,10 +633,10 @@ const DevToolsScreen = ({ navigation }) => {
 
           <TouchableOpacity
             style={[styles.button, { backgroundColor: '#0ea5e9' }]}
-            onPress={() => handleTestNotification('nextStep')}
+            onPress={() => handleTestNotification('aiSuggestion')}
             disabled={loading}
           >
-            <Text style={styles.buttonText}>📋 Next Step Notification</Text>
+            <Text style={styles.buttonText}>📋 AI Suggestion Notification</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -702,6 +704,38 @@ const DevToolsScreen = ({ navigation }) => {
             disabled={loading}
           >
             <Text style={styles.buttonText}>🔄 Reset What's New Seen</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Premium Testing */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Premium Testing
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary, marginBottom: 12 }]}>
+            Current status: {isPremium ? '✅ Premium' : '🔒 Free'}
+            {devPremiumOverride !== null ? ' (overridden)' : ' (real RevenueCat status)'}
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#10b981' }]}
+            onPress={() => setDevPremiumOverride(true)}
+          >
+            <Text style={styles.buttonText}>✅ Force Premium ON</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#ef4444' }]}
+            onPress={() => setDevPremiumOverride(false)}
+          >
+            <Text style={styles.buttonText}>🔒 Force Premium OFF</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#64748b' }]}
+            onPress={() => setDevPremiumOverride(null)}
+          >
+            <Text style={styles.buttonText}>↩️ Clear Override (use real status)</Text>
           </TouchableOpacity>
         </View>
 

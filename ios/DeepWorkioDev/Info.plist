@@ -64,7 +64,7 @@
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>This app uses notifications to remind you when your deep work sessions are complete and to track session progress.</string>
 	<key>RCTNewArchEnabled</key>
-	<false/>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

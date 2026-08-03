@@ -15,10 +15,16 @@ export const themeColors = {
   [THEMES.LIGHT]: {
     background: '#f9fafb',
     card: 'white',
+    cardBackground: '#ffffff',
+    cardBorder: '#e5e7eb',
+    track: '#f3f4f6',
     text: '#1f2937',
     textSecondary: '#6b7280',
+    subText: '#6b7280',
     border: '#e5e7eb',
     primary: '#2563eb',
+    success: '#16a34a',
+    danger: '#dc2626',
     buttonText: 'white',
     divider: '#e5e7eb',
     warning: '#f59e0b',           // Orange border
@@ -28,12 +34,18 @@ export const themeColors = {
   [THEMES.DARK]: {
     background: '#000000',
     card: '#1f1f1f',
+    cardBackground: '#111111',
+    cardBorder: '#1e1e1e',
+    track: '#1a1a1a',
     text: '#FFFFFF',
     textSecondary: '#a1a1aa',
+    subText: '#555555',
     border: '#333333',
     primary: '#2563eb',
+    success: '#4ade80',
+    danger: '#ef4444',
     buttonText: 'white',
-    divider: '#333333', 
+    divider: '#333333',
     warning: '#f59e0b',           // Orange border (same as light)
     warningBackground: '#451a03', // Dark brown background
     warningText: 'white'        // Light yellow text (good contrast on dark bg)

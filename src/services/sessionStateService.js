@@ -154,6 +154,22 @@ export const getLastSessionConfig = async () => {
 };
 
 /**
+ * Retrieve the last completed session config regardless of age.
+ * Unlike getLastSessionConfig, not scoped to the 4-hour quick-restart
+ * window — used to pre-fill Quick Start's musicChoice from whatever the
+ * user picked last, no matter how long ago.
+ */
+export const getLastUsedSessionConfig = async () => {
+  try {
+    const raw = await AsyncStorage.getItem(LAST_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (_) {
+    return null;
+  }
+};
+
+/**
  * Mark that the quick-restart modal has been shown for this session.
  * Prevents it from re-appearing on subsequent HomeScreen visits.
  */
