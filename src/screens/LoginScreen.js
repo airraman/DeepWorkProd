@@ -16,10 +16,9 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
-import { signIn, signUp } from '../services/authService';
+import { signIn, signUp, signInAnonymously } from '../services/authService';
 
 const MODE_LOGIN = 'login';
 const MODE_SIGNUP = 'signup';
@@ -86,14 +85,16 @@ export default function LoginScreen() {
     }
   }, [isLogin, email, password, displayName, validate]);
 
-  const handleSkip = useCallback(() => {
-    // Navigation handled by App.js — this just signals intent
-    // We'll implement this as a no-op since logged-out state is the default
-    Alert.alert(
-      'Continue without account',
-      'Your sessions will be saved locally on this device. Sign in later to sync and back up your data.',
-      [{ text: 'Got it', style: 'default' }]
-    );
+  const handleSkip = useCallback(async () => {
+    try {
+      setLoading(true);
+      await signInAnonymously();
+      // AuthContext picks up the new anonymous user → App.js routes to main app
+    } catch (err) {
+      setError('Unable to continue. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   return (

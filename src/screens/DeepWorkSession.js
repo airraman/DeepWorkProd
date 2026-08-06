@@ -5,6 +5,7 @@ import {
   scheduleSessionEndNotification,
   cancelSessionEndNotification,
 } from '../services/sessionEndNotification';
+import * as Notifications from 'expo-notifications';
 import {
   View,
   Text,
@@ -13,6 +14,7 @@ import {
   Dimensions,
   SafeAreaView,
   Alert,
+  AppState,
   BackHandler,
   ActivityIndicator,
   TouchableOpacity,
@@ -23,11 +25,15 @@ import {
 import { deepWorkStore } from '../services/deepWorkStore';
 import SessionNotesModal from '../components/modals/SessionNotesModal';
 import { Pause, Play, ChevronLeft } from 'lucide-react-native';
-import backgroundTimer from '../services/backgroundTimer';
+// PHASE 3: removed backgroundTimer import — the entire BackgroundFetch +
+// FCM-completion subsystem has been deleted. Session completion is owned by
+// useSessionTimer (foreground) and the OS notification (background/killed).
 import { useFocusLock } from '../context/FocusLockContext';
 import { saveSessionToFirestore } from '../services/firestoreSessionService';
 import {
-  saveActiveSession,
+  getActiveSession,
+  setActiveSession,
+  updateActiveSession,
   clearActiveSession,
   saveLastSessionConfig,
 } from '../services/sessionStateService';
@@ -36,7 +42,13 @@ import {
   cancelStreakRiskNotification,
 } from '../services/streakService';
 
-// import functions from '@react-native-firebase/functions';
+import {
+  logSessionStart,
+  logSessionComplete,
+  logSessionAbandon,
+  logSessionPause,
+  logSessionResume,
+} from '../services/analyticsService';
 
 
 const { width, height } = Dimensions.get('window');
@@ -50,7 +62,7 @@ const DeepWorkSession = ({ route, navigation }) => {
   const { duration, activity, musicChoice, focusLockEnabled } = route.params;
   const totalDuration = parseFloat(duration) * 60 * 1000;
 
-  const { startBlocking, stopBlocking } = useFocusLock();
+  const { startBlocking, stopBlocking, isReady: focusLockReady } = useFocusLock();
 
   // Timestamp-based timer — no drift, survives app reload
   const { timeLeft, isPaused, isExpired, start, pause, resume, stop } = useSessionTimer(totalDuration);
@@ -67,11 +79,12 @@ const DeepWorkSession = ({ route, navigation }) => {
   const isHandlingTimeoutRef    = useRef(false); // prevents double handleTimeout
   const isCleanedUpRef          = useRef(false); // prevents double cleanup
   const completionTimeoutRef    = useRef(null);  // 1500ms delay handle in handleTimeout
+  const hasStartedBlockingRef   = useRef(false); // prevents double startBlocking call
 
   // Services loaded dynamically to prevent crashes
   const [servicesReady, setServicesReady] = useState(false);
   const servicesRef = useRef({
-    backgroundTimer: null,
+    // PHASE 3: backgroundTimer removed; only the alarm + music services remain.
     alarmService: null,
     audioService: null
   });
@@ -103,12 +116,9 @@ const DeepWorkSession = ({ route, navigation }) => {
       console.log('🔍 Loading services in parallel...');
       
       try {
-        // ✅ Load ALL services in parallel (no delays!)
-        const [timerModule, alarmModule, audioModule] = await Promise.all([
-          import('../services/backgroundTimer').catch(err => {
-            console.warn('🔍 Background timer not available:', err.message);
-            return null;
-          }),
+        // PHASE 3: backgroundTimer lazy-import removed — only the alarm and
+        // music services need lazy-loading now.
+        const [alarmModule, audioModule] = await Promise.all([
           import('../services/alarmService').catch(err => {
             console.warn('🔔 Alarm service not available:', err.message);
             return null;
@@ -118,18 +128,12 @@ const DeepWorkSession = ({ route, navigation }) => {
             return null;
           })
         ]);
-        
-        // Assign loaded services
-        if (timerModule) {
-          servicesRef.current.backgroundTimer = timerModule.default;
-          console.log('🔍 Background timer loaded');
-        }
-        
+
         if (alarmModule) {
           servicesRef.current.alarmService = alarmModule.alarmService;
           console.log('🔔 Alarm service loaded');
         }
-        
+
         if (audioModule) {
           servicesRef.current.audioService = audioModule.audioService;
           console.log('🎵 Audio service loaded');
@@ -157,6 +161,18 @@ const DeepWorkSession = ({ route, navigation }) => {
       initializeSession();
     }
   }, [servicesReady]);
+
+  // Start blocking only after BOTH services and FocusLock context are ready.
+  // Avoids a race condition where startBlocking() fires before context.initialize()
+  // has resolved — which causes isAvailable to be false and blocking to silently no-op.
+  useEffect(() => {
+    if (!focusLockEnabled || !servicesReady || !focusLockReady) return;
+    if (hasStartedBlockingRef.current) return;
+    hasStartedBlockingRef.current = true;
+    startBlocking()
+      .then(() => console.log('🔒 Focus Lock blocking started'))
+      .catch(err => console.warn('🔒 Focus Lock start failed (non-critical):', err));
+  }, [focusLockEnabled, servicesReady, focusLockReady]);
 
   // Handle back button (Android)
   useEffect(() => {
@@ -188,52 +204,100 @@ const DeepWorkSession = ({ route, navigation }) => {
     console.log('🔍 Initializing session...');
 
     try {
-      // start() returns the effective endTime (fresh or restored from AsyncStorage)
-      const endTime = await start();
+      // PHASE 2: read the in-flight session from the single source of truth so
+      // we can restore a running or paused session after an app reload.
+      const existing = await getActiveSession();
+      const restoredEndTime  = existing?.config?.endTime ?? null;
+      const restoredPaused   = existing?.status === 'paused'
+        ? existing.config.remainingAtPause
+        : null;
+      const startTime        = existing?.config?.startTime ?? Date.now();
+
+      console.log('[Session] Init —', existing
+        ? `restoring session | endTime: ${restoredEndTime ? new Date(restoredEndTime).toLocaleTimeString() : 'null'} | paused: ${restoredPaused != null}`
+        : 'fresh start');
+
+      // start() now takes restored state and returns the effective endTime
+      // (or null when paused / already-expired).
+      const endTime = start(
+        restoredPaused != null ? { pausedRemaining: restoredPaused }
+        : restoredEndTime != null ? { endTime: restoredEndTime }
+        : undefined
+      );
+
+      console.log('[Session] endTime from start():', endTime
+        ? new Date(endTime).toLocaleTimeString()
+        : 'null — notification will NOT be scheduled (paused or already expired)');
+
       Animated.timing(animatedHeight, {
         toValue: 1,
         duration: totalDuration,
         useNativeDriver: false,
       }).start();
 
-      // Schedule OS-level notification at endTime — fires even if app is killed/locked.
-      if (endTime) {
-        scheduleSessionEndNotification(
-          endTime,
-          activityDetails?.name || 'Focus Session',
-          parseFloat(duration)
-        );
+      try {
+        logSessionStart(parseFloat(duration), musicChoice, activityDetails?.name || activity).catch(() => {});
+      } catch (analyticsErr) {
+        console.warn('[Session] logSessionStart failed (non-critical):', analyticsErr.message);
       }
 
-      // Persist config so HomeScreen can offer resume if app is killed mid-session
-      saveActiveSession({ activity, duration, musicChoice, focusLockEnabled });
+      // PHASE 2: persist the full session record before scheduling the OS
+      // notification — scheduleSessionEndNotification writes notificationId via
+      // updateActiveSession, which requires the record to already exist.
+      await setActiveSession({
+        startTime,
+        endTime,
+        activity,
+        duration,
+        musicChoice,
+        focusLockEnabled,
+        notificationId:   existing?.config?.notificationId ?? null,
+        isPaused:         restoredPaused != null,
+        remainingAtPause: restoredPaused,
+      });
+
+      // Schedule OS-level notification at endTime — fires even if app is killed/locked.
+      // Skipped when restoring a paused session (no endTime to schedule against).
+      if (endTime) {
+        try {
+          console.log('[Session] Scheduling OS notification for', new Date(endTime).toLocaleTimeString(),
+            '| in', Math.round((endTime - Date.now()) / 1000), 's');
+          const notifId = await scheduleSessionEndNotification(
+            endTime,
+            activityDetails?.name || 'Focus Session',
+            parseFloat(duration)
+          );
+          if (notifId) {
+            console.log('[Session] OS notification scheduled, id:', notifId);
+            const pending = await Notifications.getAllScheduledNotificationsAsync();
+            const confirmed = pending.some(n => n.identifier === notifId);
+            console.log('[Session] Notification confirmed in OS queue:', confirmed,
+              '| total pending:', pending.length);
+            if (!confirmed) {
+              console.error('[Session] CRITICAL: id returned but not found in OS queue');
+            }
+          } else {
+            console.error('[Session] CRITICAL: notification scheduling failed — scheduleSessionEndNotification returned null (check permissions)');
+          }
+        } catch (schedErr) {
+          console.error('[Session] CRITICAL: scheduleSessionEndNotification threw:', schedErr);
+        }
+      }
 
       // ✅ Initialize everything else in parallel (non-blocking)
-      // User already sees timer counting down while this happens in background
+      // User already sees timer counting down while this happens in background.
+      // PHASE 3: removed backgroundTimer.startTimerNotification — there is no
+      // sticky timer notification or BackgroundFetch task to start anymore.
       Promise.all([
-        // Background timer notifications
-        servicesRef.current.backgroundTimer
-          ?.startTimerNotification(duration, activity, musicChoice)
-          .then(() => console.log('🔍 Background timer started'))
-          .catch(err => console.warn('🔍 Background timer failed:', err)),
-        
         // Music initialization
         initializeMusic(),
-        
-        // Alarm service initialization  
+
+        // Alarm service initialization (foreground fallback alarm)
         servicesRef.current.alarmService
           ?.init()
           .then(() => console.log('🔔 Alarm service initialized'))
           .catch(err => console.warn('🔔 Alarm init failed:', err)),
-
-          focusLockEnabled
-          ? startBlocking()
-              .then(() => console.log('🔒 Focus Lock blocking started'))
-              .catch(err => console.warn('🔒 Focus Lock start failed (non-critical):', err))
-          : Promise.resolve(),
-      
-      
-        ]).catch(err => {
+      ]).catch(err => {
         console.warn('🔍 Some services failed to initialize:', err);
         // Non-critical - timer still works
       });
@@ -246,18 +310,22 @@ const DeepWorkSession = ({ route, navigation }) => {
   
   // ✅ Helper function for music initialization
   const initializeMusic = async () => {
+    console.log(`🎵 initializeMusic — choice from home screen: "${musicChoice}"`);
+
     if (musicChoice === 'none') {
-      console.log('🎵 No background music selected');
+      console.log('🎵 No background music selected — skipping audio init');
       return;
     }
-    
+
     if (!servicesRef.current.audioService) {
-      console.warn('🎵 Audio service not available');
+      console.warn('🎵 Audio service not available — cannot start music');
       return;
     }
-    
+
     try {
       console.log(`🎵 Starting background music: ${musicChoice}`);
+      const alreadyReady = servicesRef.current.audioService.isInitialized;
+      console.log(`🎵 audioService.isInitialized before init(): ${alreadyReady}`);
       await servicesRef.current.audioService.init();
       await servicesRef.current.audioService.playMusic(musicChoice);
       console.log('🎵 Background music started successfully');
@@ -274,25 +342,37 @@ const DeepWorkSession = ({ route, navigation }) => {
       return;
     }
     isHandlingTimeoutRef.current = true;
-    console.log('⏰ Session completed!');
+    console.log('⏰ Session completed! AppState:', AppState.currentState, '| time:', new Date().toLocaleTimeString());
 
     try {
-      await cancelSessionEndNotification();
-
       if (servicesRef.current.audioService) {
         await servicesRef.current.audioService.stopMusic();
       }
 
-      if (servicesRef.current.alarmService) {
-        try {
-          await servicesRef.current.alarmService.playCompletionAlarm();
-          console.log('🔔 Completion alarm played');
-        } catch (alarmError) {
-          console.warn('🔔 Alarm failed (non-critical):', alarmError);
+      if (AppState.currentState === 'active') {
+        // Foreground: cancel the OS notification (completion handled in-app),
+        // set badge manually since the notification payload won't fire, then
+        // play the expo-av alarm.
+        await cancelSessionEndNotification();
+        Notifications.setBadgeCountAsync(1).catch(() => {});
+        if (servicesRef.current.alarmService) {
+          try {
+            await servicesRef.current.alarmService.playCompletionAlarm();
+            console.log('🔔 Completion alarm played (foreground)');
+          } catch (alarmError) {
+            console.warn('🔔 Alarm failed (non-critical):', alarmError);
+          }
         }
+      } else {
+        // Background: leave the OS notification intact so it fires at endTime
+        // with sound + badge. Cancelling here would silence the only reliable
+        // alarm mechanism — expo-av is inaudible when backgrounded because iOS
+        // revokes the audio session.
+        console.log('🔔 App not active — leaving OS notification to fire');
       }
 
       setIsCompleted(true);
+      logSessionComplete(parseFloat(duration)).catch(() => {});
 
       // Store the timeout handle so we can cancel it on unmount.
       completionTimeoutRef.current = setTimeout(async () => {
@@ -321,8 +401,17 @@ const DeepWorkSession = ({ route, navigation }) => {
     if (isPaused) {
       // Resume — hook recomputes endTime from remaining; reschedule OS notification
       // with the new (extended) endTime so the lock-screen alert still fires correctly.
-      const newEndTime = await resume();
+      logSessionResume(Math.round((totalDuration - timeLeft) / 1000)).catch(() => {});
+      const newEndTime = resume();
       if (newEndTime) {
+        // PHASE 2: persist the new endTime + clear paused fields BEFORE
+        // scheduling. scheduleSessionEndNotification writes notificationId via
+        // updateActiveSession, which patches the latest record.
+        await updateActiveSession({
+          isPaused:         false,
+          remainingAtPause: null,
+          endTime:          newEndTime,
+        });
         scheduleSessionEndNotification(
           newEndTime,
           activityDetails?.name || 'Focus Session',
@@ -335,13 +424,7 @@ const DeepWorkSession = ({ route, navigation }) => {
         useNativeDriver: false,
       }).start();
 
-      if (servicesRef.current.backgroundTimer) {
-        try {
-          await servicesRef.current.backgroundTimer.updateTimerPauseState(false);
-        } catch (error) {
-          console.warn('Background pause update failed:', error);
-        }
-      }
+      // PHASE 3: removed backgroundTimer.updateTimerPauseState(false).
 
       if (servicesRef.current.audioService) {
         try {
@@ -353,16 +436,23 @@ const DeepWorkSession = ({ route, navigation }) => {
       }
     } else {
       // Pause — hook captures endTime → remainingAtPause, clears interval
-      await pause();
+      logSessionPause(Math.round((totalDuration - timeLeft) / 1000)).catch(() => {});
+      const remaining = pause();
       animatedHeight.stopAnimation();
+      // S1-4: Cancel the OS notification so it doesn't fire at the original end
+      // time while the session is paused. scheduleSessionEndNotification() will
+      // re-cancel + reschedule with the correct new endTime on resume.
+      // PHASE 2: cancelSessionEndNotification reads notificationId from the
+      // active session record and clears it via updateActiveSession; we then
+      // patch the paused-state fields onto the same record.
+      await cancelSessionEndNotification();
+      await updateActiveSession({
+        isPaused:         true,
+        remainingAtPause: remaining,
+        endTime:          null,
+      });
 
-      if (servicesRef.current.backgroundTimer) {
-        try {
-          await servicesRef.current.backgroundTimer.updateTimerPauseState(true);
-        } catch (error) {
-          console.warn('Background pause update failed:', error);
-        }
-      }
+      // PHASE 3: removed backgroundTimer.updateTimerPauseState(true).
 
       if (servicesRef.current.audioService) {
         try {
@@ -419,6 +509,8 @@ const DeepWorkSession = ({ route, navigation }) => {
         {
           text: 'End Session',
           onPress: async () => {
+            const elapsedSeconds = Math.round((totalDuration - timeLeft) / 1000);
+            logSessionAbandon(elapsedSeconds, parseFloat(duration)).catch(() => {});
             await cleanup();
             navigation.navigate('MainApp', { screen: 'Home' });
           },
@@ -469,22 +561,18 @@ const DeepWorkSession = ({ route, navigation }) => {
         }
       }
   
-      if (servicesRef.current.backgroundTimer) {
-        try {
-          await servicesRef.current.backgroundTimer.stopTimerNotification();
-        } catch (error) {
-          console.warn('Background cleanup error:', error);
-        }
-      }
-  
-      if (servicesRef.current.alarmService) {
-        try {
-          await servicesRef.current.alarmService.cleanup();
-        } catch (error) {
-          console.warn('Alarm cleanup error:', error);
-        }
-      }
-  
+      // PHASE 3: removed backgroundTimer.stopTimerNotification() — there is no
+      // sticky timer notification or BackgroundFetch task to tear down anymore.
+      // (The same call previously triggered Notifications.dismissAllNotificationsAsync,
+      // which was the root cause of the OS completion banner being silenced
+      // mid-sound. Phase 1 removed that line; Phase 3 removes the wrapper too.)
+
+      // PHASE 1: removed alarmService.cleanup() from session cleanup. cleanup()
+      // runs ~800ms after handleTimeout starts the 10-second alarm via
+      // handleNotesSubmit → handleSessionComplete → cleanup, which was unloading
+      // the sound mid-play and audibly truncating the alarm. The alarm's own
+      // autoStopTimer ends playback naturally after autoStopAfter seconds.
+
     } catch (error) {
       console.warn('Cleanup error:', error);
     }

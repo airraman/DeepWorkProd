@@ -1,13 +1,15 @@
 // app.config.js
+const IS_PROD = process.env.APP_VARIANT === 'production';
+
 export default {
   expo: {
-    name: "DeepWork.io",
+    name: IS_PROD ? "DeepWork.io" : "DeepWork.io (Dev)",
     slug: "DeepWorkApp",
-    version: "1.0.6",
+    version: "1.0.10",
     orientation: "portrait",
     icon: "./assets/applogo.png",
     userInterfaceStyle: "light",
-    newArchEnabled: true,
+    newArchEnabled: false,
     scheme: "deepworkapp",
     splash: {
       image: "./assets/splash-icon.png",
@@ -15,6 +17,7 @@ export default {
       backgroundColor: "#ffffff"
     },
     plugins: [
+      "expo-dev-client",
       [
         "expo-notifications",
         {
@@ -25,17 +28,17 @@ export default {
           ]
         }
       ],
-      "./ios-background-tasks-plugin.js",
+      // PHASE 4: removed ./ios-background-tasks-plugin.js — the BackgroundFetch
+      // identifier it injected (com.expo.tasks.BACKGROUND_TIMER_TASK) is dead
+      // code now that backgroundTimer.js has been deleted. Will take effect on
+      // the next native build / prebuild.
       [
         "expo-build-properties",
         {
           ios: {
             useFrameworks: "static",
             deploymentTarget: "16.0",
-            newArchEnabled: true,
-            entitlements: {
-              "com.apple.developer.family-controls": true
-            }
+            newArchEnabled: false,
           }
         }
       ],
@@ -64,22 +67,24 @@ export default {
     ],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.airraman.deepwork", 
-      buildNumber: "31",
-      googleServicesFile: "./GoogleService-Info.plist",
+      bundleIdentifier: IS_PROD ? "com.airraman.deepwork" : "com.airraman.deepwork.dev",
+      buildNumber: "45",
+      googleServicesFile: "./ios/DeepWorkioDev/GoogleService-Info.plist",
       infoPlist: {
+        // PHASE 4: dropped "fetch" and "processing" — no BackgroundFetch tasks
+        // are registered anywhere in the codebase. "audio" is kept for the
+        // background music feature; "remote-notification" is kept for FCM
+        // re-engagement.
         UIBackgroundModes: [
-          "fetch",
-          "processing",
           "audio",
-          "remote-notification"  
+          "remote-notification"
         ],
-        BGTaskSchedulerPermittedIdentifiers: [
-          "com.expo.tasks.BACKGROUND_TIMER_TASK"
-        ],
+        // PHASE 4: dropped BGTaskSchedulerPermittedIdentifiers — the only id
+        // it permitted (com.expo.tasks.BACKGROUND_TIMER_TASK) belonged to the
+        // deleted backgroundTimer.js BackgroundFetch task.
         NSUserNotificationsUsageDescription: "This app uses notifications to remind you when your deep work sessions are complete and to track session progress.",
         NSFamilyControlsUsageDescription: "DeepWork needs Screen Time access to block selected apps during your focus sessions.",
-        CFBundleDisplayName: "DeepWork.io",
+        CFBundleDisplayName: IS_PROD ? "DeepWork.io" : "DeepWork.io (Dev)",
         ITSAppUsesNonExemptEncryption: false
       },
       config: {
@@ -91,7 +96,7 @@ export default {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#ffffff"
       },
-      package: "com.airraman.deepwork",
+      package: IS_PROD ? "com.airraman.deepwork" : "com.airraman.deepwork.dev",
       versionCode: 1,
       googleServicesFile: "./google-services.json", 
       permissions: [
@@ -117,7 +122,7 @@ export default {
       firebaseAppId: process.env.FIREBASE_APP_ID,
     },
     owner: "airraman",
-    runtimeVersion: "1.0.2",
+    runtimeVersion: "1.0.10",
     updates: {
       url: "https://u.expo.dev/6154a390-07d0-416c-955b-63179fba2bc8"
     }

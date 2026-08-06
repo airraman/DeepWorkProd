@@ -113,8 +113,15 @@ export class InsightGenerator {
         );
 
         if (CacheManager.isCacheValid(cachedInsight, currentDataHash, insightType)) {
-          console.log(`[InsightGenerator] Cache hit for ${insightType}`);
-          return this._formatCachedInsight(cachedInsight);
+          // Reject cache entries that contain known error/fallback text — these
+          // were written when the API key was missing and should be regenerated.
+          const isErrorCached = cachedInsight.insight_text?.includes('Please check your API') ||
+            cachedInsight.insight_text?.includes('Unable to generate insight at this time');
+          if (!isErrorCached) {
+            console.log(`[InsightGenerator] Cache hit for ${insightType}`);
+            return this._formatCachedInsight(cachedInsight);
+          }
+          console.log(`[InsightGenerator] Cache hit but contains error text — regenerating`);
         }
       }
 

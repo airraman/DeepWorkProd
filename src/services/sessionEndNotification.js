@@ -17,16 +17,17 @@
 //   - Device is in Do Not Disturb with no exceptions — mitigated by
 //     interruptionLevel: 'timeSensitive' which iOS allows through most Focus modes
 //
-// This is categorically different from the Firebase FCM path in backgroundTimer.js:
-//   FCM:    JS detects expiry → HTTP call → Firebase → APNs → device  (needs network + JS)
-//   This:   OS fires at endTime, no intermediaries                     (needs nothing)
-//
-// Both can coexist: this fires reliably; FCM is kept for analytics.
+// PHASE 3: the parallel Firebase FCM completion path (backgroundTimer.js +
+// triggerSessionEndNotification Cloud Function) has been removed. This OS
+// scheduled local notification is now the sole background completion mechanism.
 
 import * as Notifications from 'expo-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getActiveSession, updateActiveSession } from './sessionStateService';
 
-const NOTIFICATION_ID_KEY = '@session_end_notification_id';
+// PHASE 2: notificationId is now stored inside @active_session_config via
+// sessionStateService — no more standalone @session_end_notification_id key,
+// no more @session_end_time mirror. The active session record is the single
+// source of truth for both timing and the OS notification handle.
 
 // ---------------------------------------------------------------------------
 // Permission helper
@@ -39,22 +40,35 @@ const NOTIFICATION_ID_KEY = '@session_end_notification_id';
  */
 export const ensureNotificationPermissions = async () => {
   try {
-    const { status: existing } = await Notifications.getPermissionsAsync();
-    if (existing === 'granted') return true;
+    const existing = await Notifications.getPermissionsAsync();
+    console.log('[SessionEnd] Permission check — status:', existing.status,
+      '| allowsAlert:', existing.ios?.allowsAlert,
+      '| allowsSound:', existing.ios?.allowsSound,
+      '| allowsBadge:', existing.ios?.allowsBadge,
+      '| allowsLockScreen:', existing.ios?.allowsDisplayOnLockScreen);
 
-    const { status } = await Notifications.requestPermissionsAsync({
+    if (existing.status === 'granted') return true;
+
+    console.log('[SessionEnd] Requesting notification permissions...');
+    const requested = await Notifications.requestPermissionsAsync({
       ios: {
         allowAlert: true,
         allowSound: true,
         allowBadge: true,
-        // Request critical alerts — requires Apple entitlement; silently ignored
-        // if not provisioned, but harmless to request.
         allowCriticalAlerts: false,
       },
     });
 
-    console.log('[SessionEnd] Notification permission status:', status);
-    return status === 'granted';
+    console.log('[SessionEnd] Permission request result:', requested.status,
+      '| ios:', JSON.stringify(requested.ios ?? {}));
+
+    if (requested.status !== 'granted') {
+      console.error('[SessionEnd] CRITICAL: Notification permission denied —',
+        'no session-end notification will be scheduled.',
+        'User must enable in iOS Settings → DeepWork → Notifications');
+    }
+
+    return requested.status === 'granted';
   } catch (error) {
     console.warn('[SessionEnd] Permission check failed:', error);
     return false;
@@ -104,50 +118,42 @@ export const scheduleSessionEndNotification = async (
       ? `${Math.round(durationMinutes)}-minute `
       : '';
 
+    const secondsUntilEnd = Math.max(1, Math.round((endTimeMs - Date.now()) / 1000));
+    console.log('[SessionEnd] Scheduling TIME_INTERVAL trigger — seconds:', secondsUntilEnd,
+      '| endTime:', endDate.toLocaleTimeString(),
+      '| sound: completion_alarm.wav');
+
     const id = await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Session Complete 🎉',
         body: `Great work! Your ${durationLabel}${activityName} session is done.`,
-        // The .wav file is bundled via app.config.js expo-notifications sounds array
         sound: 'completion_alarm.wav',
         data: { type: 'session_end' },
         badge: 1,
 
-        // iOS: 'timeSensitive' breaks through Focus modes (Airplane, Do Not Disturb)
-        // without requiring the Critical Alerts entitlement.
-        // 'active' (default) would be silenced by Focus modes.
-        ...(require('react-native').Platform.OS === 'ios' && {
-          interruptionLevel: 'timeSensitive',
-        }),
-
-        // iOS: vibration pattern — fires even in silent mode alongside the notification
-        // On iOS, vibration is controlled by the system when sound plays; this
-        // explicit pattern ensures it also fires when the ringer is off.
-        ...(require('react-native').Platform.OS === 'ios' && {
-          vibrate: [0, 500, 200, 500, 200, 500],
-        }),
-
         // Android: HIGH importance shows heads-up banner on lock screen + vibration
         ...(require('react-native').Platform.OS === 'android' && {
-          channelId: 'session-completion', // already created in backgroundTimer.js
+          channelId: 'session-completion',
           priority: Notifications.AndroidNotificationPriority.HIGH,
           vibrate: [0, 500, 200, 500, 200, 500],
         }),
       },
       trigger: {
-        // `date` trigger → handed to OS scheduler, fires regardless of JS state
-        // expo-notifications 0.20+ requires explicit `type` field — omitting it
-        // throws a TypeError that is silently caught, preventing scheduling.
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: endDate,
+        // TIME_INTERVAL is simpler and more reliable than DATE trigger.
+        // Once registered, iOS fires this regardless of app state (background/killed/locked).
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: secondsUntilEnd,
+        repeats: false,
       },
     });
 
-    await AsyncStorage.setItem(NOTIFICATION_ID_KEY, id);
+    // PHASE 2: persist the OS notification id inside the active session record.
+    // No more @session_end_notification_id or @session_end_time keys.
+    await updateActiveSession({ notificationId: id });
 
     console.log(
       `[SessionEnd] Notification scheduled for ${endDate.toLocaleTimeString()}, ` +
-      `in ${Math.round((endTimeMs - Date.now()) / 1000)}s, id: ${id}`
+      `in ${secondsUntilEnd}s, id: ${id}`
     );
     return id;
 
@@ -168,11 +174,16 @@ export const scheduleSessionEndNotification = async (
  */
 export const cancelSessionEndNotification = async () => {
   try {
-    const id = await AsyncStorage.getItem(NOTIFICATION_ID_KEY);
+    // PHASE 2: read the id from the single source of truth (the active session
+    // record), not from the retired @session_end_notification_id key.
+    const active = await getActiveSession();
+    const id = active?.config?.notificationId;
     if (id) {
       await Notifications.cancelScheduledNotificationAsync(id);
-      await AsyncStorage.removeItem(NOTIFICATION_ID_KEY);
-      console.log('[SessionEnd] Scheduled notification cancelled');
+      await updateActiveSession({ notificationId: null });
+      console.log('[SessionEnd] Scheduled notification cancelled, id:', id);
+    } else {
+      console.log('[SessionEnd] cancelSessionEndNotification — no id found, nothing to cancel');
     }
   } catch (error) {
     // Non-critical — worst case the notification fires after session already ended

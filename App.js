@@ -16,15 +16,18 @@ import { AuthProvider } from './src/context/AuthContext';
 import * as Notifications from 'expo-notifications';
 import * as Updates from 'expo-updates';
 import { Alert, View, Text, Platform, Dimensions, StatusBar, Linking, AppState, Vibration } from 'react-native';
-import { navigationRef, safeNavigate } from './src/services/navigationService';
+import { navigationRef } from './src/services/navigationService';
 import { versionCheckService } from './src/services/versionCheckService.js';
 import { ForceUpdateModal } from './src/components/ForceUpdateModal';
 import { WhatsNewModal } from './src/components/WhatsNewModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { devModalService } from './src/services/devModalService';
-import { notificationBackgroundTask } from './src/services/notificationBackgroundTask';
-import backgroundTimer from './src/services/backgroundTimer';
+// PHASE 3: removed imports of notificationBackgroundTask and backgroundTimer.
+// Those modules and the BackgroundFetch + FCM-completion subsystems they wrapped
+// have been deleted — session completion is now owned exclusively by the OS
+// notification scheduled in sessionEndNotification.js (background) and by
+// DeepWorkSession.handleTimeout (foreground).
 import { setupNotificationHandler } from './src/services/notificationHandler';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { audioSessionManager } from './src/services/audioSessionManager';
@@ -36,7 +39,8 @@ import LoginScreen from './src/screens/LoginScreen';
 import { useAuth } from './src/context/AuthContext';
 import { runMigration } from './src/services/migrationService';
 import { runLocalMigrationsIfNeeded } from './src/services/localMigrationService';
-
+import { logSessionComplete } from './src/services/analyticsService';
+import { getActiveSession, clearActiveSession } from './src/services/sessionStateService';
 
 try {
   messaging().setBackgroundMessageHandler(async (remoteMessage) => {
@@ -48,26 +52,21 @@ try {
   console.warn('FCM background handler registration failed:', e);
 }
 
+// S1-1: Register notification handler at module level — must run before any
+// component renders so that notifications arriving during cold launch are
+// handled correctly (shouldShowAlert/shouldPlaySound respected).
+// setupNotificationHandler() is also called inside MainApp's useEffect as a
+// belt-and-suspenders fallback; the module-level call is the authoritative one.
+setupNotificationHandler();
+
 const DevToolsScreen = __DEV__
   ? require('./src/screens/DevToolsScreen').default
   : () => null;
 
-import { notificationService } from './src/services/notificationService';
+// PHASE 4: removed `notificationService` import (file deleted) and the
+// `alarmService` dynamic require / mock fallback. App.js no longer touches the
+// alarm — the only allowed JS alarm trigger is DeepWorkSession.handleTimeout.
 import DatabaseService from './src/services/database/DatabaseService';
-
-let alarmService = null;
-try {
-  const alarmModule = require('./src/services/alarmService');
-  alarmService = alarmModule.alarmService;
-  console.log('🔔 Alarm service imported successfully');
-} catch (error) {
-  console.warn('🔔 Alarm service not available:', error.message);
-  alarmService = {
-    init: async () => { console.log('🔔 Mock alarm service init'); return true; },
-    cleanup: async () => { console.log('🔔 Mock alarm service cleanup'); },
-    playCompletionAlarm: async () => { console.log('🔔 Mock alarm'); return true; }
-  };
-}
 
 import InitialSetupScreen from './src/screens/InitialSetUpScreen';
 import HomeScreen from './src/screens/HomeScreen';
@@ -89,7 +88,13 @@ console.log('📱 Device Info:', {
   version: Platform.Version,
   isTablet,
   dimensions: { width, height },
-  hasAlarmService: !!alarmService
+});
+
+console.log('📦 Updates status:', {
+  isEmbeddedLaunch: Updates.isEmbeddedLaunch,
+  updateId: Updates.updateId,
+  runtimeVersion: Updates.runtimeVersion,
+  channel: Updates.channel,
 });
 
 // ─── Migration Handler ────────────────────────────────────────────────────────
@@ -261,60 +266,35 @@ const initializeBackgroundServices = async () => {
       console.error('📱 Permission request error:', error);
     }
 
-    let alarmInitialized = false;
-    try {
-      if (alarmService && typeof alarmService.init === 'function') {
-        alarmInitialized = await alarmService.init();
-        if (alarmInitialized) {
-          console.log('🔔 Alarm service initialized successfully');
-        } else {
-          console.warn('⚠️ Alarm service failed to initialize - alarms may not work');
-        }
-      } else {
-        console.log('🔔 Alarm service not available - using mock service');
-        alarmInitialized = true;
-      }
-    } catch (alarmError) {
-      console.error('🔔 Alarm service initialization error:', alarmError);
-      alarmInitialized = false;
-    }
+    // PHASE 4: removed the alarmService init block. The alarm is owned by
+    // DeepWorkSession (lazy-loaded when the session screen mounts) — App.js
+    // has no business pre-warming it.
 
-    let notificationsConfigured = false;
-    try {
-      console.log('📱 Configuring notification system...');
-      const configPromise = backgroundTimer.configureNotifications();
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Configuration timeout')), 15000)
-      );
-      await Promise.race([configPromise, timeoutPromise]);
-      notificationsConfigured = true;
-      console.log('📱 Notifications configured successfully');
-    } catch (notificationError) {
-      console.error('📱 Notification configuration failed:', notificationError);
-      notificationsConfigured = false;
+    // PHASE 3: replaces backgroundTimer.configureNotifications + the subsequent
+    // notificationBackgroundTask.register block. The Android session-completion
+    // channel is the only piece still required — it's the channel referenced by
+    // sessionEndNotification.scheduleSessionEndNotification and is needed for
+    // the OS notification to play completion_alarm.wav on Android. iOS does not
+    // use channels. No BackgroundFetch task is registered anywhere.
+    if (Platform.OS === 'android') {
+      try {
+        await Notifications.setNotificationChannelAsync('session-completion', {
+          name: 'Session Completion',
+          importance: Notifications.AndroidImportance.MAX,
+          sound: 'completion_alarm.wav',
+          vibrationPattern: [0, 250, 250, 250],
+          enableLights: true,
+          enableVibrate: true,
+        });
+        console.log('📱 Android session-completion channel ready');
+      } catch (channelError) {
+        console.warn('📱 Android channel creation failed (non-critical):', channelError);
+      }
     }
 
     console.log('🚀 Background services initialization completed:', {
       permissions: permissionsGranted,
-      alarmService: alarmInitialized,
-      notifications: notificationsConfigured
     });
-
-    if (permissionsGranted) {
-      try {
-        console.log('🔄 Registering notification background task...');
-        const registered = await notificationBackgroundTask.register();
-        if (registered) {
-          console.log('✅ Background task registered successfully');
-          const status = await notificationBackgroundTask.getStatus();
-          console.log('📊 Background task status:', status);
-        } else {
-          console.warn('⚠️ Background task registration returned false');
-        }
-      } catch (bgTaskError) {
-        console.error('❌ Background task registration failed:', bgTaskError);
-      }
-    }
 
     return true;
   } catch (error) {
@@ -358,7 +338,9 @@ function MainApp() {
 
   useEffect(() => {
     console.log('🚀 App.js: useEffect starting...');
-    setupNotificationHandler();
+    // PHASE 4: removed the duplicate setupNotificationHandler() call here. The
+    // module-level call at the top of this file is the authoritative one and
+    // runs before any component renders.
 
     const initApp = async () => {
       try {
@@ -391,14 +373,16 @@ function MainApp() {
             console.warn('⚠️ Local migration error (non-critical):', migrationError);
           }
 
+          // PHASE 4: inlined the permission check (notificationService.js is
+          // deleted). The actual permission *request* still happens later in
+          // initializeBackgroundServices; this read is purely diagnostic.
           try {
-            console.log('🔔 Checking notification permissions...');
-            const hasPermission = await notificationService.areNotificationsEnabled();
-            if (!hasPermission) {
-              console.log('⚠️ Notification permissions not granted');
-            } else {
+            const { status } = await Notifications.getPermissionsAsync();
+            if (status === 'granted') {
               console.log('✅ Notification permissions granted');
               console.log('ℹ️ Re-engagement reminders handled by Firebase Cloud Scheduler');
+            } else {
+              console.log('⚠️ Notification permissions not granted yet (status:', status + ')');
             }
           } catch (error) {
             console.error('❌ Error checking notification permissions:', error);
@@ -472,66 +456,60 @@ function MainApp() {
 
     initApp();
 
+    // PHASE 4: this is the SOLE expo-notifications response listener in the
+    // entire app. App.js owns notification tap handling — no alarm logic, no
+    // duplicate listeners, no cold-launch alarm replay. The OS already played
+    // the sound for any session_end notification by the time it can be tapped;
+    // re-engagement notification taps are routed by useNotificationHandlers
+    // via the FCM messaging() handlers (a separate transport).
     const setupNotifications = async () => {
       try {
         console.log('🔔 Setting up notification listeners...');
 
         const responseSubscription = Notifications.addNotificationResponseReceivedListener(
-          async response => {
+          async (response) => {
             try {
               const data = response.notification.request.content.data;
-              console.log('📱 User tapped notification:', data);
-              if (data.action === 'pauseResume') {
-                handlePauseResumeAction();
-              } else if (data.action === 'endSession') {
-                handleEndSession();
-              } else if (data.type === 'sessionComplete') {
-                await handleCompletionAlarmFromNotification(data);
-              } else if (data.action === 'navigateToSession') {
-                safeNavigate('DeepWorkSession');
-              } else if (data.type === 'pauseResume') {
-                handlePauseResumeAction();
-              } else if (data.type === 'endSession') {
-                handleEndSession();
+              const type = data?.type;
+        
+              console.log('📱 [App] Local notification tapped, type:', type);
+        
+              if (type === 'session_end') {
+                const session = await getActiveSession();
+        
+                if (!session) {
+                  console.log('⚠️ No active session found — skipping analytics');
+                  return;
+                }
+        
+                const { config, endTime, status } = session;
+        
+                if (!config?.duration || !endTime) {
+                  console.log('⚠️ Invalid session shape:', session);
+                  return;
+                }
+        
+                // ✅ Strongest, simplest check (you already computed this)
+                if (status !== 'expired') {
+                  console.log('⚠️ Session not expired yet — skipping');
+                  return;
+                }
+        
+                console.log('📊 Logging BACKGROUND session completion');
+        
+                await logSessionComplete(config.duration, 'background');
+        
+                await clearActiveSession();
               }
+        
             } catch (error) {
               console.error('🚀 Notification response error:', error);
             }
           }
         );
 
-        const receivedSubscription = Notifications.addNotificationReceivedListener(
-          async notification => {
-            try {
-              const data = notification.request.content.data;
-              console.log('📬 Notification received:', {
-                title: notification.request.content.title,
-                type: data?.type,
-                appState: AppState.currentState,
-              });
-
-              if (data?.shouldPlayAlarm || data?.type === 'sessionComplete') {
-                const appState = AppState.currentState;
-                if (appState === 'active') {
-                  console.log('🔔 App is active - playing enhanced in-app alarm');
-                  try {
-                    await alarmService.playCompletionAlarm({ volume: 0.9, autoStopAfter: 10 });
-                    Vibration.vibrate([0, 500, 200, 500]);
-                  } catch (alarmError) {
-                    console.warn('🔔 In-app alarm failed (non-critical):', alarmError);
-                  }
-                } else {
-                  console.log('🔔 App is backgrounded/locked - notification sound will handle alarm');
-                }
-              }
-            } catch (error) {
-              console.error('🔔 Received listener error:', error);
-            }
-          }
-        );
-
-        setNotificationSubscription([responseSubscription, receivedSubscription]);
-        console.log('✅ Notification listeners configured successfully');
+        setNotificationSubscription(responseSubscription);
+        console.log('✅ Notification listener configured successfully');
         setInitializationStatus(prev => ({ ...prev, notifications: 'success' }));
       } catch (error) {
         console.error('🚀 Notification setup error:', error);
@@ -539,59 +517,32 @@ function MainApp() {
       }
     };
 
-    const handleCompletionAlarmFromNotification = async (notificationData) => {
-      try {
-        console.log('🔔 Attempting to play completion alarm from notification...');
-        if (alarmService && typeof alarmService.init === 'function') {
-          const alarmReady = await alarmService.init();
-          if (!alarmReady) {
-            console.error('🔔 Failed to initialize alarm service');
-            showFallbackAlert();
-            return;
-          }
-          const alarmSettings = notificationData.alarmSettings || { volume: 0.8, autoStopAfter: 8 };
-          const alarmPlayed = await alarmService.playCompletionAlarm(alarmSettings);
-          if (alarmPlayed) {
-            console.log('🎉 Session completion alarm played successfully!');
-          } else {
-            console.log('🔔 Alarm failed to play - showing visual confirmation');
-            showFallbackAlert();
-          }
-        } else {
-          console.log('🔔 Alarm service not available - showing visual alert instead');
-          showFallbackAlert();
-        }
-      } catch (error) {
-        console.error('🔔 Error playing completion alarm from notification:', error);
-        showFallbackAlert();
-      }
-    };
-
-    const showFallbackAlert = () => {
-      setTimeout(() => {
-        Alert.alert(
-          '🎉 Session Complete!',
-          'Congratulations! Your deep work session has finished successfully.',
-          [{ text: 'Awesome!', style: 'default' }]
-        );
-      }, 500);
-    };
-
     setTimeout(setupNotifications, isTablet ? 4000 : 2000);
 
+    // PHASE 2: removed checkMissedCompletion(). Its only remaining job after
+    // Phase 1 was to delete the stale @session_end_time key; Phase 2 retires
+    // that key entirely (HomeScreen orphan detection now reads endTime from
+    // @active_session_config via sessionStateService.getActiveSession()).
+
+    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        // iOS deactivates AVAudioSession when app is backgrounded — reset the cache
+        // so the next audio call re-initializes the session rather than using stale state.
+        audioSessionManager.reset();
+        // Clear the notification badge now that the user has opened the app.
+        Notifications.setBadgeCountAsync(0).catch(() => {});
+      }
+    });
+
     return () => {
+      appStateSubscription.remove();
       console.log('🚀 App.js: Cleaning up...');
-      if (notificationSubscription) {
+      // PHASE 4: notificationSubscription is now a single subscription object,
+      // not an array (only one listener is registered).
+      if (notificationSubscription && typeof notificationSubscription.remove === 'function') {
         try {
-          if (Array.isArray(notificationSubscription)) {
-            notificationSubscription.forEach(sub => {
-              if (sub && typeof sub.remove === 'function') sub.remove();
-            });
-            console.log('✅ All notification subscriptions removed');
-          } else {
-            notificationSubscription.remove();
-            console.log('✅ Notification subscription removed');
-          }
+          notificationSubscription.remove();
+          console.log('✅ Notification subscription removed');
         } catch (error) {
           console.error('🚀 Error removing notification subscription:', error);
         }
@@ -599,25 +550,9 @@ function MainApp() {
     };
   }, []);
 
-  const handlePauseResumeAction = async () => {
-    try {
-      const sessionData = await backgroundTimer.getCurrentSession();
-      if (sessionData) {
-        await backgroundTimer.updateTimerPauseState(!sessionData.isPaused);
-      }
-    } catch (error) {
-      console.error('🚀 Pause/resume error:', error);
-    }
-  };
-
-  const handleEndSession = async () => {
-    try {
-      await backgroundTimer.stopTimerNotification();
-      safeNavigate('MainApp', { screen: 'Home' });
-    } catch (error) {
-      console.error('🚀 End session error:', error);
-    }
-  };
+  // PHASE 3: removed handlePauseResumeAction and handleEndSession. Both wrapped
+  // backgroundTimer.* methods that no longer exist; both were only invoked by
+  // notification action-button taps from the deleted sticky timer notification.
 
   const handleWhatsNewComplete = async () => {
     try {

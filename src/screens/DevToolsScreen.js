@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { seedData, clearSeedData } from '../utils/seedData';
 import { useTheme } from '../context/ThemeContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import InsightGenerator from '../services/insights/InsightGenerator';
 import SessionRepository from '../services/database/SessionRepository';
 import DataAggregator from '../services/insights/DataAggregator';
@@ -25,7 +26,6 @@ import {
 } from '../services/personalizedNotificationService';
 import { devModalService } from '../services/devModalService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useSubscription } from '../context/SubscriptionContext';
 
 const DevToolsScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -823,6 +823,32 @@ const styles = StyleSheet.create({
   },
   insightMeta: {
     fontSize: 12,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  toggleLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  toggleSub: {
+    fontSize: 13,
+  },
+  pill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  pillText: {
+    color: 'white',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
 

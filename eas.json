@@ -9,10 +9,12 @@
       "distribution": "internal",
       "channel": "development",
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "scheme": "DeepWorkioDev"
       },
       "credentialsSource": "local",
       "env": {
+        "APP_VARIANT": "development",
         "EXPO_PUBLIC_OPENAI_API_KEY": "$(EXPO_PUBLIC_OPENAI_API_KEY)"
       },
       "cache": {
@@ -22,17 +24,22 @@
     "preview": {
       "distribution": "internal",
       "channel": "preview",
+      "ios": {
+        "scheme": "DeepWorkioDev"
+      },
       "env": {
+        "APP_VARIANT": "development",
         "EXPO_PUBLIC_OPENAI_API_KEY": "$(EXPO_PUBLIC_OPENAI_API_KEY)"
       }
     },
     "production": {
-      "autoIncrement": true,
       "ios": {
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "scheme": "DeepWorkio"
       },
       "channel": "production",
       "env": {
+        "APP_VARIANT": "production",
         "EXPO_PUBLIC_OPENAI_API_KEY": "$(EXPO_PUBLIC_OPENAI_API_KEY)"
       }
     }

@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Platform } from 'react-native';
 import Purchases from 'react-native-purchases';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 
 const SubscriptionContext = createContext();
 
@@ -19,10 +21,37 @@ export function SubscriptionProvider({ children }) {
   const [devPremiumOverride, setDevPremiumOverrideState] = useState(null); // null | true | false
 
   useEffect(() => {
-    initializePurchases();
     if (__DEV__) {
       loadDevPremiumOverride();
     }
+
+    let rcInitialized = false;
+
+    // Wait for Firebase Auth to restore the session before checking entitlements.
+    // auth().currentUser is null on cold start, so checking synchronously would
+    // skip the UID login and return no entitlements for an anonymous RevenueCat user.
+    const unsubscribeAuth = auth().onAuthStateChanged(async (user) => {
+      try {
+        if (!rcInitialized) {
+          const apiKey = Platform.select(REVENUE_CAT_KEYS);
+          Purchases.configure({ apiKey });
+          Purchases.addCustomerInfoUpdateListener(updateSubscriptionStatus);
+          rcInitialized = true;
+        }
+
+        if (user?.uid) {
+          await Purchases.logIn(user.uid);
+          console.log('[Subscription] RevenueCat logged in with uid:', user.uid.substring(0, 8) + '...');
+        }
+
+        await checkSubscriptionStatus();
+      } catch (error) {
+        console.error('RevenueCat initialization error:', error);
+        setIsLoading(false);
+      }
+    });
+
+    return () => unsubscribeAuth();
   }, []);
 
   async function loadDevPremiumOverride() {
@@ -42,28 +71,27 @@ export function SubscriptionProvider({ children }) {
     setDevPremiumOverrideState(value);
   }
 
-  async function initializePurchases() {
-    try {
-      const apiKey = Platform.select(REVENUE_CAT_KEYS);
-      await Purchases.configure({ apiKey });
-      
-      // Check initial status
-      await checkSubscriptionStatus();
-      
-      // Listen for purchase updates
-      Purchases.addCustomerInfoUpdateListener((customerInfo) => {
-        updateSubscriptionStatus(customerInfo);
-      });
-    } catch (error) {
-      console.error('RevenueCat initialization error:', error);
-      setIsLoading(false);
-    }
-  }
-
   async function checkSubscriptionStatus() {
     try {
       const customerInfo = await Purchases.getCustomerInfo();
-      updateSubscriptionStatus(customerInfo);
+      const hasRevenueCat = customerInfo.entitlements.active['Pro'] !== undefined;
+
+      // Firestore override for comped users. Add a doc at
+      // premium_overrides/{email} via Firebase Console to grant free premium.
+      // Doc IDs are entered manually and their casing is inconsistent, so
+      // match case-insensitively against every doc ID rather than doing a
+      // direct .doc(email).get() lookup.
+      let hasOverride = false;
+      const email = auth().currentUser?.email?.toLowerCase();
+      if (email) {
+        const snapshot = await firestore().collection('premium_overrides').get();
+        hasOverride = snapshot.docs.some((doc) => doc.id.toLowerCase() === email);
+        if (hasOverride) {
+          console.log('[Subscription] Premium granted via Firestore override');
+        }
+      }
+
+      setIsPremium(hasRevenueCat || hasOverride);
     } catch (error) {
       console.error('Error checking subscription:', error);
       setIsPremium(false);
@@ -73,9 +101,11 @@ export function SubscriptionProvider({ children }) {
   }
 
   function updateSubscriptionStatus(customerInfo) {
-    // 'premium' is your entitlement identifier - we'll set this up in dashboard next
     const hasAccess = customerInfo.entitlements.active['Pro'] !== undefined;
-    setIsPremium(hasAccess);
+    // Note: updateSubscriptionStatus is called by the RevenueCat listener only —
+    // it does not re-check the Firestore override. checkSubscriptionStatus() handles
+    // the full check including the override on app launch.
+    setIsPremium(prev => prev || hasAccess);
   }
 
   const effectiveIsPremium = __DEV__ && devPremiumOverride !== null ? devPremiumOverride : isPremium;
@@ -84,6 +114,7 @@ export function SubscriptionProvider({ children }) {
     isPremium: effectiveIsPremium,
     isLoading,
     checkSubscriptionStatus,
+    setIsPremium, // exposed for dev tooling only
 
     // Add these for MetricsScreen compatibility
     isSubscribed: effectiveIsPremium,        // Alias for isPremium

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import messaging from '@react-native-firebase/messaging';
 import { firebase } from '@react-native-firebase/app';
+import auth from '@react-native-firebase/auth';
 import { Platform, Alert, Linking } from 'react-native';
 import deviceIdService from '../services/deviceIdService';
 import notificationPreferences from '../services/notificationPreferences';
@@ -26,6 +27,13 @@ export function useNotificationSetup() {
       const devId = await deviceIdService.getDeviceId();
       setDeviceId(devId);
       console.log('🔔 [FCM] Device ID:', devId.substring(0, 20) + '...');
+
+      // Use Firebase Auth UID as the Firestore key so fcm_tokens/{uid} and
+      // users/{uid}/preferences/notifications align with what Cloud Functions expect.
+      // Fall back to devId only if auth is not available (should not happen after
+      // anonymous auth fix, but guards against timing edge cases).
+      const uid = auth().currentUser?.uid || devId;
+      console.log('🔔 [FCM] Auth UID:', uid.substring(0, 20) + '...');
 
       const authStatus = await messaging().requestPermission();
       const enabled =
@@ -61,13 +69,13 @@ export function useNotificationSetup() {
       setFcmToken(token);
       console.log('🔑 [FCM] Token received:', token.substring(0, 20) + '...');
 
-      await registerTokenWithBackend(devId, token);
-      await initializePreferences(devId);
+      await registerTokenWithBackend(uid, token);
+      await initializePreferences(uid);
 
       const unsubscribe = messaging().onTokenRefresh(async (newToken) => {
         console.log('🔄 [FCM] Token refreshed');
         setFcmToken(newToken);
-        await registerTokenWithBackend(devId, newToken);
+        await registerTokenWithBackend(uid, newToken);
       });
 
       return unsubscribe;

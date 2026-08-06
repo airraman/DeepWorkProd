@@ -1,6 +1,5 @@
 // src/services/audioService.js - Full Implementation with Background Music
 import { Audio } from 'expo-av';
-import { Platform } from 'react-native';
 import { audioSessionManager } from './audioSessionManager';  // Add at top of file
 
 
@@ -62,7 +61,7 @@ class AudioService {
       
     } catch (error) {
       console.error('🎵 Audio initialization error:', error);
-      this.isInitialized = true;
+      this.isInitialized = false;
       return false;
     }
   }
@@ -120,46 +119,37 @@ class AudioService {
       }
       
       console.log(`🎵 Loading audio for: ${musicChoice}`);
-      
-      /**
-       * CRITICAL: Sound Loading
-       * 
-       * Audio.Sound.createAsync() does TWO things:
-       * 1. Creates a Sound object
-       * 2. Loads the audio data into memory
-       * 
-       * Returns: { sound, status }
-       * - sound: The Sound object we'll use to control playback
-       * - status: Current state (loaded, playing, duration, etc.)
-       * 
-       * INTERVIEW Q: Why destructure { sound }?
-       * A: We only need the sound object, not the status
-       */
+
+      // Re-apply audio mode directly before loading — iOS deactivates the audio
+      // session when the app is backgrounded, and the audioSessionManager cache
+      // keeps isInitialized=true so init() would skip re-setup. This mirrors
+      // the same pattern used in alarmService.playCompletionAlarm().
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        interruptionModeIOS: 2, // DuckOthers
+        interruptionModeAndroid: 2,
+        shouldDuckAndroid: true,
+        allowsRecordingIOS: false,
+        playThroughEarpieceAndroid: false,
+      });
+      console.log('🎵 Audio mode set — playsInSilentMode: true, staysActiveInBackground: true');
+
       const { sound } = await Audio.Sound.createAsync(
         soundSource,
         {
-          // Start playing immediately after loading
           shouldPlay: true,
-          
-          // Loop the music continuously
-          // IMPORTANT: Background music should loop until session ends
           isLooping: true,
-          
-          // Set volume (0.0 to 1.0)
-          // Using 0.5 so it's not overwhelming
           volume: 0.5,
         },
-        // Status update callback (called when playback state changes)
-        // We use this to track when playback finishes or errors occur
         this.onPlaybackStatusUpdate
       );
-      
-      // Store the sound object so we can control it later (pause/stop)
-      // CRITICAL: Without this, we'd have no way to stop the music!
+      console.log(`🎵 Sound object created for: ${musicChoice}`);
+
       this.currentSound = sound;
       this.currentMusicChoice = musicChoice;
       this.isPlaying = true;
-      
+
       console.log(`🎵 Successfully playing: ${musicChoice}`);
       return true;
       

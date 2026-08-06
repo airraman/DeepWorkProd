@@ -89,43 +89,36 @@ const WeeklyFocusChart = ({ sessions }) => {
   );
 };
 
-const TotalTimeCard = ({ totalHours }) => {
-  const { colors } = useTheme();
-  
-  const getBackgroundColorForTime = (hours) => {
-    if (hours <= 5) return '#D1FADF';   
-    if (hours <= 20) return '#A6F4C5';  
-    if (hours <= 50) return '#4ADE80';  
-    return '#22C55E';                   
+const TotalTimeCard = ({ sessions, selectedMonth }) => {
+  const computeMonthHours = () => {
+    if (!selectedMonth || !sessions) return 0;
+    const [year, month] = selectedMonth.split('-').map(Number);
+    let totalMins = 0;
+    Object.entries(sessions).forEach(([dateStr, daySessions]) => {
+      const d = new Date(`${dateStr}T00:00:00`);
+      if (d.getFullYear() === year && d.getMonth() + 1 === month) {
+        daySessions.forEach(s => { totalMins += s.duration || 0; });
+      }
+    });
+    return Math.round((totalMins / 60) * 10) / 10;
   };
 
-  const getTextColorForTime = (hours) => {
-    if (hours <= 20) return '#1E3A29';
-    return '#FFFFFF';
-  };
-
-  const backgroundColor = getBackgroundColorForTime(totalHours);
-  const textColor = getTextColorForTime(totalHours);
+  const monthHours = computeMonthHours();
+  const monthLabel = selectedMonth
+    ? MONTHS[parseInt(selectedMonth.split('-')[1], 10) - 1]
+    : 'Month';
 
   return (
-    <View style={[
-      styles.totalTimeContainer,
-      { backgroundColor }
-    ]}>
-      <Text style={[styles.totalTimeLabel, { color: textColor }]}>
+    <View style={[styles.totalTimeContainer, { backgroundColor: 'rgba(21,128,61,0.12)' }]}>
+      <Text style={[styles.totalTimeLabel, { color: '#15803D' }]}>
         Focus Time
       </Text>
-      <Text style={[styles.totalTimeValue, { color: textColor }]}>
-        {totalHours}h
+      <Text style={[styles.totalTimeValue, { color: '#15803D' }]}>
+        {monthHours}h
       </Text>
-      <Text style={[styles.totalTimeSubtext, { color: textColor }]}>
-        All-time
+      <Text style={[styles.totalTimeSubtext, { color: '#15803D' }]}>
+        {monthLabel}
       </Text>
-      {totalHours > 50 && (
-        <View style={styles.achievementContainer}>
-          <Text style={styles.achievementIcon}></Text>
-        </View>
-      )}
     </View>
   );
 };
@@ -397,7 +390,7 @@ const MonthSelector = ({ selectedMonth, onMonthSelect, sessions }) => {
   );
 };
 
-const SessionList = ({ sessions, activities, onSessionPress, selectedMonth,  onActivityPress }) => {
+const SessionList = ({ sessions, activities, onSessionPress, selectedMonth, onActivityPress, onScrollY }) => {
   const { colors } = useTheme();
   
   const generateDaysList = () => {
@@ -439,9 +432,11 @@ for (let d = 1; d <= lastDay.getDate(); d++) {
   
   return (
     <View style={styles.sessionListContainer}>
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
+        onScroll={onScrollY}
+        scrollEventThrottle={16}
       >
         {days.map((day) => {
           const dayTotal = calculateDayTotal(day.sessions);
@@ -519,6 +514,29 @@ const MetricsScreen = () => {
   const navigation = useNavigation();
 
   const { isPremium, canGenerateInsights } = useSubscription();
+
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, 60],
+    outputRange: [52, 0],
+    extrapolate: 'clamp',
+  });
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 40],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+  const monthSelectorHeight = scrollY.interpolate({
+    inputRange: [0, 60],
+    outputRange: [58, 0],
+    extrapolate: 'clamp',
+  });
+  const monthSelectorOpacity = scrollY.interpolate({
+    inputRange: [0, 50],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
 
   const [sessions, setSessions] = useState({});
   const [activities, setActivities] = useState([]);
@@ -697,16 +715,6 @@ const MetricsScreen = () => {
   };
 
 
-  const calculateTotalHours = () => {
-    let totalMinutes = 0;
-    Object.values(sessions).forEach(daySessions => {
-      daySessions.forEach(session => {
-        totalMinutes += session.duration;
-      });
-    });
-    return Math.round(totalMinutes / 60);
-  };
-
   const handleSessionPress = (session) => {
     setSelectedSession(session);
   };
@@ -731,18 +739,16 @@ const MetricsScreen = () => {
     setSelectedMonth(value);
   };
 
-  const totalHours = calculateTotalHours();
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
+      <Animated.View style={[styles.header, { borderBottomColor: colors.border, height: headerHeight, overflow: 'hidden' }]}>
+        <Animated.Text style={[styles.headerTitle, { color: colors.text, opacity: headerOpacity }]}>
           DeepWork.io
-        </Text>
-        <Text style={[styles.headerSubtitle, { color: colors.text }]}>
+        </Animated.Text>
+        <Animated.Text style={[styles.headerSubtitle, { color: colors.text, opacity: headerOpacity }]}>
           Metrics
-        </Text>
-      </View>
+        </Animated.Text>
+      </Animated.View>
 
       <View style={styles.content}>
         {/* Fixed Section: Insights + Metrics + Month Selector */}
@@ -762,25 +768,35 @@ const MetricsScreen = () => {
             </View>
             
             <View style={styles.totalTimeSection}>
-              <TotalTimeCard totalHours={totalHours} />
+              <TotalTimeCard sessions={sessions} selectedMonth={selectedMonth} />
             </View>
           </View>
 
-          {/* Month Selector */}
-          <MonthSelector 
-            selectedMonth={selectedMonth}
-            onMonthSelect={handleMonthSelect}
-            sessions={sessions}
-          />
+          {/* Month Selector — collapses on scroll */}
+          <Animated.View style={{
+            height: monthSelectorHeight,
+            opacity: monthSelectorOpacity,
+            overflow: 'hidden',
+          }}>
+            <MonthSelector
+              selectedMonth={selectedMonth}
+              onMonthSelect={handleMonthSelect}
+              sessions={sessions}
+            />
+          </Animated.View>
         </View>
 
         {/* Scrollable Section: Session List Only */}
-        <SessionList 
-          sessions={sessions} 
+        <SessionList
+          sessions={sessions}
           activities={activities}
           onSessionPress={handleSessionPress}
           selectedMonth={selectedMonth}
-          onActivityPress={handleActivityPress}  // ✅ NEW: Pass the handler
+          onActivityPress={handleActivityPress}
+          onScrollY={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: false }
+          )}
         />
       </View>
 
@@ -1294,12 +1310,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  analyzeButtonTeaser: {
+    fontSize: 12,
+    marginTop: 2,
+  },
   buttonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  
+
   // Inline Preview Card (After Generation)
   insightPreviewCard: {
     backgroundColor: '#1a1a1a',
@@ -1307,6 +1327,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginHorizontal: 16,
     marginVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
   },
   insightPreviewHeader: {
     flexDirection: 'row',
@@ -1339,6 +1364,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     marginTop: 4,
+  },
+  lockedInsightBlock: {
+    padding: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(150,150,150,0.25)',
+    alignItems: 'center',
+    gap: 6,
+  },
+  lockedInsightText: {
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  lockedInsightSub: {
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  lockedUpgradeBtn: {
+    marginTop: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  lockedUpgradeBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   
   // Modal Styles

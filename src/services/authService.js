@@ -61,6 +61,23 @@ export const signIn = async (email, password) => {
 };
 
 /**
+ * Sign in anonymously (guest mode).
+ * Creates an anonymous Firebase user so App.js gates open.
+ * The user can upgrade to a real account later via linkWithCredential.
+ */
+export const signInAnonymously = async () => {
+  console.log('🔄 [authService] signInAnonymously');
+  try {
+    const credential = await auth().signInAnonymously();
+    console.log('✅ [authService] signInAnonymously — uid:', credential.user.uid);
+    return credential.user;
+  } catch (error) {
+    console.log('❌ [authService] signInAnonymously error:', error.message);
+    throw error;
+  }
+};
+
+/**
  * Sign out current user.
  */
 export const signOut = async () => {
