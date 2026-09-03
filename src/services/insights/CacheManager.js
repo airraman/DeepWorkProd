@@ -49,12 +49,16 @@ export class CacheManager {
       case 'monthly':
         return timeSinceCached < ONE_MONTH_MS;
 
+      case 'behavioral_30d':
+        // Same freshness window as 'daily' — regenerate once data changes or a day passes.
+        return timeSinceCached < ONE_DAY_MS;
+
       default:
         // Activity-specific insights (e.g., 'activity_work_week')
         if (insightType.startsWith('activity_')) {
           return timeSinceCached < ONE_WEEK_MS;
         }
-        
+
         // Unknown type - invalidate cache to be safe
         return false;
     }
@@ -83,6 +87,7 @@ export class CacheManager {
       daily: ONE_DAY_MS * 0.8,      // After 19.2 hours
       weekly: ONE_WEEK_MS * 0.8,    // After 5.6 days
       monthly: ONE_MONTH_MS * 0.8,  // After 24 days
+      behavioral_30d: ONE_DAY_MS * 0.8,
     };
 
     const threshold = expirationThreshold[insightType] || ONE_WEEK_MS * 0.8;

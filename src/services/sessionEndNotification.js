@@ -65,7 +65,7 @@ export const ensureNotificationPermissions = async () => {
     if (requested.status !== 'granted') {
       console.error('[SessionEnd] CRITICAL: Notification permission denied —',
         'no session-end notification will be scheduled.',
-        'User must enable in iOS Settings → DeepWork → Notifications');
+        'User must enable in iOS Settings → Lucid → Notifications');
     }
 
     return requested.status === 'granted';

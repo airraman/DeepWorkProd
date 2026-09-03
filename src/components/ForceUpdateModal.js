@@ -57,7 +57,7 @@ export function ForceUpdateModal({ visible, updateUrl }) {
         <Animated.View style={[styles.card, { opacity, transform: [{ scale }] }]}>
           <Text style={styles.title}>Update Required</Text>
           <Text style={styles.body}>
-            A new version of DeepWork is available with important improvements.
+            A new version of Lucid is available with important improvements.
             Please update to continue.
           </Text>
           <TouchableOpacity style={styles.button} onPress={handleUpdate} activeOpacity={0.85}>

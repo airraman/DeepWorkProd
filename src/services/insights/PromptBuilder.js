@@ -229,6 +229,105 @@ The two bullets should cover:
 Tone: direct, warm, specific. No paragraph text — bullets only.`;
   }
 
+  // ─── Behavioral (30-day qualitative insight) ────────────────────────────────
+
+  static _formatGroup(label, group) {
+    if (!group || group.count === 0) return null;
+    const parts = [`${label}: ${group.count} session${group.count === 1 ? '' : 's'}`];
+    if (group.totalHours !== undefined) parts.push(`${group.totalHours.toFixed(1)}h total`);
+    if (group.avgFocus !== null && group.avgFocus !== undefined) parts.push(`avg focus ${group.avgFocus}/5`);
+    if (group.avgProductivity !== null && group.avgProductivity !== undefined) parts.push(`avg productivity ${group.avgProductivity}/5`);
+    return parts.join(', ');
+  }
+
+  static buildBehavioralPrompt(aggregatedData) {
+    const {
+      totalSessions, totalHours, avgSessionMinutes, daysInWindow, daysWithSessions,
+      ratedSessionCount, avgFocus, avgProductivity,
+      byDurationBucket, byActivity, byTimeOfDay, weekdayVsWeekend, recentVsHistorical,
+      notableSessions,
+    } = aggregatedData;
+
+    const overallLines = [
+      `Total sessions: ${totalSessions}, total focus time: ${totalHours.toFixed(1)}h, avg session length: ${avgSessionMinutes} min`,
+      `Days with at least one session: ${daysWithSessions} of ${daysInWindow}`,
+    ];
+    if (ratedSessionCount > 0) {
+      overallLines.push(`Average focus rating: ${avgFocus}/5, average productivity rating: ${avgProductivity}/5 (based on ${ratedSessionCount} rated sessions)`);
+    } else {
+      overallLines.push('No focus/productivity ratings recorded in this period.');
+    }
+
+    const durationLines = Object.entries(byDurationBucket || {})
+      .map(([bucket, g]) => this._formatGroup(bucket, g))
+      .filter(Boolean);
+
+    const activityLines = Object.entries(byActivity || {})
+      .sort((a, b) => b[1].totalHours - a[1].totalHours)
+      .map(([activity, g]) => this._formatGroup(activity, g))
+      .filter(Boolean);
+
+    const timeOfDayLines = Object.entries(byTimeOfDay || {})
+      .map(([bucket, g]) => this._formatGroup(bucket, g))
+      .filter(Boolean);
+
+    const weekdayLines = [
+      this._formatGroup('Weekday', weekdayVsWeekend?.weekday),
+      this._formatGroup('Weekend', weekdayVsWeekend?.weekend),
+    ].filter(Boolean);
+
+    const trendLines = [
+      this._formatGroup('Last 7 days', recentVsHistorical?.recent7Days),
+      this._formatGroup(`Previous ${Math.max(daysInWindow - 7, 0)} days`, recentVsHistorical?.priorPeriod),
+    ].filter(Boolean);
+
+    const notableLines = (notableSessions || []).map(s => {
+      const ratingPart = s.focusRating !== null
+        ? `focus ${s.focusRating}/5${s.productivityRating !== null ? `, productivity ${s.productivityRating}/5` : ''}`
+        : 'no rating';
+      const workedOnPart = s.workedOn ? ` Worked on: "${this._sanitize(s.workedOn, 80)}"` : '';
+      return `- ${s.date} (${s.dayOfWeek}, ${s.timeOfDay}): ${s.activity}, ${s.minutes} min, ${ratingPart}.${workedOnPart}`;
+    });
+
+    return `You are analyzing focus session data for a user of a deep work app, covering the last ${daysInWindow} days.
+
+OVERALL
+${overallLines.join('\n')}
+
+BY SESSION LENGTH
+${durationLines.length > 0 ? durationLines.join('\n') : 'No data.'}
+
+BY ACTIVITY
+${activityLines.length > 0 ? activityLines.join('\n') : 'No data.'}
+
+BY TIME OF DAY
+${timeOfDayLines.length > 0 ? timeOfDayLines.join('\n') : 'No data.'}
+
+WEEKDAY VS WEEKEND
+${weekdayLines.length > 0 ? weekdayLines.join('\n') : 'No data.'}
+
+RECENT VS EARLIER
+${trendLines.length > 0 ? trendLines.join('\n') : 'No data.'}
+
+NOTABLE SESSIONS (for context — reference only if relevant to the pattern you pick)
+${notableLines.length > 0 ? notableLines.join('\n') : 'None.'}
+
+TASK
+Identify the SINGLE most useful, well-supported pattern in this data — something the user would not already know just from looking at simple totals like session count or total hours.
+
+Consider (without forcing yourself into) these pattern types: optimal session duration, optimal time of day, an activity associated with stronger focus/productivity, a change in focus/productivity over time (recent vs earlier), consistency, an unusually strong or weak session, or a relationship between session length and ratings.
+
+Requirements:
+- The insight must be interpretation, not a restated total. Do NOT report "you completed N sessions" or "you focused for N hours" as the insight — those are already shown elsewhere in the app.
+- The insight must be grounded in the data above. The evidence field must cite the specific numbers that support it.
+- Use cautious, evidence-based language: "Your data suggests...", "You tend to...", "Your highest-focus sessions...". Do not invent a causal explanation the data doesn't support.
+- If no group above has at least 3 rated sessions, or no dimension shows a meaningful difference (roughly 0.5+ points on the 1-5 scale, or a clear directional trend), return category "insufficient_data" with a short, honest insight instead of manufacturing a pattern.
+- Set confidence to "high" only when the supporting group has 5+ sessions and a clear (0.5+) difference vs. the comparison group; "medium" for smaller samples or smaller differences; "low" otherwise (including "insufficient_data").
+
+Respond with ONLY a JSON object in this exact shape, no other text, no markdown code fences:
+{"insight": "<one sentence, the interpretive observation, second person>", "evidence": "<one sentence, the specific numbers that support it>", "category": "session_duration | time_of_day | activity | trend | consistency | standout_session | insufficient_data", "confidence": "high | medium | low"}`;
+  }
+
   // ─── Fallback ─────────────────────────────────────────────────────────────
 
   static _buildEmptyPrompt(insightType) {

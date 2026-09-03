@@ -3,6 +3,21 @@
 import OpenAI from 'openai';
 import { OPENAI_API_KEY, OPENAI_CONFIG } from '../../config/openai';
 
+const DEFAULT_SYSTEM_PROMPT = `You are a data analyst reviewing focus session metrics. Your role is to:
+
+1. Identify patterns in quantitative data (session frequency, duration, distribution)
+2. Observe themes in qualitative data (types of work, project focus areas)
+3. Make evidence-based observations, not motivational statements
+4. Reference specific session notes when available
+5. Offer data-driven suggestions sparingly - only when the metrics clearly indicate an opportunity
+
+Tone: Professional, observational, fact-based. Avoid:
+- Generic encouragement ("Great job!", "Keep it up!")
+- Prescriptive advice without data support
+- Assumptions about the user's goals or feelings
+
+Response length: 2-3 sentences maximum (under 100 words).`;
+
 /**
  * OpenAIService - Handles all OpenAI API interactions
  * 
@@ -44,6 +59,8 @@ class OpenAIService {
       maxTokens = OPENAI_CONFIG.maxTokens,
       temperature = 0.6,
       retryCount = 0,
+      systemPrompt = DEFAULT_SYSTEM_PROMPT,
+      responseFormat = null, // pass 'json_object' to request strict JSON output
     } = options;
 
     try {
@@ -51,27 +68,14 @@ class OpenAIService {
       await this._enforceRateLimit();
 
       console.log(`[OpenAI] Generating insight (attempt ${retryCount + 1})...`);
-      
+
       // API call to OpenAI
       const response = await this.client.chat.completions.create({
         model: OPENAI_CONFIG.model,
         messages: [
           {
             role: 'system',
-            content: `You are a data analyst reviewing focus session metrics. Your role is to:
-
-1. Identify patterns in quantitative data (session frequency, duration, distribution)
-2. Observe themes in qualitative data (types of work, project focus areas)
-3. Make evidence-based observations, not motivational statements
-4. Reference specific session notes when available
-5. Offer data-driven suggestions sparingly - only when the metrics clearly indicate an opportunity
-
-Tone: Professional, observational, fact-based. Avoid:
-- Generic encouragement ("Great job!", "Keep it up!")
-- Prescriptive advice without data support
-- Assumptions about the user's goals or feelings
-
-Response length: 2-3 sentences maximum (under 100 words).`,
+            content: systemPrompt,
           },
           {
             role: 'user',
@@ -80,6 +84,7 @@ Response length: 2-3 sentences maximum (under 100 words).`,
         ],
         max_tokens: maxTokens,
         temperature: temperature,
+        ...(responseFormat === 'json_object' ? { response_format: { type: 'json_object' } } : {}),
       });
 
       // Extract and validate response
@@ -95,7 +100,7 @@ Response length: 2-3 sentences maximum (under 100 words).`,
       return insightText.trim();
 
     } catch (error) {
-      return this._handleError(error, prompt, { maxTokens, temperature, retryCount });
+      return this._handleError(error, prompt, { maxTokens, temperature, retryCount, systemPrompt, responseFormat });
     }
   }
 

@@ -182,7 +182,7 @@ const InitialSetupScreen = ({navigation}) => {
         return (
             <SafeAreaView style={[styles.container, styles.centered]}>
                 <ActivityIndicator size="large" color="#2563EB" />
-                <Text style={styles.loadingText}>Initializing DeepWork...</Text>
+                <Text style={styles.loadingText}>Initializing Lucid...</Text>
             </SafeAreaView>
         );
     }

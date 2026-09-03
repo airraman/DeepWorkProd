@@ -1,22 +1,24 @@
 // src/services/notificationPreferences.js
 /**
  * Notification Preferences Service
- * 
- * ARCHITECTURE v2 (Realtime Database):
- * - Primary storage: Firebase Realtime Database (cloud, syncs across devices)
- * - Fallback: AsyncStorage (local cache for offline)
- * - Smart defaults: All notifications ON by default
- * 
- * WHY REALTIME DATABASE:
- * - Multi-device sync (preferences follow user across devices)
- * - Real-time updates (changes sync instantly)
- * - Simple structure (perfect for user preferences)
- * - No gRPC issues (unlike Firestore)
+ *
+ * ARCHITECTURE v3 (Firestore):
+ * - Primary storage: Firestore at users/{uid}/preferences/notifications —
+ *   the exact path/uid key functions/index.js's dailyRemindersBatch and
+ *   weeklySummaryBatch read from.
+ * - Fallback: AsyncStorage (local cache for offline / logged-out reads).
+ * - Smart defaults: All notifications ON by default.
+ *
+ * v2 wrote this data to Realtime Database keyed by deviceId, which the
+ * Cloud Functions never read (they read Firestore keyed by Auth uid) — so
+ * scheduled notifications silently never sent. Nothing else in the app
+ * reads the old RTDB path, so it has been retired rather than kept as a
+ * second, unread source of truth.
  */
 
-import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
+import firestore from '../config/firebaseConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import deviceIdService from './deviceIdService';
 
 const PREFS_STORAGE_KEY = '@notification_preferences';
 
@@ -38,89 +40,103 @@ class NotificationPreferencesService {
   
   /**
    * Get user's notification preferences
-   * 
+   *
    * FLOW:
-   * 1. Try Realtime Database (cloud)
-   * 2. Fallback to AsyncStorage cache (offline)
+   * 1. Try Firestore, users/{uid}/preferences/notifications (cloud)
+   * 2. Fallback to AsyncStorage cache (offline / logged-out)
    * 3. Return defaults if nothing exists
    */
   async getPreferences() {
     try {
-      const deviceId = await deviceIdService.getDeviceId();
-      
-      // Try Realtime Database first
-      try {
-        const snapshot = await database()
-          .ref(`/users/${deviceId}/preferences/notifications`)
-          .once('value');
-        
-        if (snapshot.exists()) {
-          console.log('📋 [NotificationPrefs] Loaded from Realtime Database');
-          const prefs = snapshot.val();
-          
-          // Cache locally for offline access
-          await this._cachePreferences(prefs);
-          
-          return prefs;
+      const uid = auth().currentUser?.uid;
+
+      // Try Firestore first — same doc the Cloud Functions read.
+      if (uid) {
+        try {
+          const doc = await firestore()
+            .collection('users')
+            .doc(uid)
+            .collection('preferences')
+            .doc('notifications')
+            .get();
+
+          if (doc.exists) {
+            console.log('📋 [NotificationPrefs] Loaded from Firestore');
+            const prefs = doc.data();
+
+            // Cache locally for offline access
+            await this._cachePreferences(prefs);
+
+            return prefs;
+          }
+        } catch (firestoreError) {
+          console.warn('⚠️ [NotificationPrefs] Firestore unavailable:', firestoreError.message);
         }
-      } catch (dbError) {
-        console.warn('⚠️ [NotificationPrefs] Realtime Database unavailable:', dbError.message);
       }
-      
+
       // Fallback to local cache
       const cachedPrefs = await this._getCachedPreferences();
       if (cachedPrefs) {
         console.log('📋 [NotificationPrefs] Loaded from cache');
         return cachedPrefs;
       }
-      
+
       // No preferences exist - return defaults
       console.log('📋 [NotificationPrefs] Using defaults');
       return DEFAULT_PREFERENCES;
-      
+
     } catch (error) {
       console.error('❌ [NotificationPrefs] Error getting preferences:', error);
       return DEFAULT_PREFERENCES;
     }
   }
-  
+
   /**
    * Save user's notification preferences
-   * 
+   *
    * DUAL-WRITE PATTERN:
-   * - Realtime Database (primary, cloud-synced)
+   * - Firestore, users/{uid}/preferences/notifications (primary, cloud-synced,
+   *   merge:true so a single-field update never drops sibling fields)
    * - AsyncStorage (backup, offline support)
    */
   async savePreferences(preferences) {
     try {
-      const deviceId = await deviceIdService.getDeviceId();
-      
+      const uid = auth().currentUser?.uid;
+
       // Validate preferences
       const validatedPrefs = this._validatePreferences(preferences);
-      
+
       // Add timestamp
       const prefsWithTimestamp = {
         ...validatedPrefs,
         updatedAt: new Date().toISOString(),
       };
-      
-      // Save to Realtime Database
-      try {
-        await database()
-          .ref(`/users/${deviceId}/preferences/notifications`)
-          .set(prefsWithTimestamp);
-        
-        console.log('✅ [NotificationPrefs] Saved to Realtime Database');
-      } catch (dbError) {
-        console.warn('⚠️ [NotificationPrefs] Realtime Database save failed:', dbError.message);
+
+      // Save to Firestore — same doc the Cloud Functions read. No-ops
+      // safely when logged out, matching the Chrome bridge's pattern.
+      if (uid) {
+        try {
+          await firestore()
+            .collection('users')
+            .doc(uid)
+            .collection('preferences')
+            .doc('notifications')
+            .set(prefsWithTimestamp, {merge: true});
+
+          console.log('✅ [NotificationPrefs] Saved to Firestore');
+        } catch (firestoreError) {
+          console.warn('⚠️ [NotificationPrefs] Firestore save failed:', firestoreError.message);
+        }
+      } else {
+        console.log('📋 [NotificationPrefs] No user logged in — skipping Firestore save');
       }
-      
+
       // Save to local cache (always succeeds)
       await this._cachePreferences(prefsWithTimestamp);
       console.log('✅ [NotificationPrefs] Cached locally');
-      
+
       return true;
-      
+
     } catch (error) {
       console.error('❌ [NotificationPrefs] Error saving preferences:', error);
       return false;
@@ -265,16 +281,21 @@ class NotificationPreferencesService {
    */
   async clearAll() {
     try {
-      const deviceId = await deviceIdService.getDeviceId();
-      
-      // Clear Realtime Database
-      await database()
-        .ref(`/users/${deviceId}/preferences/notifications`)
-        .remove();
-      
+      const uid = auth().currentUser?.uid;
+
+      // Clear Firestore
+      if (uid) {
+        await firestore()
+          .collection('users')
+          .doc(uid)
+          .collection('preferences')
+          .doc('notifications')
+          .delete();
+      }
+
       // Clear cache
       await AsyncStorage.removeItem(PREFS_STORAGE_KEY);
-      
+
       console.log('🗑️ [NotificationPrefs] Cleared all preferences');
       return true;
       

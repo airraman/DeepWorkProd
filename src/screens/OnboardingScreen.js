@@ -105,7 +105,7 @@ function WelcomeStep({ onNext }) {
         <Text style={styles.heroEmoji}>🧠</Text>
         <Text style={styles.heroTitle}>Block out noise.{'\n'}Make progress.</Text>
         <Text style={styles.heroSub}>
-          DeepWork.io helps you tap into your unique focus rhythm, unlocking deep creativity and consistency.
+          Lucid helps you tap into your unique focus rhythm, unlocking deep creativity and consistency.
         </Text>
       </View>
       <View style={styles.featureList}>
@@ -266,7 +266,7 @@ function AppBlockingStep({ onNext, onSkip, onBack }) {
       <Text style={styles.stepTitle}>Block distractions</Text>
       <Text style={styles.stepSub}>
         Choose which apps to block during your focus sessions. iOS enforces
-        this at the OS level — even if you close DeepWork.
+        this at the OS level — even if you close Lucid.
       </Text>
 
       <View style={styles.blockingIllustration}>
@@ -284,7 +284,7 @@ function AppBlockingStep({ onNext, onSkip, onBack }) {
       {status === 'error' && (
         <View style={styles.successRow}>
           <Text style={styles.errorText}>
-            Permission denied. Open Settings → Screen Time → DeepWork to enable FamilyControls, then try again.
+            Permission denied. Open Settings → Screen Time → Lucid to enable FamilyControls, then try again.
           </Text>
         </View>
       )}

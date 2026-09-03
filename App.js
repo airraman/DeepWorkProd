@@ -5,18 +5,18 @@ import 'react-native-gesture-handler'; // Required side-effect import for react-
 import './src/config/firebaseConfig';
 
 import messaging from '@react-native-firebase/messaging';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { ThemeProvider } from './src/context/ThemeContext';
-import { SubscriptionProvider } from './src/context/SubscriptionContext';
+import { SubscriptionProvider, useSubscription } from './src/context/SubscriptionContext';
 import { AuthProvider } from './src/context/AuthContext';
 import * as Notifications from 'expo-notifications';
 import * as Updates from 'expo-updates';
 import { Alert, View, Text, Platform, Dimensions, StatusBar, Linking, AppState, Vibration } from 'react-native';
-import { navigationRef } from './src/services/navigationService';
+import { navigationRef, safeNavigate } from './src/services/navigationService';
 import { versionCheckService } from './src/services/versionCheckService.js';
 import { ForceUpdateModal } from './src/components/ForceUpdateModal';
 import { WhatsNewModal } from './src/components/WhatsNewModal';
@@ -38,9 +38,12 @@ import FocusLockTest from './src/screens/FocusLockTest';
 import LoginScreen from './src/screens/LoginScreen';
 import { useAuth } from './src/context/AuthContext';
 import { runMigration } from './src/services/migrationService';
+import { restoreSessionsFromFirestore } from './src/services/sessionRestoreService';
 import { runLocalMigrationsIfNeeded } from './src/services/localMigrationService';
 import { logSessionComplete } from './src/services/analyticsService';
-import { getActiveSession, clearActiveSession } from './src/services/sessionStateService';
+import { getActiveSession } from './src/services/sessionStateService';
+import { syncWidgetState } from './src/services/widgetSyncService';
+import { processPendingWidgetSessionStart } from './src/services/widgetHandoffService';
 
 try {
   messaging().setBackgroundMessageHandler(async (remoteMessage) => {
@@ -103,6 +106,12 @@ const handleMigrationNeeded = async (firebaseUser) => {
   console.log('📦 [App] migration check triggered for uid:', firebaseUser.uid);
   const result = await runMigration(firebaseUser);
   console.log('📦 [App] migration result:', result);
+
+  // Firestore → local restoration runs after migration (not before) so a
+  // fresh install with no local sessions doesn't get its just-restored
+  // history immediately re-uploaded by runMigration on the same pass.
+  const restoreResult = await restoreSessionsFromFirestore(firebaseUser);
+  console.log('📦 [App] session restore result:', restoreResult);
 };
 
 // ─── Auth-Gated Navigator ─────────────────────────────────────────────────────
@@ -113,6 +122,116 @@ const handleMigrationNeeded = async (firebaseUser) => {
  */
 function AppNavigator() {
   const { user, authLoading } = useAuth();
+  // Widget-triggered starts must respect the same long-session premium gate
+  // HomeScreen enforces — isPremium/isLoading feed into
+  // processPendingWidgetSessionStart's fail-closed check below.
+  const { isPremium, isLoading: subscriptionLoading } = useSubscription();
+
+  // Cold-launch active-session recovery: if iOS suspended/killed the app while
+  // a session was running (e.g. phone locked with no background audio), route
+  // straight back into DeepWorkSession instead of landing on Home and forcing
+  // the user through the manual "pick up where you left off?" prompt.
+  // DeepWorkSession.initializeSession() re-derives the correct remaining time
+  // from the persisted endTime on mount, so only the launch config (duration/
+  // activity/musicChoice/focusLockEnabled) needs to be restored here — same
+  // params HomeScreen.handleResumeSession already passes.
+  const [sessionRecovery, setSessionRecovery] = useState({ checked: false, params: null });
+  const recoveryStartedRef = useRef(false);
+
+  useEffect(() => {
+    // Also wait on subscription readiness — the widget-check below needs a
+    // resolved isPremium to safely apply the long-session paywall gate, and
+    // gating the whole effect keeps this simple rather than letting
+    // active-session recovery and the widget-check race independently.
+    if (authLoading || subscriptionLoading || !user) return;
+    // Guard against re-running on subsequent auth-state changes (token
+    // refresh, etc.) — this check must happen at most once per cold launch.
+    if (recoveryStartedRef.current) return;
+    recoveryStartedRef.current = true;
+
+    let cancelled = false;
+    (async () => {
+      let params = null;
+      try {
+        const active = await getActiveSession();
+        // Only auto-resume a still-running session. Expired sessions must
+        // continue through the existing HomeScreen "session finished while
+        // away" recovery flow — do not treat them as active.
+        if (active && active.status === 'running') {
+          params = {
+            duration:         String(active.config.duration),
+            activity:         active.config.activity,
+            musicChoice:      active.config.musicChoice,
+            focusLockEnabled: active.config.focusLockEnabled,
+          };
+        }
+      } catch (error) {
+        // If the check itself fails, fall through to normal Home routing —
+        // HomeScreen's own getActiveSession() check remains the fallback.
+        console.warn('[App] Active-session recovery check failed:', error);
+      }
+
+      // A resumed in-progress session always takes priority — only look for
+      // a widget-triggered start request if there's nothing to resume.
+      if (!params) {
+        try {
+          console.log('[WidgetHandoff] JS: cold-launch check running, isPremium=', isPremium);
+          const widgetResult = await processPendingWidgetSessionStart({ isPremium });
+          console.log('[WidgetHandoff] JS: cold-launch result =', widgetResult);
+          if (widgetResult.started) {
+            params = {
+              duration:         String(widgetResult.params.duration),
+              activity:         widgetResult.params.activity,
+              musicChoice:      widgetResult.params.musicChoice,
+              focusLockEnabled: widgetResult.params.focusLockEnabled,
+            };
+          }
+        } catch (error) {
+          console.warn('[App] Widget session-start check failed:', error);
+        }
+      }
+
+      if (!cancelled) setSessionRecovery({ checked: true, params });
+    })();
+
+    return () => { cancelled = true; };
+  }, [authLoading, subscriptionLoading, user]);
+
+  // Recurring foreground check for widget-triggered session starts. The
+  // effect above only runs once per cold launch (recoveryStartedRef guards
+  // it) and covers the "auth just became ready" moment; this covers every
+  // subsequent return to foreground while already authenticated. Kept as a
+  // separate AppState subscription (distinct from the one in MainApp, which
+  // handles unrelated housekeeping and has no auth access) specifically
+  // because starting a session requires user/authLoading, which only this
+  // component (inside AuthProvider) has via useAuth().
+  useEffect(() => {
+    if (authLoading || subscriptionLoading || !user) return; // not safe to process yet — request stays pending untouched
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+      (async () => {
+        try {
+          console.log('[WidgetHandoff] JS: foreground check running, isPremium=', isPremium);
+          const result = await processPendingWidgetSessionStart({ isPremium });
+          console.log('[WidgetHandoff] JS: foreground result =', result);
+          if (result.started) {
+            console.log('[WidgetHandoff] JS: navigating to DeepWorkSession with params=', result.params);
+            safeNavigate('DeepWorkSession', {
+              duration:         String(result.params.duration),
+              activity:         result.params.activity,
+              musicChoice:      result.params.musicChoice,
+              focusLockEnabled: result.params.focusLockEnabled,
+            });
+          }
+        } catch (error) {
+          console.warn('[AppNavigator] Widget session-start foreground check failed:', error);
+        }
+      })();
+    });
+
+    return () => subscription.remove();
+  }, [authLoading, subscriptionLoading, user]);
 
   if (authLoading) {
     // Auth is resolving persisted session — render nothing to avoid flash
@@ -123,9 +242,16 @@ function AppNavigator() {
     return <LoginScreen />;
   }
 
+  if (!sessionRecovery.checked) {
+    // Brief check before the navigator mounts — same "render nothing" pattern
+    // used for authLoading above. initialRouteName is only honored on first
+    // mount, so the navigator must not render until this resolves.
+    return null;
+  }
+
   return (
     <Stack.Navigator
-      initialRouteName="InitialSetup"
+      initialRouteName={sessionRecovery.params ? 'DeepWorkSession' : 'InitialSetup'}
       screenOptions={{
         headerShown: false,
         gestureEnabled: false,
@@ -155,6 +281,7 @@ function AppNavigator() {
       <Stack.Screen
         name="DeepWorkSession"
         component={DeepWorkSession}
+        initialParams={sessionRecovery.params || undefined}
         options={{
           presentation: 'card',
           gestureEnabled: false,
@@ -245,7 +372,7 @@ const initializeBackgroundServices = async () => {
         setTimeout(() => {
           Alert.alert(
             'Enable Notifications',
-            'DeepWork needs notifications to alert you when sessions complete, even when your phone is locked.\n\nTo enable:\n1. Open Settings\n2. Find DeepWork\n3. Enable Notifications\n4. Enable Sounds',
+            'Lucid needs notifications to alert you when sessions complete, even when your phone is locked.\n\nTo enable:\n1. Open Settings\n2. Find Lucid\n3. Enable Notifications\n4. Enable Sounds',
             [
               { text: 'Later', style: 'cancel' },
               {
@@ -412,7 +539,7 @@ function MainApp() {
               await Updates.fetchUpdateAsync();
               Alert.alert(
                 'Update Available',
-                'A new version of DeepWork has been downloaded. Would you like to restart to apply it?',
+                'A new version of Lucid has been downloaded. Would you like to restart to apply it?',
                 [
                   { text: 'Later', style: 'cancel' },
                   { text: 'Restart Now', onPress: () => Updates.reloadAsync() }
@@ -447,7 +574,7 @@ function MainApp() {
         console.error('❌ Critical app initialization error:', error);
         Alert.alert(
           'Initialization Error',
-          'There was a problem starting DeepWork. Please try restarting the app.',
+          'There was a problem starting Lucid. Please try restarting the app.',
           [{ text: 'OK' }]
         );
         setIsAppReady(true);
@@ -496,10 +623,19 @@ function MainApp() {
                 }
         
                 console.log('📊 Logging BACKGROUND session completion');
-        
+
                 await logSessionComplete(config.duration, 'background');
-        
-                await clearActiveSession();
+
+                // NOTE: intentionally NOT calling clearActiveSession() here.
+                // HomeScreen's orphan-detection ("Session ended while away" modal)
+                // is the sole owner of saving + clearing an expired active-session
+                // record. Clearing it here would race with that flow — if this
+                // notification-tap handler wins the race, the record disappears
+                // before HomeScreen can show the save prompt, silently losing the
+                // session (it would never be written to history). Leaving it
+                // intact is safe: HomeScreen's checkSessionState() (now also
+                // triggered on AppState foreground, not just navigation focus)
+                // will pick it up and clear it once the user saves or dismisses.
               }
         
             } catch (error) {
@@ -531,6 +667,10 @@ function MainApp() {
         audioSessionManager.reset();
         // Clear the notification badge now that the user has opened the app.
         Notifications.setBadgeCountAsync(0).catch(() => {});
+        // Keep the widget's shared state current in case anything changed
+        // while the app was backgrounded (e.g. a notification-driven
+        // completion) — fire-and-forget, matches the pattern above.
+        syncWidgetState().catch(() => {});
       }
     });
 
@@ -581,7 +721,7 @@ function MainApp() {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb', padding: 20 }}>
         <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>
-          Loading DeepWork.io...
+          Loading Lucid...
         </Text>
         <Text style={{ fontSize: 14, color: '#666', textAlign: 'center' }}>
           {isTablet ? 'Optimizing for iPad...' : 'Preparing your workspace...'}

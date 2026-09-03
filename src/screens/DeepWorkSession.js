@@ -29,7 +29,12 @@ import { Pause, Play, ChevronLeft } from 'lucide-react-native';
 // FCM-completion subsystem has been deleted. Session completion is owned by
 // useSessionTimer (foreground) and the OS notification (background/killed).
 import { useFocusLock } from '../context/FocusLockContext';
-import { saveSessionToFirestore } from '../services/firestoreSessionService';
+import {
+  saveSessionToFirestore,
+  publishActiveSession,
+  updateActiveSessionBridge,
+  clearActiveSessionBridge,
+} from '../services/firestoreSessionService';
 import {
   getActiveSession,
   setActiveSession,
@@ -37,6 +42,7 @@ import {
   clearActiveSession,
   saveLastSessionConfig,
 } from '../services/sessionStateService';
+import { syncWidgetState } from '../services/widgetSyncService';
 import {
   incrementStreak,
   cancelStreakRiskNotification,
@@ -256,6 +262,21 @@ const DeepWorkSession = ({ route, navigation }) => {
         remainingAtPause: restoredPaused,
       });
 
+      // Chrome live-session bridge — publish to Firestore so the (unmodified)
+      // Chrome extension can detect this session. Fire-and-forget: must never
+      // block or fail local session start.
+      publishActiveSession({
+        activity:  activityDetails?.name || activity,
+        duration:  parseFloat(duration),
+        startedAt: startTime,
+        endsAt:    endTime,
+        isPaused:  restoredPaused != null,
+      }).catch(() => {});
+
+      // Widget shared-state sync — fire-and-forget, mirrors the same
+      // non-blocking pattern as the Chrome bridge publish above.
+      syncWidgetState().catch(() => {});
+
       // Schedule OS-level notification at endTime — fires even if app is killed/locked.
       // Skipped when restoring a paused session (no endTime to schedule against).
       if (endTime) {
@@ -412,6 +433,10 @@ const DeepWorkSession = ({ route, navigation }) => {
           remainingAtPause: null,
           endTime:          newEndTime,
         });
+        updateActiveSessionBridge({
+          isPaused: false,
+          endsAt:   newEndTime,
+        }).catch(() => {});
         scheduleSessionEndNotification(
           newEndTime,
           activityDetails?.name || 'Focus Session',
@@ -451,6 +476,7 @@ const DeepWorkSession = ({ route, navigation }) => {
         remainingAtPause: remaining,
         endTime:          null,
       });
+      updateActiveSessionBridge({ isPaused: true }).catch(() => {});
 
       // PHASE 3: removed backgroundTimer.updateTimerPauseState(true).
 
@@ -542,6 +568,7 @@ const DeepWorkSession = ({ route, navigation }) => {
       await stop();
       await cancelSessionEndNotification();
       await clearActiveSession(); // remove orphan-detection key
+      clearActiveSessionBridge().catch(() => {}); // deactivate Chrome bridge doc
 
 
       // Stop Focus Lock blocking regardless of whether it was enabled —
@@ -708,6 +735,9 @@ const handleSessionComplete = async (sessionData = {}) => {
     } catch (firestoreError) {
       console.log('❌ [DeepWorkSession] Firestore save failed (non-critical):', firestoreError.message);
     }
+
+    // Widget shared-state sync — today's count/7-day chart just changed.
+    syncWidgetState().catch(() => {});
     console.log('✅ Session saved successfully!');
     console.log('===================================\n');
     console.log('🐛 DEBUG: About to navigate to SessionRating with sessionId:', savedSessionId);
@@ -722,6 +752,7 @@ const handleSessionComplete = async (sessionData = {}) => {
         activityName: activityDetails?.name || '',
         duration,
         musicChoice,
+        focusLockEnabled,
       }),
       incrementStreak(),
       cancelStreakRiskNotification(),

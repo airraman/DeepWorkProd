@@ -14,7 +14,7 @@ import {
   Modal,
 } from 'react-native';
 import ActivitySummaryModal from '../components/modals/ActivitySummaryModal';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { deepWorkStore } from '../services/deepWorkStore';
 import SessionDetailsModal from '../components/modals/SessionDetailsModal';
 import { useTheme } from '../context/ThemeContext';
@@ -512,8 +512,20 @@ for (let d = 1; d <= lastDay.getDate(); d++) {
 const MetricsScreen = () => {
   const { colors, isDarkMode } = useTheme();
   const navigation = useNavigation();
+  const route = useRoute();
 
   const { isPremium, canGenerateInsights } = useSubscription();
+
+  // Weekly performance notification tap lands here with openInsights: true —
+  // consume it once, then clear it so it doesn't re-trigger on a later focus
+  // (e.g. tab switch away and back) that carries the same stale param.
+  const [autoOpenInsights, setAutoOpenInsights] = useState(false);
+  useEffect(() => {
+    if (route.params?.openInsights) {
+      setAutoOpenInsights(true);
+      navigation.setParams({ openInsights: undefined });
+    }
+  }, [route.params?.openInsights]);
 
   const scrollY = useRef(new Animated.Value(0)).current;
 
@@ -743,7 +755,7 @@ const MetricsScreen = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <Animated.View style={[styles.header, { borderBottomColor: colors.border, height: headerHeight, overflow: 'hidden' }]}>
         <Animated.Text style={[styles.headerTitle, { color: colors.text, opacity: headerOpacity }]}>
-          DeepWork.io
+          Lucid
         </Animated.Text>
         <Animated.Text style={[styles.headerSubtitle, { color: colors.text, opacity: headerOpacity }]}>
           Metrics
@@ -754,7 +766,13 @@ const MetricsScreen = () => {
         {/* Fixed Section: Insights + Metrics + Month Selector */}
         <View style={styles.fixedSection}>
 {/* AI Insights Section - Gate for Premium */}
-<InsightsSection isPremium={isPremium} onLockedPress={() => setShowPaywall(true)} navigation={navigation} />
+<InsightsSection
+  isPremium={isPremium}
+  onLockedPress={() => setShowPaywall(true)}
+  navigation={navigation}
+  autoOpen={autoOpenInsights}
+  onAutoOpenHandled={() => setAutoOpenInsights(false)}
+/>
 
 
           {/* Metrics Row */}

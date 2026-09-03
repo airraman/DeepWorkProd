@@ -76,7 +76,7 @@ export default function InsightsBottomSheet({
             <View style={styles.grabber} />
 
             <View style={styles.header}>
-              <Text style={[styles.title, { color: colors.text }]}>DeepWork</Text>
+              <Text style={[styles.title, { color: colors.text }]}>Lucid</Text>
               <TouchableOpacity onPress={close} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                 <X size={20} color={colors.subText} />
               </TouchableOpacity>

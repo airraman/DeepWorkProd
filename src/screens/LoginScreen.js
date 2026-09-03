@@ -110,7 +110,7 @@ export default function LoginScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.logo}>⏱</Text>
-          <Text style={styles.title}>DeepWork</Text>
+          <Text style={styles.title}>Lucid</Text>
           <Text style={styles.subtitle}>
             {isLogin
               ? 'Sign in to sync your focus sessions'

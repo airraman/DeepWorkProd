@@ -36,7 +36,7 @@ export async function buildInsightCards() {
     ? Math.max(...thisWeekSessions.map((s) => secondsToMinutes(s.duration)))
     : null;
 
-  const aiInsight = await InsightGenerator.generate('daily', { referenceDate: new Date() }).catch(
+  const aiInsight = await InsightGenerator.generate('behavioral_30d', { referenceDate: new Date() }).catch(
     () => ({ success: false })
   );
 

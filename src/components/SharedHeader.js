@@ -6,7 +6,7 @@ import ThemeToggle from './ThemeToggle';
 // Reduced height values
 const HEADER_HEIGHT = Platform.OS === 'ios' ? 60 : 50;
 
-const SharedHeader = ({ title = 'DeepWork.io' }) => {
+const SharedHeader = ({ title = 'Lucid' }) => {
   const { colors, theme } = useTheme();
   const isDark = theme === THEMES.DARK;
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useTheme } from '../../context/ThemeContext';
@@ -8,10 +8,26 @@ import { trackEvent } from '../../services/analytics';
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // Config shape: { id, type, eyebrow, value, sub?, state, rows?, action? }
-export default function InsightCard({ card, onPress }) {
+// isActive/onExpandChange let a parent carousel (InsightCarousel) grow its
+// page height to fit an expanded card and collapse it again when the card is
+// swiped away — inline expansion needs more vertical space than a fixed-
+// height pager page provides, so the parent must be told when to grow.
+export default function InsightCard({ card, onPress, isActive = true, onExpandChange }) {
   const { colors } = useTheme();
   const [truncated, setTruncated] = useState(false);
   const [expanded, setExpanded] = useState(false);
+
+  // Auto-collapse when swiped away so a card never sits "expanded" while
+  // off-screen — without this, re-visiting it later would try to render at
+  // full expanded height again before the parent has grown to match,
+  // clipping it exactly like the original bug.
+  useEffect(() => {
+    if (!isActive && expanded) {
+      setExpanded(false);
+      onExpandChange?.(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
 
   const pressed = useSharedValue(0);
   const animatedStyle = useAnimatedStyle(() => ({
@@ -30,13 +46,22 @@ export default function InsightCard({ card, onPress }) {
   const handlePress = useCallback(() => {
     const isExpandable = card.type === 'ai_insight' && truncated;
     if (isExpandable) {
-      setExpanded((e) => !e);
+      // Toggle in place only — do not also open the detail sheet below,
+      // which was previously firing on every tap via onPress and
+      // immediately covering the just-expanded card before it was visible.
+      setExpanded((e) => {
+        const next = !e;
+        onExpandChange?.(next);
+        return next;
+      });
+      trackEvent('insight_cta_pressed', { cardType: card.type });
+      return;
     }
-    if (isExpandable || card.action) {
+    if (card.action) {
       trackEvent('insight_cta_pressed', { cardType: card.type });
     }
     onPress?.(card);
-  }, [card, truncated, onPress]);
+  }, [card, truncated, onPress, onExpandChange]);
 
   const isLive = card.state === 'live';
   const isEmpty = card.state === 'empty' || card.state === 'offline' || card.state === 'loading';
@@ -102,7 +127,10 @@ export default function InsightCard({ card, onPress }) {
               {card.value}
             </Text>
             {card.sub ? (
-              <Text style={[typeScale.subText, { color: colors.subText, marginTop: spacing.xs }]}>
+              <Text
+                style={[typeScale.subText, { color: colors.subText, marginTop: spacing.xs }]}
+                numberOfLines={card.type === 'ai_insight' ? 2 : undefined}
+              >
                 {card.sub}
               </Text>
             ) : null}

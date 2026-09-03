@@ -77,7 +77,7 @@ export default function ProfileScreen({ navigation }) {
     ? `${totalHours}h ${remainingMinutes}m`
     : `${stats.totalMinutes}m`;
 
-  const displayName = userProfile?.displayName || user?.displayName || 'DeepWorker';
+  const displayName = userProfile?.displayName || user?.displayName || 'Friend';
   const email = userProfile?.email || user?.email || '';
   const memberSince = userProfile?.createdAt
     ? new Date(userProfile.createdAt.toDate()).toLocaleDateString('en-US', {

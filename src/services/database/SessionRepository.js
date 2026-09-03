@@ -45,6 +45,11 @@ class SessionRepository {
                         || null,
               // Pass full reflection through so DataAggregator can use all four fields
               reflection: session.rating?.reflection || null,
+              // Rating scores (1-5) — captured at session-completion but previously
+              // dropped here before reaching aggregation/AI.
+              focusRating: typeof session.rating?.focus === 'number' ? session.rating.focus : null,
+              productivityRating: typeof session.rating?.productivity === 'number' ? session.rating.productivity : null,
+              overallRating: typeof session.rating?.rating === 'number' ? session.rating.rating : null,
               created_at: session.timestamp,
             });
           });

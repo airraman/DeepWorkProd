@@ -12,7 +12,8 @@ import {
   ActivityIndicator,
   Modal,
   Platform,
-  Alert
+  Alert,
+  AppState
 } from 'react-native';
 import { Clock, Music, Pencil } from 'lucide-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -28,6 +29,7 @@ import {
   getLastSessionConfig,
   markRestartOffered,
 } from '../services/sessionStateService';
+import { saveSessionToFirestore } from '../services/firestoreSessionService';
 import {
   getStreak,
   scheduleStreakRiskNotification,
@@ -99,7 +101,14 @@ const HomeScreen = () => {
   const [showStreakModal, setShowStreakModal] = useState(false);
   const [streakModalSessions, setStreakModalSessions] = useState({});
 
-  // ── Session recovery + streak check on every focus ────────────���──────────────
+  // ── Session recovery + streak check on every focus ─────────────────────────
+  // Also re-run whenever the app returns to the foreground (see AppState
+  // effect below) — useFocusEffect alone only fires on navigation focus/blur,
+  // so a session that expires while the app is backgrounded AND HomeScreen is
+  // already the active tab (no navigation focus event occurs) would otherwise
+  // never surface the "Session ended while away" recovery prompt.
+  const checkSessionStateRef = useRef(null);
+
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -123,10 +132,23 @@ const HomeScreen = () => {
         scheduleStreakRiskNotification(currentStreak);
       };
 
+      checkSessionStateRef.current = checkSessionState;
       checkSessionState();
-      return () => { cancelled = true; };
+      return () => {
+        cancelled = true;
+        checkSessionStateRef.current = null;
+      };
     }, [])
   );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' && checkSessionStateRef.current) {
+        checkSessionStateRef.current();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   // ── Interrupted-session handlers ─────────────────────────────────────────────
 
@@ -156,6 +178,14 @@ const HomeScreen = () => {
       setActiveSession(null);
 
       if (result.success && result.session?.id) {
+        // Mirror DeepWorkSession.handleSessionComplete's Firestore sync so
+        // sessions recovered here (app was killed/backgrounded through
+        // completion) also reach the user's cross-device history. Local
+        // AsyncStorage write above already succeeded — this is best-effort
+        // and must never block navigation on failure.
+        saveSessionToFirestore(result.session).catch(err => {
+          console.log('❌ [HomeScreen] Firestore save failed for recovered session (non-critical):', err.message);
+        });
         navigation.navigate('SessionRating', { sessionId: result.session.id });
       }
     } catch (err) {

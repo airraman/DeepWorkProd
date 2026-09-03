@@ -100,7 +100,7 @@ export default function SessionSummaryScreen({ navigation, route }) {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.logo}>DeepWork.io</Text>
+          <Text style={styles.logo}>Lucid</Text>
         </View>
 
         {/* Title */}

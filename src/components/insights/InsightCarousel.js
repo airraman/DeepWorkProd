@@ -6,10 +6,19 @@ import { spacing, radius, motion } from '../../theme/insightTokens';
 import InsightCard from './InsightCard';
 import { trackEvent } from '../../services/analytics';
 
+// Fixed default page height (styles.pager below) clips any content taller
+// than it, since PagerView clips its pages natively — not a CSS overflow
+// issue, so `overflow: visible` on a child can't override it. An expanded
+// ai_insight card needs more room than the default, so the pager grows to
+// this height only while a card is actually expanded, and returns to the
+// default otherwise (see handleExpandChange / handlePageSelected).
+const EXPANDED_PAGER_HEIGHT = 280;
+
 export default function InsightCarousel({ cards, onCardPressed, initialIndex = 0 }) {
   const { colors } = useTheme();
   const pagerRef = useRef(null);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const [expandedHeight, setExpandedHeight] = useState(null);
   const currentIndex = useRef(initialIndex);
   const isAutoAdvanceRef = useRef(false);
   const autoAdvanceTimer = useRef(null);
@@ -51,6 +60,10 @@ export default function InsightCarousel({ cards, onCardPressed, initialIndex = 0
     [clearTimers, startAutoAdvance]
   );
 
+  const handleExpandChange = useCallback((isExpanded) => {
+    setExpandedHeight(isExpanded ? EXPANDED_PAGER_HEIGHT : null);
+  }, []);
+
   const handlePageSelected = useCallback(
     (e) => {
       const index = e.nativeEvent.position;
@@ -58,6 +71,10 @@ export default function InsightCarousel({ cards, onCardPressed, initialIndex = 0
       isAutoAdvanceRef.current = false;
       currentIndex.current = index;
       setActiveIndex(index);
+      // The card being swiped away from auto-collapses itself (InsightCard's
+      // isActive effect) and reports that here — reset eagerly too so the
+      // pager shrinks back immediately rather than waiting a render cycle.
+      setExpandedHeight(null);
 
       const card = cards[index];
       if (!card) return;
@@ -76,14 +93,19 @@ export default function InsightCarousel({ cards, onCardPressed, initialIndex = 0
     <View style={styles.container}>
       <PagerView
         ref={pagerRef}
-        style={styles.pager}
+        style={[styles.pager, expandedHeight ? { height: expandedHeight } : null]}
         initialPage={initialIndex}
         onPageSelected={handlePageSelected}
         onPageScrollStateChanged={handlePageScrollStateChanged}
       >
         {cards.map((card, index) => (
           <View key={card.id} style={styles.page}>
-            <InsightCard card={card} onPress={() => onCardPressed?.(card, index)} />
+            <InsightCard
+              card={card}
+              onPress={() => onCardPressed?.(card, index)}
+              isActive={index === activeIndex}
+              onExpandChange={index === activeIndex ? handleExpandChange : undefined}
+            />
           </View>
         ))}
       </PagerView>

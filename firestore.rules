@@ -1,0 +1,58 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────
+// WARNING — READ BEFORE DEPLOYING
+//
+// This file only contains the rule added for the premium_overrides fix.
+// It is NOT a copy of the live production ruleset (no firestore.rules file
+// existed anywhere in this repository before this change, so the rest of
+// the current production rules — for `users/{uid}`, session data, or any
+// other collection — are not represented here).
+//
+// `firebase deploy --only firestore:rules` REPLACES the entire live
+// ruleset with whatever is in the deployed file. Deploying this file as-is
+// would remove every other rule currently protecting the database.
+//
+// Before deploying: pull the current live rules from the Firebase Console
+// (Firestore Database → Rules) or `firebase firestore:rules:get`-equivalent
+// in Console, merge the `premium_overrides` block below into that existing
+// ruleset in the same match /databases/{database}/documents { ... } block,
+// and deploy the merged result — not this file standalone.
+// ─────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Premium override lookup (see src/context/SubscriptionContext.js).
+    //
+    // The client performs a targeted single-document read at
+    // premium_overrides/{normalizedEmail}, never a collection query, so a
+    // user can only ever ask about their own document — this rule enforces
+    // that server-side too, independent of what the client sends.
+    //
+    // Document IDs must be written as email.trim().toLowerCase() by
+    // whoever creates the override (Firebase Console). Firestore Rules has
+    // no trim() equivalent, so only the lowercase half of that convention
+    // can be enforced here — a doc ID with stray whitespace will not match
+    // even though the write-time convention forbids it.
+    match /premium_overrides/{docId} {
+      allow get: if request.auth != null
+                  && request.auth.token.email != null
+                  && docId == request.auth.token.email.lower();
+
+      // No `list` rule is granted, so the collection cannot be enumerated —
+      // only a `get` on a specific, self-matching document ID is possible.
+      allow list: if false;
+
+      // premium_overrides is admin/Console-managed only; no client writes.
+      allow write: if false;
+    }
+
+    // ── Everything else in the live ruleset (users/{uid}, session data,
+    // etc.) needs to be merged in here from the actual production rules
+    // before this file is deployed. Leaving the implicit default-deny in
+    // place for anything not explicitly matched above is intentional and
+    // matches the existing (assumed) production fallback — just make sure
+    // nothing that currently has an explicit allow rule gets lost.
+  }
+}

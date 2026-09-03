@@ -11,6 +11,23 @@ export function truncate(text, max = 140) {
   return text.length > max ? `${text.slice(0, max).trim()}…` : text;
 }
 
+// The behavioral insight (insightCardService -> InsightGenerator 'behavioral_30d')
+// stores insightText as a JSON string: { insight, evidence, category, confidence }.
+// Older cached entries or fallback paths may not parse — treat those as unavailable
+// rather than displaying raw JSON.
+export function parseInsightPayload(insightText) {
+  if (!insightText) return null;
+  try {
+    const parsed = JSON.parse(insightText);
+    if (parsed && typeof parsed.insight === 'string' && typeof parsed.evidence === 'string') {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function buildAiInsightCard({ aiInsight }) {
   const base = { id: 'ai-insight', type: 'ai_insight', eyebrow: 'AI Insight' };
 
@@ -33,11 +50,25 @@ export function buildAiInsightCard({ aiInsight }) {
       sub: 'Complete a few focus sessions and check back.',
     };
   }
+
+  const parsed = parseInsightPayload(aiInsight.insightText);
+  if (!parsed || parsed.category === 'insufficient_data') {
+    return {
+      ...base,
+      state: 'empty',
+      value: parsed?.insight || 'Not enough varied session data yet to identify a clear pattern.',
+      sub: parsed?.evidence || 'Rate your focus after sessions to unlock personalized insights.',
+    };
+  }
+
+  // No character truncation here — the interpretive insight + evidence
+  // are the whole point of this card. InsightCard clamps to 3/2 lines
+  // with tap-to-expand rather than hard-cutting the text.
   return {
     ...base,
     state: 'default',
-    value: truncate(aiInsight.insightText),
-    sub: aiInsight.metadata?.fromCache ? null : 'New insight',
+    value: parsed.insight,
+    sub: parsed.evidence,
   };
 }
 
@@ -121,11 +152,17 @@ export function buildDataCard({ aggThisWeek, longestSessionMinutes }) {
 export function buildUpNextCard({ aiInsight, aggThisWeek }) {
   const base = { id: 'up-next', type: 'up_next', eyebrow: 'Up Next' };
 
-  if (aiInsight?.success && !aiInsight.metadata?.fromCache && !aiInsight.metadata?.isEmpty) {
+  const parsedForTeaser = aiInsight?.success ? parseInsightPayload(aiInsight.insightText) : null;
+  if (
+    parsedForTeaser &&
+    parsedForTeaser.category !== 'insufficient_data' &&
+    !aiInsight.metadata?.fromCache &&
+    !aiInsight.metadata?.isEmpty
+  ) {
     return {
       ...base,
       state: 'default',
-      value: truncate(aiInsight.insightText, 100),
+      value: truncate(parsedForTeaser.insight, 100),
       sub: 'New insight ready',
     };
   }

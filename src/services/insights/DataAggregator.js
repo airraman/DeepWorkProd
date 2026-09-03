@@ -257,6 +257,166 @@ class DataAggregator {
   }
 
   /**
+   * Aggregate sessions into behavioral pattern groupings for the 30-day
+   * qualitative "AI Insight" card. Unlike aggregateSessions() (a flat
+   * summary), this computes focus/productivity ratings broken out by
+   * duration bucket, activity, time-of-day, weekday/weekend, and a
+   * recent-vs-prior trend split, plus a handful of standout sessions —
+   * the deterministic evidence the AI is asked to interpret, not restate.
+   *
+   * @param {Array} sessions - Raw sessions (last N days)
+   * @param {Object} options - { daysInWindow }
+   */
+  aggregateBehavioralData(sessions, options = {}) {
+    const { daysInWindow = 30 } = options;
+
+    if (!sessions || sessions.length === 0) {
+      return { totalSessions: 0, ratedSessionCount: 0, daysInWindow };
+    }
+
+    const totalSessions = sessions.length;
+    const totalDuration = sessions.reduce((sum, s) => sum + s.duration, 0);
+    const totalHours = secondsToHours(totalDuration);
+    const avgSessionMinutes = secondsToMinutes(totalDuration / totalSessions);
+
+    const rated = sessions.filter(s => typeof s.focusRating === 'number');
+    const ratedSessionCount = rated.length;
+
+    const avg = (arr, key) => {
+      const vals = arr.map(s => s[key]).filter(v => typeof v === 'number');
+      return vals.length > 0 ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null;
+    };
+
+    const daysWithSessions = new Set(sessions.map(s => new Date(s.start_time).toDateString())).size;
+
+    // ── By duration bucket ──
+    const bucketFor = (minutes) => {
+      if (minutes < 20) return '<20 min';
+      if (minutes < 30) return '20-29 min';
+      if (minutes < 45) return '30-44 min';
+      return '45+ min';
+    };
+    const durationGroups = {};
+    sessions.forEach(s => {
+      const bucket = bucketFor(secondsToMinutes(s.duration));
+      if (!durationGroups[bucket]) durationGroups[bucket] = [];
+      durationGroups[bucket].push(s);
+    });
+    const byDurationBucket = {};
+    Object.entries(durationGroups).forEach(([bucket, group]) => {
+      byDurationBucket[bucket] = {
+        count: group.length,
+        avgFocus: avg(group, 'focusRating'),
+        avgProductivity: avg(group, 'productivityRating'),
+      };
+    });
+
+    // ── By activity ──
+    const activityGroups = {};
+    sessions.forEach(s => {
+      if (!activityGroups[s.activity_type]) activityGroups[s.activity_type] = [];
+      activityGroups[s.activity_type].push(s);
+    });
+    const byActivity = {};
+    Object.entries(activityGroups).forEach(([activity, group]) => {
+      const groupDuration = group.reduce((sum, s) => sum + s.duration, 0);
+      byActivity[activity] = {
+        count: group.length,
+        totalHours: secondsToHours(groupDuration),
+        avgFocus: avg(group, 'focusRating'),
+        avgProductivity: avg(group, 'productivityRating'),
+      };
+    });
+
+    // ── By time of day ──
+    const timeOfDayBucket = (hour) => {
+      if (hour >= 5 && hour < 12) return 'morning';
+      if (hour >= 12 && hour < 17) return 'afternoon';
+      if (hour >= 17 && hour < 21) return 'evening';
+      return 'night';
+    };
+    const todGroups = {};
+    sessions.forEach(s => {
+      const bucket = timeOfDayBucket(new Date(s.start_time).getHours());
+      if (!todGroups[bucket]) todGroups[bucket] = [];
+      todGroups[bucket].push(s);
+    });
+    const byTimeOfDay = {};
+    Object.entries(todGroups).forEach(([bucket, group]) => {
+      byTimeOfDay[bucket] = {
+        count: group.length,
+        avgFocus: avg(group, 'focusRating'),
+        avgProductivity: avg(group, 'productivityRating'),
+      };
+    });
+
+    // ── Weekday vs weekend ──
+    const isWeekend = (s) => [0, 6].includes(new Date(s.start_time).getDay());
+    const weekendGroup = sessions.filter(isWeekend);
+    const weekdayGroup = sessions.filter(s => !isWeekend(s));
+    const weekdayVsWeekend = {
+      weekday: { count: weekdayGroup.length, avgFocus: avg(weekdayGroup, 'focusRating'), avgProductivity: avg(weekdayGroup, 'productivityRating') },
+      weekend: { count: weekendGroup.length, avgFocus: avg(weekendGroup, 'focusRating'), avgProductivity: avg(weekendGroup, 'productivityRating') },
+    };
+
+    // ── Recent (last 7 days) vs prior ──
+    const now = Date.now();
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const recentGroup = sessions.filter(s => s.start_time >= sevenDaysAgo);
+    const priorGroup = sessions.filter(s => s.start_time < sevenDaysAgo);
+    const recentVsHistorical = {
+      recent7Days: { count: recentGroup.length, avgFocus: avg(recentGroup, 'focusRating'), avgProductivity: avg(recentGroup, 'productivityRating') },
+      priorPeriod: { count: priorGroup.length, avgFocus: avg(priorGroup, 'focusRating'), avgProductivity: avg(priorGroup, 'productivityRating') },
+    };
+
+    // ── Notable sessions (evidence texture): highest/lowest focus, most recent first as tiebreak ──
+    const sortedByFocus = [...rated].sort((a, b) => b.focusRating - a.focusRating);
+    const highest = sortedByFocus.slice(0, 2);
+    const lowest = sortedByFocus.slice(-2).reverse();
+    const notableSet = new Map();
+    [...highest, ...lowest].forEach(s => notableSet.set(s.id, s));
+    const notableSessions = Array.from(notableSet.values())
+      .sort((a, b) => b.start_time - a.start_time)
+      .slice(0, 5)
+      .map(s => {
+        const d = new Date(s.start_time);
+        return {
+          date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          dayOfWeek: d.toLocaleDateString('en-US', { weekday: 'short' }),
+          timeOfDay: timeOfDayBucket(d.getHours()),
+          activity: s.activity_type,
+          minutes: secondsToMinutes(s.duration),
+          focusRating: s.focusRating,
+          productivityRating: s.productivityRating,
+          workedOn: s.description || null,
+        };
+      });
+
+    const topActivities = Object.entries(byActivity)
+      .sort((a, b) => b[1].totalHours - a[1].totalHours)
+      .slice(0, 3)
+      .map(([activity, data]) => ({ activity, hours: data.totalHours }));
+
+    return {
+      totalSessions,
+      totalHours,
+      avgSessionMinutes,
+      daysInWindow,
+      daysWithSessions,
+      ratedSessionCount,
+      avgFocus: avg(rated, 'focusRating'),
+      avgProductivity: avg(rated, 'productivityRating'),
+      byDurationBucket,
+      byActivity,
+      byTimeOfDay,
+      weekdayVsWeekend,
+      recentVsHistorical,
+      notableSessions,
+      topActivities,
+    };
+  }
+
+  /**
    * Empty aggregation for when there are no sessions
    * @private
    */

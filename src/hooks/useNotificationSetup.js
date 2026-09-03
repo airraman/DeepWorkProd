@@ -44,7 +44,7 @@ export function useNotificationSetup() {
         console.log('🔔 [FCM] Permission denied');
         Alert.alert(
           'Enable Notifications',
-          'DeepWork needs notification permission to alert you when sessions complete.\n\nTo enable:\n1. Open Settings\n2. Find DeepWork\n3. Enable Notifications\n4. Enable Sound & Badges',
+          'Lucid needs notification permission to alert you when sessions complete.\n\nTo enable:\n1. Open Settings\n2. Find Lucid\n3. Enable Notifications\n4. Enable Sound & Badges',
           [
             { text: 'Cancel', style: 'cancel' },
             {

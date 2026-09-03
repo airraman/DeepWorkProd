@@ -25,6 +25,13 @@ export function useNotificationHandlers() {
     const unsubscribeForeground = messaging().onMessage(async (message) => {
       console.log('📱 [FCM] Foreground notification received:', message);
       console.log(`📱 ${message.notification?.title}: ${message.notification?.body}`);
+
+      // Weekly performance is the one FCM type that should navigate even when
+      // received in the foreground (no separate "tap" event exists in that
+      // case) — every other type keeps its existing log-only behavior.
+      if (message.data?.type === 'weekly_performance') {
+        handleFCMNotificationTap(message);
+      }
     });
 
     // ── FCM: app was backgrounded when notification arrived ──────────────────
@@ -56,11 +63,23 @@ export function useNotificationHandlers() {
     console.log('🧭 [FCM] Navigating based on type:', notificationType);
 
     switch (notificationType) {
+      case 'weekly_performance':
+        // Opens Metrics and auto-expands the Insights bottom sheet — see
+        // MetricsScreen's route.params.openInsights handling.
+        navigationRef.current?.navigate('MainApp', {
+          screen: 'Metrics',
+          params: { openInsights: true },
+        });
+        break;
       case 'session_end':
       case 'insights_ready':
         navigationRef.current?.navigate('MainApp', { screen: 'Metrics' });
         break;
       case 're_engagement':
+        // Sent by functions/index.js's behavior-based re-engagement system
+        // (integrated into dailyRemindersBatch). Home is the right landing
+        // spot — it's the existing session-start experience, and this case
+        // was already identical to default before that system existed.
       default:
         navigationRef.current?.navigate('MainApp', { screen: 'Home' });
         break;

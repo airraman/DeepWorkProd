@@ -3,9 +3,9 @@ const IS_PROD = process.env.APP_VARIANT === 'production';
 
 export default {
   expo: {
-    name: IS_PROD ? "DeepWork.io" : "DeepWork.io (Dev)",
+    name: IS_PROD ? "Lucid" : "Lucid (Dev)",
     slug: "DeepWorkApp",
-    version: "1.0.10",
+    version: "1.0.12",
     orientation: "portrait",
     icon: "./assets/applogo.png",
     userInterfaceStyle: "light",
@@ -83,8 +83,8 @@ export default {
         // it permitted (com.expo.tasks.BACKGROUND_TIMER_TASK) belonged to the
         // deleted backgroundTimer.js BackgroundFetch task.
         NSUserNotificationsUsageDescription: "This app uses notifications to remind you when your deep work sessions are complete and to track session progress.",
-        NSFamilyControlsUsageDescription: "DeepWork needs Screen Time access to block selected apps during your focus sessions.",
-        CFBundleDisplayName: IS_PROD ? "DeepWork.io" : "DeepWork.io (Dev)",
+        NSFamilyControlsUsageDescription: "Lucid needs Screen Time access to block selected apps during your focus sessions.",
+        CFBundleDisplayName: IS_PROD ? "Lucid" : "Lucid (Dev)",
         ITSAppUsesNonExemptEncryption: false
       },
       config: {

@@ -14,6 +14,19 @@ import {
 import OpenAIService from './OpenAIService';
 import PromptBuilder from './PromptBuilder';
 
+const BEHAVIORAL_SYSTEM_PROMPT = `You are a behavioral data analyst for a deep work / focus app. You review a user's session history (durations, activities, self-reported focus and productivity ratings, timing) and identify the single most useful, evidence-backed pattern in how they work.
+
+Rules:
+- Interpret, don't just report totals — the user already sees session counts and total hours elsewhere in the app.
+- Every claim must be grounded in the numbers you're given. Never invent a cause the data doesn't support.
+- Use cautious language ("Your data suggests...", "You tend to..."), not certainty.
+- If the data doesn't support a clear pattern, say so honestly rather than manufacturing one.
+- Always respond with ONLY the JSON object requested — no prose, no markdown fences.`;
+
+// Minimum rated sessions in the 30-day window before it's worth spending an
+// API call — below this there's rarely enough signal for a real comparison.
+const MIN_RATED_SESSIONS_FOR_AI = 5;
+
 /**
  * InsightGenerator - Orchestrates the insight generation flow
  * 
@@ -128,10 +141,9 @@ export class InsightGenerator {
       console.log('[InsightGenerator] Cache miss or force regenerate - generating new insight');
 
       // Step 6: Aggregate data (reduce tokens from ~1250 to ~200)
-      const aggregatedData = this.aggregator.aggregateSessions(
-        filteredSessions,
-        { timePeriod }
-      );
+      const aggregatedData = insightType === 'behavioral_30d'
+        ? this.aggregator.aggregateBehavioralData(filteredSessions, { daysInWindow: 30 })
+        : this.aggregator.aggregateSessions(filteredSessions, { timePeriod });
 
       // ✅ ADD THIS DEBUG BLOCK
 console.log('[InsightGenerator] === DEBUG AGGREGATED DATA ===');
@@ -214,6 +226,13 @@ console.log('==========================================');
           label: 'Last month',
         };
 
+      case 'behavioral_30d':
+        return {
+          start: refTimestamp - 30 * 24 * 60 * 60 * 1000,
+          end: refTimestamp,
+          label: 'Last 30 days',
+        };
+
       default:
         // Activity-specific: 'activity_work_week' -> last 7 days of 'work'
         if (insightType.startsWith('activity_')) {
@@ -234,26 +253,30 @@ console.log('==========================================');
  * @private
  */
 async _generateInsightText(aggregatedData, insightType, activityType) {
+  if (insightType === 'behavioral_30d') {
+    return this._generateBehavioralInsightText(aggregatedData);
+  }
+
   try {
     // Debug: Log aggregated data structure
     console.log('[InsightGenerator] Aggregated data keys:', Object.keys(aggregatedData || {}));
-    
+
     // Build appropriate prompt based on insight type
     let prompt;
-    
+
     switch (insightType) {
       case 'daily':
         prompt = PromptBuilder.buildDailyPrompt(aggregatedData);
         break;
-      
+
       case 'weekly':
         prompt = PromptBuilder.buildWeeklyPrompt(aggregatedData);
         break;
-      
+
       case 'monthly':
         prompt = PromptBuilder.buildMonthlyPrompt(aggregatedData);
         break;
-      
+
       default:
         if (insightType.startsWith('activity_')) {
           prompt = PromptBuilder.buildActivityPrompt(aggregatedData, activityType);
@@ -267,7 +290,7 @@ async _generateInsightText(aggregatedData, insightType, activityType) {
 
     // Generate insight using OpenAI
     const insightText = await OpenAIService.generateInsight(prompt);
-    
+
     console.log('[InsightGenerator] OpenAI generation successful');
 
     return insightText;
@@ -276,18 +299,18 @@ async _generateInsightText(aggregatedData, insightType, activityType) {
     console.error('[InsightGenerator] Error generating insight text:', error);
     console.error('[InsightGenerator] Error message:', error.message);
     console.error('[InsightGenerator] Error code:', error.code || 'N/A');
-    
+
     // ✅ ENHANCED: Log more details for debugging
     console.log('[InsightGenerator] Insight type:', insightType);
     console.log('[InsightGenerator] Aggregated data keys:', Object.keys(aggregatedData || {}));
-    
+
     // ✅ FIXED: Use correct property names from DataAggregator
     if (aggregatedData && typeof aggregatedData === 'object') {
       const { totalSessions, totalHours } = aggregatedData;
-      
+
       if (totalSessions !== undefined && totalSessions > 0) {
         console.log(`[InsightGenerator] Using fallback: ${totalSessions} sessions, ${totalHours}h`);
-        
+
         const hoursText = totalHours ? totalHours.toFixed(1) : '0.0';
         return `• This period, you completed ${totalSessions} focus session${totalSessions === 1 ? '' : 's'} totaling ${hoursText} hours.\n• Keep showing up — consistency compounds faster than intensity.`;
       }
@@ -296,6 +319,61 @@ async _generateInsightText(aggregatedData, insightType, activityType) {
     // Last resort fallback
     console.error('[InsightGenerator] Could not extract stats, using generic message');
     return `• This week, you showed up for your focus practice.\n• Keep logging sessions — the more data you add, the sharper your insights get.`;
+  }
+}
+
+/**
+ * Generate the structured {insight, evidence, category, confidence} JSON
+ * for the 30-day behavioral insight card.
+ * @private
+ */
+async _generateBehavioralInsightText(aggregatedData) {
+  const { totalSessions, totalHours, ratedSessionCount } = aggregatedData;
+
+  // Pre-flight: skip the API call entirely when there isn't enough rated
+  // data to support a real comparison — cheaper and more honest than
+  // asking the model to find a pattern in noise.
+  if (!ratedSessionCount || ratedSessionCount < MIN_RATED_SESSIONS_FOR_AI) {
+    console.log(`[InsightGenerator] Only ${ratedSessionCount || 0} rated sessions — skipping AI call, returning insufficient_data`);
+    return JSON.stringify({
+      insight: totalSessions > 0
+        ? "Not enough rated sessions yet to identify a clear pattern."
+        : "No focus sessions recorded in the last 30 days yet.",
+      evidence: totalSessions > 0
+        ? `${totalSessions} session${totalSessions === 1 ? '' : 's'} logged (${totalHours.toFixed(1)}h total), but only ${ratedSessionCount || 0} include a focus rating.`
+        : 'Start a session and rate your focus afterward to unlock personalized insights.',
+      category: 'insufficient_data',
+      confidence: 'low',
+    });
+  }
+
+  try {
+    const prompt = PromptBuilder.buildBehavioralPrompt(aggregatedData);
+    console.log('[InsightGenerator] Calling OpenAI service (behavioral_30d, json_object)...');
+
+    const raw = await OpenAIService.generateInsight(prompt, {
+      systemPrompt: BEHAVIORAL_SYSTEM_PROMPT,
+      responseFormat: 'json_object',
+      maxTokens: 400,
+      temperature: 0.5,
+    });
+
+    const parsed = JSON.parse(raw);
+    if (!parsed.insight || !parsed.evidence || !parsed.category) {
+      throw new Error('Model response missing required fields');
+    }
+
+    console.log('[InsightGenerator] Behavioral insight generated:', parsed.category, parsed.confidence);
+    return JSON.stringify(parsed);
+
+  } catch (error) {
+    console.error('[InsightGenerator] Error generating behavioral insight:', error.message);
+    return JSON.stringify({
+      insight: `You completed ${totalSessions} session${totalSessions === 1 ? '' : 's'} over the last 30 days.`,
+      evidence: `Totaling ${totalHours.toFixed(1)} hours, with ${ratedSessionCount} sessions rated.`,
+      category: 'insufficient_data',
+      confidence: 'low',
+    });
   }
 }
 

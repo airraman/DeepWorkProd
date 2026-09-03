@@ -28,7 +28,9 @@ const log = (message, data) => {
 };
 
 // Validation function for individual session objects
-const isValidSession = (session) => {
+// Exported for reuse by sessionRestoreService, which validates Firestore-sourced
+// sessions before merging them into local storage — avoids re-implementing this check.
+export const isValidSession = (session) => {
   return (
     session &&
     typeof session.activity === 'string' &&
@@ -631,6 +633,33 @@ getSessions: async () => {
       return true;
     } catch (error) {
       log('Error repairing storage:', error);
+      return false;
+    }
+  },
+
+  /**
+   * Bulk-write a full date-keyed sessions object, replacing whatever is
+   * currently stored. Used by sessionRestoreService to persist the result of
+   * merging local sessions with Firestore-restored ones in a single write.
+   *
+   * Unlike addSession, this does not lock/verify per-session — callers are
+   * responsible for producing a valid, already-merged storage object (e.g.
+   * via isValidSession on each entry before calling this).
+   *
+   * @param {Object} sessionsByDate - Full { 'YYYY-MM-DD': Session[] } object
+   * @returns {Promise<boolean>}
+   */
+  mergeSessions: async (sessionsByDate) => {
+    try {
+      if (!isValidStorage(sessionsByDate)) {
+        log('mergeSessions: rejected — invalid storage shape');
+        return false;
+      }
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sessionsByDate));
+      log('mergeSessions: sessions written successfully');
+      return true;
+    } catch (error) {
+      log('Error in mergeSessions:', error);
       return false;
     }
   },

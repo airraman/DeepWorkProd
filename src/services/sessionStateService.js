@@ -137,6 +137,10 @@ export const saveLastSessionConfig = async (config) => {
       activityName:     config.activityName || '',
       duration:         config.duration,
       musicChoice:      config.musicChoice,
+      // Default false — matches the existing implicit behavior everywhere
+      // else in the app that treats an unset focusLockEnabled as off, not a
+      // new invented default.
+      focusLockEnabled: config.focusLockEnabled ?? false,
       completedAt:      Date.now(),
       hasOfferedRestart: false,
     }));

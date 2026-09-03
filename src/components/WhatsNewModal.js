@@ -152,7 +152,7 @@ export function WhatsNewModal({ visible, onComplete }) {
 
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>DeepWork just got better</Text>
+          <Text style={styles.title}>Lucid just got better</Text>
           <Text style={styles.subtitle}>New features to help you stay consistent</Text>
         </View>
 

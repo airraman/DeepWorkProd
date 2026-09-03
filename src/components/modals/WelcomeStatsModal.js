@@ -81,7 +81,7 @@ const WelcomeStatsModal = ({
                     onPress={onClose}
                 >
                     <Text style={styles.startButtonText}>
-                        Begin DeepWork
+                        Begin
                     </Text>
                 </TouchableOpacity>
             </View>

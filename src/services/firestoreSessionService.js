@@ -13,6 +13,8 @@ import firestore from '../config/firebaseConfig';
 import auth from '@react-native-firebase/auth';
 
 const SESSIONS_SUBCOLLECTION = 'sessions';
+const ACTIVE_SESSION_SUBCOLLECTION = 'activeSession';
+const ACTIVE_SESSION_DOC = 'current';
 
 /**
  * Save a single completed session to Firestore.
@@ -74,11 +76,19 @@ export const getSessionsFromFirestore = async () => {
   console.log('🔄 [firestoreSessionService] Fetching sessions from Firestore');
 
   try {
+    // No .orderBy('timestamp', ...) here deliberately: Firestore excludes any
+    // document missing the ordered-on field from the results entirely, and
+    // historical sessions written before this field convention (or via a
+    // migration pass that only forwarded fields already present locally —
+    // see migrationService.sanitizeSession) may not have `timestamp` set.
+    // An orderBy here would silently make those documents unrestorable.
+    // Both current callers (sessionRestoreService, which buckets by date
+    // regardless of fetch order, and DevToolsScreen's .find() lookup) are
+    // order-independent, so fetching unordered is safe.
     const snapshot = await firestore()
       .collection('users')
       .doc(user.uid)
       .collection(SESSIONS_SUBCOLLECTION)
-      .orderBy('timestamp', 'desc')
       .get();
 
     const sessions = snapshot.docs.map((doc) => ({
@@ -180,6 +190,128 @@ export const updateSessionRatingInFirestore = async (sessionId, rating) => {
 
   } catch (error) {
     console.log('[firestoreSessionService] Rating sync failed (non-critical):', error.message);
+    return false;
+  }
+};
+
+// ─── Chrome Live-Session Bridge ───────────────────────────────────────────────
+//
+// Publishes the in-flight session to users/{uid}/activeSession/current so the
+// (unmodified) Chrome extension can detect it and mirror it as a Chrome-side
+// session. Purely additive, like the rest of this file — never replaces the
+// local AsyncStorage session state, and every method no-ops safely when
+// logged out or on Firestore failure so the bridge can never block or break
+// the local session lifecycle.
+//
+// The published (Chrome Web Store) extension reads startedAt/endsAt via
+// raw.startedAt?.toMillis?.() — it expects real Firestore Timestamp values,
+// not plain millisecond numbers. Writing a plain number makes toMillis()
+// undefined, so the extension silently falls back to a `now`-based default
+// on every listener reattach, resetting the visible countdown. toBridgeTimestamp
+// converts before every write so this stays compatible with the already-
+// deployed extension without touching its (working) code.
+const toBridgeTimestamp = (ms) =>
+  typeof ms === 'number' && isFinite(ms) ? firestore.Timestamp.fromMillis(ms) : ms;
+
+/**
+ * Publish the start of a live session to the Chrome bridge doc.
+ * Safe to call when logged out — no-ops silently.
+ *
+ * @param {object} session - { activity, duration, startedAt, endsAt, isPaused }
+ * @returns {Promise<boolean>}
+ */
+export const publishActiveSession = async (session) => {
+  const user = auth().currentUser;
+
+  if (!user) {
+    console.log('📦 [firestoreSessionService] No user logged in — skipping active-session publish');
+    return false;
+  }
+
+  try {
+    await firestore()
+      .collection('users')
+      .doc(user.uid)
+      .collection(ACTIVE_SESSION_SUBCOLLECTION)
+      .doc(ACTIVE_SESSION_DOC)
+      .set({
+        isActive:  true,
+        activity:  session.activity,
+        duration:  session.duration,
+        startedAt: toBridgeTimestamp(session.startedAt),
+        endsAt:    toBridgeTimestamp(session.endsAt),
+        isPaused:  session.isPaused ?? false,
+      });
+
+    console.log('✅ [firestoreSessionService] Active session published to Chrome bridge');
+    return true;
+
+  } catch (error) {
+    console.log('❌ [firestoreSessionService] Active-session publish failed (non-critical):', error.message);
+    return false;
+  }
+};
+
+/**
+ * Patch fields on the Chrome bridge doc — used for pause/resume.
+ * Merges so it never drops fields the extension depends on.
+ * Safe to call when logged out — no-ops silently.
+ *
+ * @param {object} updates - partial fields, e.g. { isPaused: true }
+ * @returns {Promise<boolean>}
+ */
+export const updateActiveSessionBridge = async (updates) => {
+  const user = auth().currentUser;
+
+  if (!user) return false;
+
+  try {
+    // Same startedAt/endsAt -> Timestamp conversion as publishActiveSession —
+    // the resume path (DeepWorkSession.js) patches a fresh endsAt through
+    // here, and it needs the same treatment or resuming would silently
+    // re-break the extension's countdown that publish alone fixed.
+    const bridgeUpdates = { ...updates };
+    if ('startedAt' in bridgeUpdates) bridgeUpdates.startedAt = toBridgeTimestamp(bridgeUpdates.startedAt);
+    if ('endsAt' in bridgeUpdates) bridgeUpdates.endsAt = toBridgeTimestamp(bridgeUpdates.endsAt);
+
+    await firestore()
+      .collection('users')
+      .doc(user.uid)
+      .collection(ACTIVE_SESSION_SUBCOLLECTION)
+      .doc(ACTIVE_SESSION_DOC)
+      .set(bridgeUpdates, { merge: true });
+
+    return true;
+
+  } catch (error) {
+    console.log('❌ [firestoreSessionService] Active-session update failed (non-critical):', error.message);
+    return false;
+  }
+};
+
+/**
+ * Deactivate the Chrome bridge doc — used on completion, timeout, and cancel.
+ * Safe to call when logged out — no-ops silently.
+ *
+ * @returns {Promise<boolean>}
+ */
+export const clearActiveSessionBridge = async () => {
+  const user = auth().currentUser;
+
+  if (!user) return false;
+
+  try {
+    await firestore()
+      .collection('users')
+      .doc(user.uid)
+      .collection(ACTIVE_SESSION_SUBCOLLECTION)
+      .doc(ACTIVE_SESSION_DOC)
+      .set({ isActive: false }, { merge: true });
+
+    return true;
+
+  } catch (error) {
+    console.log('❌ [firestoreSessionService] Active-session clear failed (non-critical):', error.message);
     return false;
   }
 };

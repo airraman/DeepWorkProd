@@ -10,7 +10,7 @@
       "channel": "development",
       "ios": {
         "simulator": false,
-        "scheme": "DeepWorkioDev"
+        "scheme": "DeepWorkio"
       },
       "credentialsSource": "local",
       "env": {
@@ -25,7 +25,7 @@
       "distribution": "internal",
       "channel": "preview",
       "ios": {
-        "scheme": "DeepWorkioDev"
+        "scheme": "DeepWorkio"
       },
       "env": {
         "APP_VARIANT": "development",

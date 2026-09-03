@@ -12,11 +12,12 @@ import { trackEvent } from '../../services/analytics';
 
 const FIRST_IMPRESSION_KEY = '@insights_first_impression_seen';
 
-export default function InsightsSection({ isPremium, onLockedPress, navigation }) {
+export default function InsightsSection({ isPremium, onLockedPress, navigation, autoOpen, onAutoOpenHandled }) {
   const { colors } = useTheme();
   const [cards, setCards] = useState(null);
   const [loading, setLoading] = useState(false);
   const hasExpandedFired = useRef(false);
+  const hasAutoOpenedFired = useRef(false);
 
   const [sheetVisible, setSheetVisible] = useState(false);
   const [sheetCardIndex, setSheetCardIndex] = useState(0);
@@ -83,6 +84,19 @@ export default function InsightsSection({ isPremium, onLockedPress, navigation }
       load();
     }, [load])
   );
+
+  // Weekly performance notification tap — open straight into the bottom
+  // sheet once cards are loaded, landing on the week-over-week comparison
+  // card when one exists. Fires once per navigation (guarded by the ref);
+  // MetricsScreen resets autoOpen to false via onAutoOpenHandled so a later
+  // unrelated focus doesn't reopen it.
+  useEffect(() => {
+    if (!autoOpen || !cards || hasAutoOpenedFired.current) return;
+    hasAutoOpenedFired.current = true;
+    const comparisonIndex = cards.findIndex((c) => c.type === 'comparison');
+    handleCardPressed(cards[comparisonIndex !== -1 ? comparisonIndex : 0], comparisonIndex !== -1 ? comparisonIndex : 0);
+    onAutoOpenHandled?.();
+  }, [autoOpen, cards, handleCardPressed, onAutoOpenHandled]);
 
   if (!isPremium) {
     return (

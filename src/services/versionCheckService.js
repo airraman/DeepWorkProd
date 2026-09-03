@@ -236,8 +236,8 @@ class VersionCheckService {
       : '🎉 Update Available';
     
     const defaultMessage = forceUpdate
-      ? 'A critical update is required to continue using DeepWork. Please update now.'
-      : 'A new version of DeepWork is available with improvements and bug fixes!';
+      ? 'A critical update is required to continue using Lucid. Please update now.'
+      : 'A new version of Lucid is available with improvements and bug fixes!';
     
     const buttons = [];
     
