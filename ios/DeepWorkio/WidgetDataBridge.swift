@@ -93,5 +93,86 @@ class WidgetDataBridge: NSObject {
     resolve(true)
   }
 
+  // App-side mirrors of the types declared in DeepWorkWidget.swift
+  // (WidgetSharedState/DefaultSessionConfig/PendingSessionStartRequest) —
+  // that file belongs only to the DeepWorkWidgetExtension target and the
+  // two targets share no framework, so these structs cannot reference it
+  // directly. They exist solely to decode/encode the same JSON contract;
+  // they do not define a new one. Only the field this bridge needs
+  // (defaultSessionConfig) is modeled — the rest of the shared-state shape
+  // is irrelevant here and is intentionally left undecoded.
+  private struct AppSideDefaultSessionConfig: Codable {
+    var activity: String?
+    var durationMinutes: Double?
+    var musicChoice: String?
+    var focusLockEnabled: Bool?
+  }
+
+  private struct AppSideWidgetSharedState: Codable {
+    var defaultSessionConfig: AppSideDefaultSessionConfig?
+  }
+
+  // Mirrors PendingSessionStartRequest in DeepWorkWidget.swift exactly —
+  // field names, optionality, and the ms-epoch Double for createdAt.
+  private struct AppSidePendingSessionStartRequest: Codable {
+    var requestId: String
+    var createdAt: Double
+    var activity: String?
+    var durationMinutes: Double?
+    var musicChoice: String?
+    var focusLockEnabled: Bool?
+  }
+
+  /// App-side equivalent of StartFocusSessionIntent's App Group write —
+  /// used by the lucid://start-focus deep-link path, which runs in the app
+  /// process rather than the widget extension. Produces the exact same
+  /// pending-request JSON shape the widget extension writes, sourced from
+  /// the same cached defaultSessionConfig the widget itself reads.
+  @objc
+  func createPendingSessionStart(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    guard let defaults = UserDefaults(suiteName: WidgetDataBridge.appGroupID) else {
+      reject("NO_APP_GROUP", "Could not open App Group UserDefaults suite", nil)
+      return
+    }
+
+    // Missing shared state (fresh install, never synced) means there's no
+    // defaultSessionConfig to source a request from — writing a request
+    // with everything nil would leave the JS-side handoff no better off
+    // than not writing one at all, so this fails clearly rather than
+    // reporting success for a no-op.
+    guard let stateData = defaults.data(forKey: WidgetDataBridge.stateKey) else {
+      reject("NO_SHARED_STATE", "No widgetSharedState found in App Group", nil)
+      return
+    }
+
+    let state: AppSideWidgetSharedState
+    do {
+      state = try JSONDecoder().decode(AppSideWidgetSharedState.self, from: stateData)
+    } catch {
+      reject("DECODE_FAILED", "Could not decode widgetSharedState: \(error.localizedDescription)", error)
+      return
+    }
+
+    let request = AppSidePendingSessionStartRequest(
+      requestId: UUID().uuidString,
+      createdAt: Date().timeIntervalSince1970 * 1000,
+      activity: state.defaultSessionConfig?.activity,
+      durationMinutes: state.defaultSessionConfig?.durationMinutes,
+      musicChoice: state.defaultSessionConfig?.musicChoice,
+      focusLockEnabled: state.defaultSessionConfig?.focusLockEnabled
+    )
+
+    guard let requestData = try? JSONEncoder().encode(request) else {
+      reject("ENCODE_FAILED", "Could not encode pending session-start request", nil)
+      return
+    }
+
+    defaults.set(requestData, forKey: WidgetDataBridge.pendingSessionStartKey)
+    resolve(true)
+  }
+
   @objc static func requiresMainQueueSetup() -> Bool { return false }
 }

@@ -37,13 +37,16 @@ import { FocusLockProvider } from './src/context/FocusLockContext';
 import FocusLockTest from './src/screens/FocusLockTest';
 import LoginScreen from './src/screens/LoginScreen';
 import { useAuth } from './src/context/AuthContext';
+import { configureGoogleSignIn } from './src/services/authService';
 import { runMigration } from './src/services/migrationService';
 import { restoreSessionsFromFirestore } from './src/services/sessionRestoreService';
 import { runLocalMigrationsIfNeeded } from './src/services/localMigrationService';
 import { logSessionComplete } from './src/services/analyticsService';
+import { trackNotificationOpened } from './src/services/analytics';
 import { getActiveSession } from './src/services/sessionStateService';
 import { syncWidgetState } from './src/services/widgetSyncService';
 import { processPendingWidgetSessionStart } from './src/services/widgetHandoffService';
+import { createPendingSessionStart } from './src/services/widgetDataBridge';
 
 try {
   messaging().setBackgroundMessageHandler(async (remoteMessage) => {
@@ -99,6 +102,8 @@ console.log('📦 Updates status:', {
   runtimeVersion: Updates.runtimeVersion,
   channel: Updates.channel,
 });
+
+configureGoogleSignIn();
 
 // ─── Migration Handler ────────────────────────────────────────────────────────
 // Stub for now — Session 2 wires this to migrationService
@@ -232,6 +237,94 @@ function AppNavigator() {
 
     return () => subscription.remove();
   }, [authLoading, subscriptionLoading, user]);
+
+  // lucid://start-focus deep link (widget FOCUS button, via a widgetURL/Link
+  // rather than the AppIntent handoff — see DeepWorkWidget.swift). Receiving
+  // this URL only proves the OS delivered the tap; it does not by itself mean
+  // a pending request exists, so this creates one via the native bridge
+  // (createPendingSessionStart mirrors the widget's own App Group write —
+  // see widgetDataBridge.js/WidgetDataBridge.swift) and then reuses the same
+  // processPendingWidgetSessionStart() lifecycle/premium-gate/navigation
+  // already used by the foreground and cold-launch paths above, rather than
+  // introducing a second session-start pathway.
+  //
+  // Refs (not state) mirror the latest auth/subscription values so the
+  // Linking listener effect below can read fresh values without needing
+  // those values as dependencies — keeping that effect's registration
+  // one-time-per-mount instead of resubscribing (and re-querying
+  // getInitialURL()) on every auth/subscription change.
+  const widgetDeepLinkAuthStateRef = useRef({ authLoading, subscriptionLoading, user, isPremium });
+  useEffect(() => {
+    widgetDeepLinkAuthStateRef.current = { authLoading, subscriptionLoading, user, isPremium };
+  }, [authLoading, subscriptionLoading, user, isPremium]);
+
+  // Guards against overlapping runs if the OS ever redelivers the same URL
+  // while a previous invocation is still in flight — without this, two
+  // concurrent createPendingSessionStart() calls could each be picked up by
+  // a separate processPendingWidgetSessionStart() call and start two
+  // sessions instead of one.
+  const handlingStartFocusDeepLinkRef = useRef(false);
+
+  const handleStartFocusDeepLink = useCallback(async () => {
+    if (handlingStartFocusDeepLinkRef.current) return;
+    handlingStartFocusDeepLinkRef.current = true;
+    try {
+      const created = await createPendingSessionStart();
+      if (!created) return;
+
+      const {
+        authLoading: authLoadingNow,
+        subscriptionLoading: subscriptionLoadingNow,
+        user: userNow,
+        isPremium: isPremiumNow,
+      } = widgetDeepLinkAuthStateRef.current;
+
+      if (authLoadingNow || subscriptionLoadingNow || !userNow) {
+        // Not safe to resolve/navigate yet — the pending request now sits in
+        // the App Group exactly like a widget-written one, and the existing
+        // cold-launch effect above will pick it up as soon as auth is ready.
+        return;
+      }
+
+      const result = await processPendingWidgetSessionStart({ isPremium: isPremiumNow });
+      if (result.started) {
+        safeNavigate('DeepWorkSession', {
+          duration:         String(result.params.duration),
+          activity:         result.params.activity,
+          musicChoice:      result.params.musicChoice,
+          focusLockEnabled: result.params.focusLockEnabled,
+        });
+      }
+    } catch (error) {
+      console.warn('[App] Widget deep-link session-start failed:', error);
+    } finally {
+      handlingStartFocusDeepLinkRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleUrl = ({ url }) => {
+      if (url && url.startsWith('lucid://start-focus')) {
+        handleStartFocusDeepLink();
+      }
+    };
+
+    // Covers the app already running (foregrounded or backgrounded).
+    const subscription = Linking.addEventListener('url', handleUrl);
+
+    // Covers the app being launched cold by the link itself.
+    Linking.getInitialURL()
+      .then((url) => {
+        if (url && url.startsWith('lucid://start-focus')) {
+          handleStartFocusDeepLink();
+        }
+      })
+      .catch((error) => {
+        console.warn('[App] Linking.getInitialURL() failed:', error);
+      });
+
+    return () => subscription.remove();
+  }, [handleStartFocusDeepLink]);
 
   if (authLoading) {
     // Auth is resolving persisted session — render nothing to avoid flash
@@ -600,6 +693,12 @@ function MainApp() {
               const type = data?.type;
         
               console.log('📱 [App] Local notification tapped, type:', type);
+
+              // FCM taps are counted in useNotificationHandlers; count only
+              // the app's own local types here so no tap is counted twice.
+              if (['session_end', 'streak_risk', 'reengagement'].includes(type)) {
+                trackNotificationOpened(data, 'local');
+              }
         
               if (type === 'session_end') {
                 const session = await getActiveSession();

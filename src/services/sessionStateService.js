@@ -132,7 +132,7 @@ export const getActiveSession = async () => {
 
 export const saveLastSessionConfig = async (config) => {
   try {
-    await AsyncStorage.setItem(LAST_KEY, JSON.stringify({
+    const toStore = {
       activity:         config.activity,
       activityName:     config.activityName || '',
       duration:         config.duration,
@@ -143,7 +143,8 @@ export const saveLastSessionConfig = async (config) => {
       focusLockEnabled: config.focusLockEnabled ?? false,
       completedAt:      Date.now(),
       hasOfferedRestart: false,
-    }));
+    };
+    await AsyncStorage.setItem(LAST_KEY, JSON.stringify(toStore));
   } catch (error) {
     console.warn('[sessionStateService] saveLastSessionConfig failed:', error);
   }

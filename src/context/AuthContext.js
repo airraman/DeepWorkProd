@@ -10,6 +10,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { onAuthStateChanged, getUserProfile } from '../services/authService';
+import { identifyAnalyticsUser } from '../services/analytics';
 
 const AuthContext = createContext(null);
 
@@ -44,6 +45,8 @@ export const AuthProvider = ({ children, onMigrationNeeded }) => {
       );
 
       setUser(firebaseUser);
+      // GA4 user id + internal_user property (uid only, never email).
+      identifyAnalyticsUser(firebaseUser?.uid ?? null);
       await loadUserProfile(firebaseUser);
 
       // Trigger migration check in App.js if a callback was provided

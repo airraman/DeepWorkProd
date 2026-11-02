@@ -1,6 +1,7 @@
 // src/services/database/SessionRepository.js
 
 import { deepWorkStore } from '../deepWorkStore';
+import { resolveActivityName } from '../insights/activityNames';
 
 class SessionRepository {
   
@@ -15,7 +16,11 @@ class SessionRepository {
   async getSessionsByDateRange(startTime, endTime) {
     try {
       // Get all sessions from deepWorkStore (returns date-keyed object)
-      const allSessions = await deepWorkStore.getSessions();
+      const [allSessions, settings] = await Promise.all([
+        deepWorkStore.getSessions(),
+        deepWorkStore.getSettings(),
+      ]);
+      const activities = settings?.activities || [];
       
       const flatSessions = [];
       
@@ -35,9 +40,14 @@ class SessionRepository {
             flatSessions.push({
               id: session.id,
               activity_type: session.activity,
+              activity_name: resolveActivityName(session.activity, activities),
               duration: session.duration * 60,
               start_time: session.timestamp,
               end_time: session.timestamp + (session.duration * 60 * 1000),
+              // `timestamp` is captured when the session is saved, i.e. at
+              // completion, so the actual start is duration earlier. Pauses
+              // aren't recorded, so this is the planned-duration start.
+              started_at: session.timestamp - (session.duration * 60 * 1000),
               // Priority: structured reflection → legacy rating.notes → top-level notes
               description: session.rating?.reflection?.workedOn
                         || session.rating?.notes

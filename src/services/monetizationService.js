@@ -5,6 +5,7 @@
 // conservative defaults (i.e., no gate fires on missing data).
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { decideQuickRestart, quickRestartsUsedToday } from './quickRestartPolicy';
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
@@ -62,12 +63,23 @@ export const getQuickRestartsToday = async () => {
       KEYS.QUICK_RESTART_DATE,
       KEYS.QUICK_RESTART_COUNT,
     ]);
-    if (!isSameDay(dateStr, todayStr())) return 0;
-    return parseInt(countStr || '0', 10);
+    return quickRestartsUsedToday({ storedDate: dateStr, storedCount: countStr, today: todayStr() });
   } catch {
     return 0;
   }
 };
+
+/**
+ * The quick-restart decision for every entry point (Home's quick-restart
+ * modal and the session summary's "Start another"). Pass isPremium from
+ * SubscriptionContext. Only records usage via incrementQuickRestarts when
+ * the caller acts on an allowed decision — a denied check changes nothing.
+ *
+ * @param {boolean} isPremium
+ * @returns {Promise<{ allowed: boolean, consume: boolean, showPaywall: boolean }>}
+ */
+export const checkQuickRestart = async (isPremium) =>
+  decideQuickRestart({ isPremium, usedToday: await getQuickRestartsToday() });
 
 /**
  * Increment the quick-restart counter for today.

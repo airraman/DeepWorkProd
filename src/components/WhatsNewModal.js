@@ -34,51 +34,22 @@ const FEATURES = [
   },
 ];
 
-const SCROLL_THRESHOLD = 0.95;
-
 export function WhatsNewModal({ visible, onComplete }) {
-  const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
-  const [hasStartedScrolling, setHasStartedScrolling] = useState(false);
-
-  // CTA animation values
-  const ctaOpacity = useRef(new Animated.Value(0.35)).current;
-  const ctaScale = useRef(new Animated.Value(0.97)).current;
-
-  // "Scroll to continue" hint fade
-  const hintOpacity = useRef(new Animated.Value(1)).current;
-
-  // Bottom gradient fade (fades out once user reaches bottom)
-  const gradientOpacity = useRef(new Animated.Value(1)).current;
 
   // Progress bar width (0–100%)
   const progressWidth = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!visible) {
-      // Reset all state when modal hides
-      setIsScrolledToBottom(false);
+      // Reset scroll progress when modal hides
       setScrollProgress(0);
-      setHasStartedScrolling(false);
-      ctaOpacity.setValue(0.35);
-      ctaScale.setValue(0.97);
-      hintOpacity.setValue(1);
-      gradientOpacity.setValue(1);
       progressWidth.setValue(0);
     }
   }, [visible]);
 
   const handleScroll = ({ nativeEvent }) => {
     const { contentOffset, layoutMeasurement, contentSize } = nativeEvent;
-
-    if (!hasStartedScrolling && contentOffset.y > 4) {
-      setHasStartedScrolling(true);
-      Animated.timing(hintOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    }
 
     const progress = Math.min(
       (contentOffset.y + layoutMeasurement.height) / contentSize.height,
@@ -91,40 +62,15 @@ export function WhatsNewModal({ visible, onComplete }) {
       duration: 60,
       useNativeDriver: false,
     }).start();
+  };
 
-    const reachedBottom = progress >= SCROLL_THRESHOLD;
-    if (reachedBottom && !isScrolledToBottom) {
-      setIsScrolledToBottom(true);
-
-      // Fade out bottom gradient
-      Animated.timing(gradientOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-
-      // Unlock CTA with animation
-      Animated.parallel([
-        Animated.timing(ctaOpacity, {
-          toValue: 1,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.spring(ctaScale, {
-          toValue: 1,
-          tension: 70,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      // Haptic feedback when CTA unlocks
-      try {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch (_) {
-        // Haptics unavailable — no-op
-      }
+  const handleContinuePress = () => {
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (_) {
+      // Haptics unavailable — no-op
     }
+    onComplete();
   };
 
   return (
@@ -132,7 +78,7 @@ export function WhatsNewModal({ visible, onComplete }) {
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={() => {/* non-dismissible until scrolled */}}
+      onRequestClose={() => {/* non-dismissible except via Continue */}}
     >
       <View style={styles.container}>
         {/* Progress bar */}
@@ -181,33 +127,33 @@ export function WhatsNewModal({ visible, onComplete }) {
             <View style={styles.scrollBottomSpacer} />
           </ScrollView>
 
-          {/* Fade gradient — hints there's more content */}
+          {/* Fade gradient — hints there's more content; fades out as the
+              user nears the bottom, purely a reading affordance (Continue
+              is available regardless of scroll position). */}
           <Animated.View
-            style={[styles.bottomGradient, { opacity: gradientOpacity }]}
+            style={[
+              styles.bottomGradient,
+              {
+                opacity: progressWidth.interpolate({
+                  inputRange: [0, 90, 100],
+                  outputRange: [0.92, 0.92, 0],
+                  extrapolate: 'clamp',
+                }),
+              },
+            ]}
             pointerEvents="none"
           />
         </View>
 
         {/* Footer */}
         <View style={styles.footer}>
-          {/* "Scroll to continue" hint */}
-          <Animated.Text style={[styles.scrollHint, { opacity: hintOpacity }]}>
-            Scroll to continue ↓
-          </Animated.Text>
-
-          <Animated.View style={{ opacity: ctaOpacity, transform: [{ scale: ctaScale }] }}>
-            <TouchableOpacity
-              style={[
-                styles.ctaButton,
-                !isScrolledToBottom && styles.ctaButtonDisabled,
-              ]}
-              onPress={isScrolledToBottom ? onComplete : undefined}
-              activeOpacity={0.85}
-              disabled={!isScrolledToBottom}
-            >
-              <Text style={styles.ctaText}>Continue</Text>
-            </TouchableOpacity>
-          </Animated.View>
+          <TouchableOpacity
+            style={styles.ctaButton}
+            onPress={handleContinuePress}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.ctaText}>Continue</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -310,20 +256,11 @@ const styles = StyleSheet.create({
     borderTopColor: '#F3F4F6',
     backgroundColor: '#FFFFFF',
   },
-  scrollHint: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
   ctaButton: {
     backgroundColor: '#000000',
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
-  },
-  ctaButtonDisabled: {
-    backgroundColor: '#D1D5DB',
   },
   ctaText: {
     color: '#FFFFFF',

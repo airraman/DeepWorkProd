@@ -129,6 +129,12 @@ class SessionService {
             completedAt: session.completedAt,
             rating: session.rating,
             notes: session.notes,
+            // Raw config for "Start another" on the summary screen. `found`
+            // distinguishes a real session from the fallbacks below, whose
+            // placeholder values must never be used to prefill a session.
+            found: true,
+            activity: activity ? session.activity : null,
+            musicChoice: session.musicChoice || null,
           };
         }
       }

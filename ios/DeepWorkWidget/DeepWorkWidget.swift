@@ -250,15 +250,12 @@ struct DeepWorkWidgetEntryView: View {
                     .font(.caption2)
             }
             Spacer()
-            if #available(iOS 17.0, *) {
-                Button(intent: StartFocusSessionIntent()) {
-                    Image(systemName: "target")
-                }
-                .buttonStyle(.plain)
-            } else {
-                Image(systemName: "target")
-            }
+            Image(systemName: "target")
         }
+        // Lock Screen accessory widgets can't hold a Link, so the whole widget
+        // opens the same lucid://start-focus flow as the Home Screen button.
+        // Without a last-used config there's nothing to start: just open Lucid.
+        .widgetURL(entry.state.defaultSessionConfig == nil ? nil : URL(string: "lucid://start-focus"))
     }
 
     // MARK: Home Screen (.systemMedium)
@@ -312,7 +309,7 @@ struct DeepWorkWidgetEntryView: View {
                     // wasn't the intended treatment). .contentShape(Circle())
                     // guarantees the entire circular area is tappable, not
                     // just the icon glyph.
-                    Button(intent: StartFocusSessionIntent()) {
+                    Link(destination: URL(string: "lucid://start-focus")!) {
                         ZStack {
                             Circle()
                                 .fill(Color.accentColor)

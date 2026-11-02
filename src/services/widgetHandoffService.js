@@ -23,7 +23,9 @@
  */
 
 import { getPendingSessionStart, clearPendingSessionStart } from './widgetDataBridge';
-import { getActiveSession, getLastUsedSessionConfig } from './sessionStateService';
+import { getActiveSession, getLastUsedSessionConfig, discardActiveSession, saveLastSessionConfig } from './sessionStateService';
+import { deepWorkStore } from './deepWorkStore';
+import { saveSessionToFirestore } from './firestoreSessionService';
 
 // Long enough to comfortably cover realistic cold-launch + auth-resolution
 // latency (typically a few seconds, generously up to ~30s on a slow
@@ -40,6 +42,57 @@ const isPositiveNumber = (v) => typeof v === 'number' && isFinite(v) && v > 0;
 const LONG_SESSION_MINUTES_THRESHOLD = 45;
 
 let _lock = Promise.resolve();
+
+/**
+ * Resolve an orphaned 'expired' active-session record the same way
+ * HomeScreen.handleSaveExpiredSession does: save it to history (best-effort
+ * Firestore sync included) and then discard the record, so a new
+ * widget-triggered session can proceed. Mirrors that function's semantics
+ * exactly — this never invents or discards data silently, it just performs
+ * the same resolution the user would otherwise have to do by hand on Home.
+ */
+const resolveExpiredActiveSession = async (active) => {
+  const config = active?.config;
+  if (!config) {
+    await discardActiveSession();
+    return;
+  }
+
+  try {
+    const settings = await deepWorkStore.getSettings();
+    const activityColor = settings.activities.find(a => a.id === config.activity)?.color;
+
+    const result = await deepWorkStore.addSession({
+      activity:    config.activity,
+      duration:    parseFloat(config.duration),
+      musicChoice: config.musicChoice || 'none',
+      notes:       '',
+      timestamp:   active.endTime,
+      ...(activityColor ? { activityColor } : {}),
+    });
+    await discardActiveSession();
+
+    // Same field mapping DeepWorkSession.js/HomeScreen.js use on their own
+    // completion paths — without this, the widget's defaultSessionConfig
+    // never gets populated for a session resolved here.
+    await saveLastSessionConfig({
+      activity: config.activity,
+      activityName: settings.activities.find(a => a.id === config.activity)?.name || '',
+      duration: config.duration,
+      musicChoice: config.musicChoice,
+      focusLockEnabled: config.focusLockEnabled,
+    });
+
+    if (result?.success && result.session?.id) {
+      saveSessionToFirestore(result.session).catch((err) => {
+        console.log('[WidgetHandoff] JS: Firestore save failed for resolved expired session (non-critical):', err.message);
+      });
+    }
+  } catch (error) {
+    console.warn('[WidgetHandoff] JS: failed to save expired session before widget start (non-critical, discarding):', error.message);
+    await discardActiveSession();
+  }
+};
 
 /**
  * Validates and consumes the pending widget session-start request, if any.
@@ -90,8 +143,21 @@ export const processPendingWidgetSessionStart = async ({ isPremium } = {}) => {
 
     const active = await getActiveSession();
     if (active) {
-      console.log('[WidgetHandoff] JS: rejected — active_session_exists', active);
-      return { started: false, reason: 'active_session_exists' };
+      if (active.status !== 'expired') {
+        // A genuinely in-progress session (status 'running') is a real
+        // conflict — never silently override it.
+        console.log('[WidgetHandoff] JS: rejected — active_session_exists', active);
+        return { started: false, reason: 'active_session_exists' };
+      }
+      // An 'expired' record is just a previous session whose timer ran out
+      // while the app was away and nobody has acknowledged it yet — the same
+      // state HomeScreen's "Session ended while away" prompt resolves with a
+      // single tap before letting the user start a new one. The widget path
+      // has no such prompt, so resolve it here the same way
+      // (HomeScreen.handleSaveExpiredSession: save to history, then discard)
+      // rather than leaving it to permanently block every future widget tap.
+      console.log('[WidgetHandoff] JS: resolving orphaned expired session before continuing', active);
+      await resolveExpiredActiveSession(active);
     }
 
     const lastUsed = await getLastUsedSessionConfig();

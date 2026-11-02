@@ -90,6 +90,7 @@ const WeeklyFocusChart = ({ sessions }) => {
 };
 
 const TotalTimeCard = ({ sessions, selectedMonth }) => {
+  const { colors } = useTheme();
   const computeMonthHours = () => {
     if (!selectedMonth || !sessions) return 0;
     const [year, month] = selectedMonth.split('-').map(Number);
@@ -109,7 +110,7 @@ const TotalTimeCard = ({ sessions, selectedMonth }) => {
     : 'Month';
 
   return (
-    <View style={[styles.totalTimeContainer, { backgroundColor: 'rgba(21,128,61,0.12)' }]}>
+    <View style={[styles.totalTimeContainer, { backgroundColor: 'rgba(21,128,61,0.12)', borderColor: colors.success }]}>
       <Text style={[styles.totalTimeLabel, { color: '#15803D' }]}>
         Focus Time
       </Text>
@@ -420,8 +421,15 @@ for (let d = 1; d <= lastDay.getDate(); d++) {
   
   const days = generateDaysList();
   
-  const getActivityColor = (activityId) => {
-    const activity = activities.find(a => a.id === activityId);
+  // Prefers the color captured on the session itself at the time it was
+  // recorded (session.activityColor) so past months keep showing the color
+  // that was actually true historically, even if the activity's color (or
+  // the activity itself) has since changed. Falls back to the activity's
+  // current color — the only option for sessions recorded before this field
+  // existed, since their original color was never persisted anywhere.
+  const getActivityColor = (session) => {
+    if (session.activityColor) return session.activityColor;
+    const activity = activities.find(a => a.id === session.activity);
     return activity?.color || colors.primary;
   };
   
@@ -459,7 +467,7 @@ for (let d = 1; d <= lastDay.getDate(); d++) {
                         key={session.id}
                         style={[
                           styles.sessionCube,
-                          { backgroundColor: getActivityColor(session.activity) }
+                          { backgroundColor: getActivityColor(session) }
                         ]}
                         onPress={() => onSessionPress(session)}
                         activeOpacity={0.7}
@@ -1088,6 +1096,7 @@ const styles = StyleSheet.create({
     height: 58,
     position: 'relative',
     borderRadius: 1,
+    borderWidth: 1,
   },
   totalTimeLabel: {
     fontSize: 7,

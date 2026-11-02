@@ -676,7 +676,10 @@ const handleSessionComplete = async (sessionData = {}) => {
       activity: activity,
       duration: parseFloat(duration),
       musicChoice: musicChoice || 'none',
-      
+      // Captured now so this session's history block keeps this color even
+      // if the activity's color changes later — see deepWorkStore.addSession.
+      ...(activityDetails?.color ? { activityColor: activityDetails.color } : {}),
+
       // CHANGED: Store structured session data instead of just notes string
       notes: sessionData.notes || '',
       ratings: {
@@ -736,6 +739,18 @@ const handleSessionComplete = async (sessionData = {}) => {
       console.log('❌ [DeepWorkSession] Firestore save failed (non-critical):', firestoreError.message);
     }
 
+    // Persist the just-completed session's config BEFORE syncing widget
+    // state — syncWidgetState() reads @last_session_config synchronously, so
+    // this must complete first or the widget's defaultSessionConfig reflects
+    // the previous session instead of this one.
+    await saveLastSessionConfig({
+      activity,
+      activityName: activityDetails?.name || '',
+      duration,
+      musicChoice,
+      focusLockEnabled,
+    });
+
     // Widget shared-state sync — today's count/7-day chart just changed.
     syncWidgetState().catch(() => {});
     console.log('✅ Session saved successfully!');
@@ -747,13 +762,6 @@ const handleSessionComplete = async (sessionData = {}) => {
 
     // Non-critical post-save: streak + quick-restart config (fire-and-forget)
     Promise.all([
-      saveLastSessionConfig({
-        activity,
-        activityName: activityDetails?.name || '',
-        duration,
-        musicChoice,
-        focusLockEnabled,
-      }),
       incrementStreak(),
       cancelStreakRiskNotification(),
     ]).catch(err => console.warn('[DeepWorkSession] Post-save services failed:', err));

@@ -18,4 +18,7 @@ RCT_EXTERN_METHOD(getPendingSessionStart:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(clearPendingSessionStart:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(createPendingSessionStart:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end

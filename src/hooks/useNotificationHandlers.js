@@ -12,6 +12,7 @@ import { useEffect } from 'react';
 import messaging from '@react-native-firebase/messaging';
 import { firebase } from '@react-native-firebase/app';
 import { navigationRef } from '../services/navigationService';
+import { trackNotificationOpened } from '../services/analytics';
 
 export function useNotificationHandlers() {
   useEffect(() => {
@@ -37,6 +38,7 @@ export function useNotificationHandlers() {
     // ── FCM: app was backgrounded when notification arrived ──────────────────
     messaging().onNotificationOpenedApp((message) => {
       console.log('👆 [FCM] Notification tapped (app was background):', message);
+      trackNotificationOpened(message?.data, 'fcm', 'background');
       handleFCMNotificationTap(message);
     });
 
@@ -46,6 +48,7 @@ export function useNotificationHandlers() {
       .then((message) => {
         if (message) {
           console.log('🚀 [FCM] App opened from quit state via notification:', message);
+          trackNotificationOpened(message?.data, 'fcm', 'quit');
           // Delay to allow NavigationContainer to mount if app was killed
           setTimeout(() => handleFCMNotificationTap(message), 500);
         }

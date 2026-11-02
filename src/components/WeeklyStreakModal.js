@@ -12,38 +12,16 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { computeWeeklyActivity } from '../services/weeklyActivity';
 
 // ─── Data helpers ─────────────────────────────────────────────────────────────
 
 const utcToday = () => new Date().toISOString().split('T')[0];
 
-/**
- * Derive the last 7 days (oldest → newest) as YYYY-MM-DD strings.
- */
-const getLast7Days = () => {
-  const days = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setUTCDate(d.getUTCDate() - i);
-    days.push(d.toISOString().split('T')[0]);
-  }
-  return days;
-};
-
-/**
- * Map each of the last 7 days to whether the user completed a session.
- *
- * @param {Object} sessions — result of deepWorkStore.getSessions()
- *   shape: { 'YYYY-MM-DD': [session, ...], ... }
- * @returns {{ date: string, completed: boolean }[]} — 7 entries, oldest first
- */
-export const computeWeeklyActivity = (sessions) => {
-  const days = getLast7Days();
-  return days.map((date) => ({
-    date,
-    completed: Array.isArray(sessions[date]) && sessions[date].length > 0,
-  }));
-};
+// The 7-day grid lives in services/weeklyActivity.js so HomeScreen can use
+// the exact same definition to decide whether this modal has anything to
+// show. Re-exported here for existing imports.
+export { computeWeeklyActivity };
 
 /**
  * Calculate the current streak: consecutive completed days counting backwards

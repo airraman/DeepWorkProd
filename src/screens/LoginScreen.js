@@ -5,7 +5,7 @@
  * Handles all loading, error, and keyboard states.
  */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,14 +17,22 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { useTheme } from '../context/ThemeContext';
-import { signIn, signUp, signInAnonymously } from '../services/authService';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { useTheme, THEMES } from '../context/ThemeContext';
+import {
+  signIn,
+  signUp,
+  signInAnonymously,
+  signInWithGoogle,
+  signInWithApple,
+  isAppleSignInAvailable,
+} from '../services/authService';
 
 const MODE_LOGIN = 'login';
 const MODE_SIGNUP = 'signup';
 
 export default function LoginScreen() {
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const styles = makeStyles(colors);
 
   const [mode, setMode] = useState(MODE_LOGIN);
@@ -32,12 +40,20 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const [error, setError] = useState('');
 
   const passwordRef = useRef(null);
   const displayNameRef = useRef(null);
 
   const isLogin = mode === MODE_LOGIN;
+  const busy = loading || googleLoading || appleLoading;
+
+  useEffect(() => {
+    isAppleSignInAvailable().then(setAppleAvailable);
+  }, []);
 
   const toggleMode = useCallback(() => {
     setMode((prev) => (prev === MODE_LOGIN ? MODE_SIGNUP : MODE_LOGIN));
@@ -85,6 +101,39 @@ export default function LoginScreen() {
     }
   }, [isLogin, email, password, displayName, validate]);
 
+  const handleGoogleSignIn = useCallback(async () => {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      console.log('🔄 [LoginScreen] attempting Google sign-in');
+      await signInWithGoogle();
+      console.log('✅ [LoginScreen] Google sign-in success — auth state will update via listener');
+      // Navigation happens automatically — AuthContext updates user → App.js hides LoginScreen
+    } catch (err) {
+      if (err.code !== 'CANCELLED') {
+        setError(err.message);
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  }, []);
+
+  const handleAppleSignIn = useCallback(async () => {
+    if (busy) return;
+    setError('');
+    setAppleLoading(true);
+    try {
+      await signInWithApple();
+      // Navigation happens automatically — AuthContext updates user → App.js hides LoginScreen
+    } catch (err) {
+      if (err.code !== 'CANCELLED') {
+        setError(err.message);
+      }
+    } finally {
+      setAppleLoading(false);
+    }
+  }, [busy]);
+
   const handleSkip = useCallback(async () => {
     try {
       setLoading(true);
@@ -120,6 +169,51 @@ export default function LoginScreen() {
 
         {/* Form */}
         <View style={styles.form}>
+          {/* Apple and Google — offered first, above the email/password fields */}
+          {appleAvailable && (
+            <View style={[styles.appleButtonWrapper, appleLoading && styles.primaryButtonDisabled]}>
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={
+                  isLogin
+                    ? AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN
+                    : AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP
+                }
+                buttonStyle={
+                  theme === THEMES.DARK
+                    ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                    : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                }
+                cornerRadius={14}
+                style={styles.appleButton}
+                onPress={handleAppleSignIn}
+              />
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={[styles.googleButton, googleLoading && styles.primaryButtonDisabled]}
+            onPress={handleGoogleSignIn}
+            disabled={busy}
+            activeOpacity={0.85}
+          >
+            {googleLoading ? (
+              <ActivityIndicator color={colors.text} size="small" />
+            ) : (
+              <>
+                <Text style={styles.googleIcon}>G</Text>
+                <Text style={styles.googleButtonText}>
+                  {isLogin ? 'Sign in with Google' : 'Sign Up with Google'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.dividerRow}>
+            <View style={[styles.dividerLine, { backgroundColor: colors.border || colors.separator }]} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={[styles.dividerLine, { backgroundColor: colors.border || colors.separator }]} />
+          </View>
+
           {/* Display name — signup only */}
           {!isLogin && (
             <View style={styles.fieldWrapper}>
@@ -183,7 +277,7 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
             onPress={handleSubmit}
-            disabled={loading}
+            disabled={busy}
             activeOpacity={0.85}
           >
             {loading ? (
@@ -199,7 +293,7 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={styles.toggleButton}
             onPress={toggleMode}
-            disabled={loading}
+            disabled={busy}
           >
             <Text style={styles.toggleText}>
               {isLogin ? "Don't have an account? " : 'Already have an account? '}
@@ -213,7 +307,7 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={styles.skipButton}
             onPress={handleSkip}
-            disabled={loading}
+            disabled={busy}
           >
             <Text style={styles.skipText}>Continue without account</Text>
           </TouchableOpacity>
@@ -285,6 +379,49 @@ const makeStyles = (colors) =>
       fontSize: 16,
       borderWidth: 1,
       borderColor: colors.border || colors.separator,
+    },
+    appleButtonWrapper: {
+      marginBottom: 12,
+    },
+    appleButton: {
+      width: '100%',
+      height: 50,
+    },
+    googleButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface || colors.card,
+      borderRadius: 14,
+      paddingVertical: 15,
+      borderWidth: 1,
+      borderColor: colors.border || colors.separator,
+      marginBottom: 20,
+    },
+    googleIcon: {
+      fontSize: 17,
+      fontWeight: '700',
+      color: colors.text,
+      marginRight: 10,
+    },
+    googleButtonText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    dividerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    dividerLine: {
+      flex: 1,
+      height: StyleSheet.hairlineWidth,
+    },
+    dividerText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginHorizontal: 10,
     },
     errorBox: {
       backgroundColor: colors.error

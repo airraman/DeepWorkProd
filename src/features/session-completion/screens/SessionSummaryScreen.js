@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { sessionService } from '../services/sessionService';
@@ -15,7 +16,19 @@ import {
   getPostInsightSessionCount,
   incrementPostInsightSessionCount,
   resetPostInsightSessionCount,
+  checkQuickRestart,
+  incrementQuickRestarts,
 } from '../../../services/monetizationService';
+import { startAnotherNavigationState } from '../../../services/sessionPrefill';
+import { deepWorkStore } from '../../../services/deepWorkStore';
+import { markRestartOffered } from '../../../services/sessionStateService';
+import { getWeekRecap, normalizeStoreSessions } from '../../../services/homeProgress';
+import { trackEvent } from '../../../services/analytics';
+import {
+  EVENTS,
+  sessionSummaryViewedParams,
+  startAnotherTappedParams,
+} from '../../../services/analyticsEvents';
 
 export default function SessionSummaryScreen({ navigation, route }) {
   const { sessionId } = route.params;
@@ -25,6 +38,8 @@ export default function SessionSummaryScreen({ navigation, route }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showInsightPaywall, setShowInsightPaywall] = useState(false);
+  const [weekRecap, setWeekRecap] = useState(null);
+  const [showQuickRestartPaywall, setShowQuickRestartPaywall] = useState(false);
 
   useEffect(() => {
     loadSessionData();
@@ -37,6 +52,24 @@ export default function SessionSummaryScreen({ navigation, route }) {
 
       setSession(sessionData);
       setStats(statsData);
+
+      // "Build on it" recap from completed sessions (this one is already
+      // saved). Best-effort: the section simply hides if this fails.
+      // session_summary_viewed fires once, after the recap settles, with
+      // counts and 0/1 flags only — never the activity name or reflection.
+      deepWorkStore.getSessions()
+        .then((all) => getWeekRecap(normalizeStoreSessions(all), Date.now()))
+        .catch(() => null)
+        .then((recap) => {
+          setWeekRecap(recap);
+          trackEvent(EVENTS.SESSION_SUMMARY_VIEWED, sessionSummaryViewedParams({
+            durationMinutes:       sessionData?.duration,
+            weekSessionCount:      recap ? recap.weekCount : null,
+            hasNextStep:           !!sessionData?.rating?.reflection?.nextStep?.trim(),
+            startAnotherAvailable: sessionData?.found === true && !!sessionData?.activity,
+            isFirstSession:        recap ? recap.allTimeCount === 1 : false,
+          }));
+        });
 
       // 🔒 GATE: post-insight paywall — show once every 2 sessions after the 3rd
       if (!isPremium && statsData?.allTime >= 3) {
@@ -71,6 +104,47 @@ export default function SessionSummaryScreen({ navigation, route }) {
     });
   };
 
+  // Prefill Home with this session's activity, duration and music. Never
+  // starts a session: the user still presses Begin, so every Home gate
+  // (45-min, Focus Lock) applies as usual. Focus Lock is deliberately not
+  // carried over — its daily limit is checked when the toggle is tapped.
+  // Prefill Home with this session's activity, duration and music. Never
+  // starts a session: the user still presses Begin, so every Home gate
+  // (45-min, Focus Lock) applies as usual. Focus Lock is deliberately not
+  // carried over — its daily limit is checked when the toggle is tapped.
+  //
+  // Re-loading the last session's settings is a quick restart, so it uses
+  // the same entitlement as Home's "Quick restart?" (quickRestartPolicy.js):
+  // free users get one per day. A denied tap records nothing.
+  const handleStartAnother = async () => {
+    trackEvent(EVENTS.SESSION_START_ANOTHER_TAPPED, startAnotherTappedParams({
+      durationMinutes:  session.duration,
+      weekSessionCount: weekRecap ? weekRecap.weekCount : null,
+    }));
+    const decision = await checkQuickRestart(isPremium);
+    if (!decision.allowed) {
+      if (decision.showPaywall) {
+        setShowQuickRestartPaywall(true);
+      } else {
+        // Premium (2/day) is already upgraded — tell them rather than sell.
+        Alert.alert('Quick restarts used', "You've used today's quick restarts.", [
+          { text: 'Set up manually', onPress: handleSetUpManually },
+        ]);
+      }
+      return;
+    }
+    await incrementQuickRestarts();
+    // Home would otherwise also offer "Quick restart?" for this same config.
+    await markRestartOffered();
+    navigation.reset(startAnotherNavigationState(session));
+  };
+
+  // Paywall fallback: Home with nothing pre-filled, like Home's own
+  // "Start manually". Consumes nothing.
+  const handleSetUpManually = () => {
+    navigation.reset(startAnotherNavigationState(null));
+  };
+
   if (loading) {
     return (
       <View style={styles.loading}>
@@ -80,6 +154,9 @@ export default function SessionSummaryScreen({ navigation, route }) {
   }
 
   if (!session) return null;
+
+  const nextStep = session.rating?.reflection?.nextStep?.trim() || null;
+  const canStartAnother = session.found === true && !!session.activity;
 
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);
@@ -143,11 +220,6 @@ export default function SessionSummaryScreen({ navigation, route }) {
             Distractions: <Text style={styles.value}>{session.rating.reflection.distractions}</Text>
           </Text>
         ) : null}
-        {session.rating?.reflection?.nextStep ? (
-          <Text style={styles.label}>
-            Next step: <Text style={styles.value}>{session.rating.reflection.nextStep}</Text>
-          </Text>
-        ) : null}
 
         {/* Stats Section */}
         {stats && (
@@ -160,10 +232,35 @@ export default function SessionSummaryScreen({ navigation, route }) {
           </>
         )}
 
+        {/* Build on it — only real data; hidden entirely when there's none */}
+        {(weekRecap || nextStep) && (
+          <View style={styles.buildOnIt}>
+            <Text style={styles.sectionTitle}>BUILD ON IT</Text>
+            {weekRecap ? (
+              <Text style={styles.buildHeadline}>{weekRecap.headline}</Text>
+            ) : null}
+            {nextStep ? (
+              <Text style={styles.label}>
+                Next step: <Text style={styles.value}>{nextStep}</Text>
+              </Text>
+            ) : null}
+          </View>
+        )}
+
         {/* Done Button */}
         <TouchableOpacity style={styles.doneButton} onPress={handleDone}>
           <Text style={styles.doneButtonText}>Done</Text>
         </TouchableOpacity>
+
+        {canStartAnother && (
+          <TouchableOpacity
+            style={styles.startAnotherButton}
+            onPress={handleStartAnother}
+            accessibilityHint="Opens Home with this session's settings. Press Begin to start."
+          >
+            <Text style={styles.startAnotherButtonText}>Start another</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       {/* 🔒 Post-insight paywall — non-blocking, appears after summary renders */}
@@ -171,6 +268,15 @@ export default function SessionSummaryScreen({ navigation, route }) {
         visible={showInsightPaywall}
         onClose={() => setShowInsightPaywall(false)}
         limitType="post_insight"
+      />
+
+      {/* 🔒 Quick-restart limit reached via "Start another" — same gate as Home */}
+      <PaywallModal
+        visible={showQuickRestartPaywall}
+        onClose={() => setShowQuickRestartPaywall(false)}
+        limitType="quick_restart"
+        secondaryCtaText="Set up manually"
+        onSecondaryAction={handleSetUpManually}
       />
     </SafeAreaView>
   );
@@ -248,6 +354,27 @@ const styles = StyleSheet.create({
   },
   doneButtonText: {
     color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  buildOnIt: {
+    marginTop: 8,
+  },
+  buildHeadline: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  startAnotherButton: {
+    borderWidth: 1,
+    borderColor: '#000000',
+    paddingVertical: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  startAnotherButtonText: {
+    color: '#000000',
     fontSize: 16,
     fontWeight: '600',
   },

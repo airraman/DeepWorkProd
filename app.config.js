@@ -5,7 +5,7 @@ export default {
   expo: {
     name: IS_PROD ? "Lucid" : "Lucid (Dev)",
     slug: "DeepWorkApp",
-    version: "1.0.12",
+    version: "1.0.13",
     orientation: "portrait",
     icon: "./assets/applogo.png",
     userInterfaceStyle: "light",
@@ -67,8 +67,9 @@ export default {
     ],
     ios: {
       supportsTablet: true,
+      usesAppleSignIn: true,
       bundleIdentifier: IS_PROD ? "com.airraman.deepwork" : "com.airraman.deepwork.dev",
-      buildNumber: "45",
+      buildNumber: "51",
       googleServicesFile: "./ios/DeepWorkioDev/GoogleService-Info.plist",
       infoPlist: {
         // PHASE 4: dropped "fetch" and "processing" — no BackgroundFetch tasks
@@ -122,7 +123,7 @@ export default {
       firebaseAppId: process.env.FIREBASE_APP_ID,
     },
     owner: "airraman",
-    runtimeVersion: "1.0.10",
+    runtimeVersion: "1.0.11",
     updates: {
       url: "https://u.expo.dev/6154a390-07d0-416c-955b-63179fba2bc8"
     }

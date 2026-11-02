@@ -327,6 +327,7 @@ const sanitizeSession = (session) => {
   const fields = [
     'id', 'date', 'activity', 'duration', 'musicChoice',
     'notes', 'rating', 'ratings', 'timestamp', 'completedAt', 'metadata',
+    'activityColor',
   ];
 
   fields.forEach((field) => {

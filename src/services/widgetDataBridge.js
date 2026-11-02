@@ -90,3 +90,18 @@ export const clearPendingSessionStart = async () => {
     return false;
   }
 };
+
+export const createPendingSessionStart = async () => {
+  if (!WidgetDataBridge) return false;
+
+  try {
+    await WidgetDataBridge.createPendingSessionStart();
+    return true;
+  } catch (error) {
+    console.warn(
+      '[widgetDataBridge] createPendingSessionStart failed (non-critical):',
+      error.message
+    );
+    return false;
+  }
+};

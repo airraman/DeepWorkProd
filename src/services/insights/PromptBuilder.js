@@ -22,7 +22,7 @@ class PromptBuilder {
 
   static _buildActivityBlock(activity, stats) {
     const lines = [
-      `- ${activity}: ${stats.sessionCount} sessions, ` +
+      `- ${stats.name || activity}: ${stats.sessionCount} sessions, ` +
       `${stats.totalHours.toFixed(1)}h total, ` +
       `avg ${stats.avgMinutes} min/session`,
     ];

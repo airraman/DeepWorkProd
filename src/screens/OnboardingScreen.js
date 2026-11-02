@@ -453,7 +453,7 @@ function PaywallStep({ onStart, onBack, saving }) {
                       <View style={[styles.radioButton, isSelected && styles.radioButtonSelected]}>
                         {isSelected && <View style={styles.radioInner} />}
                       </View>
-                      <View>
+                      <View style={styles.packageInfo}>
                         <Text style={[styles.packageName, isSelected && styles.packageNameSelected]}>
                           {getDisplayName(pkg)}
                         </Text>
@@ -689,8 +689,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   proList: {
-    marginBottom: 32,
-    gap: 12,
+    marginBottom: 24,
+    gap: 10,
   },
   featureRow: {
     flexDirection: 'row',
@@ -877,7 +877,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9ca3af',
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: 8,
     lineHeight: 18,
   },
   hintText: {
@@ -896,15 +896,15 @@ const styles = StyleSheet.create({
 
   // Package cards (step 5)
   packagesContainer: {
-    gap: 10,
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 20,
   },
   packageCard: {
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#e5e7eb',
     backgroundColor: '#f9fafb',
-    padding: 14,
+    padding: 12,
     position: 'relative',
   },
   packageCardSelected: {
@@ -934,6 +934,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
+  },
+  packageInfo: {
     flex: 1,
   },
   radioButton: {

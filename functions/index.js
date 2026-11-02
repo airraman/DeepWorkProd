@@ -8,26 +8,133 @@
 // by the deleted function and has been removed.
 const {onRequest} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
-const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {
+  onDocumentCreated,
+  onDocumentUpdated,
+} = require("firebase-functions/v2/firestore");
+
+const {
+  resendApiKey,
+  sendEmail,
+} = require("./emailService");
 const admin = require("firebase-admin");
+const {
+  localDateLabel,
+  localHour,
+  resolveTimezone,
+  resolveSchedule,
+  isDailyReminderEnabled,
+  isReengagementEnabled,
+  isWeeklySummaryEnabled,
+  classifySegment,
+  buildMorningActivationMessage,
+  isUnansweredCapReached,
+  nextUnansweredCount,
+  isInvalidTokenError,
+} = require("./morningActivation");
+const {
+  registerPushToken,
+  unregisterPushToken,
+} = require("./pushTokens");
+const {defineSecret} = require("firebase-functions/params");
+const {
+  handleUnsubscribe,
+  handleResendWebhook,
+} = require("./email");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
 
 /**
+ * Sends the Chrome extension invitation when a new user profile
+ * is created in Firestore.
+ */
+exports.sendChromeExtensionWelcomeEmail = onDocumentCreated(
+  {
+    document: "users/{userId}",
+    secrets: [resendApiKey],
+  },
+  async (event) => {
+    const userId = event.params.userId;
+
+    try {
+      const userRecord = await admin.auth().getUser(userId);
+      const email = userRecord.email;
+
+      if (!email) {
+        console.warn(
+            `No email found for new user ${userId}; skipping welcome email.`,
+        );
+        return;
+      }
+
+      await sendEmail({
+        to: email,
+        subject: "Get more out of Lucid with the Chrome extension",
+        html: `
+          <h1>Stay focused wherever you work.</h1>
+          <p>
+            Your Lucid account is ready. You can also use Lucid in Chrome
+            to block distracting websites and keep your focus sessions
+            connected across devices.
+          </p>
+          <p>
+            <a href="https://chromewebstore.google.com/detail/lucid-%E2%80%93-creative-focus/kjhmjfnodmankioppjmblompjlnoldfo">
+              Download the Lucid Chrome extension
+            </a>
+          </p>
+          <p>
+            Once you sign in with the same Lucid account, your extension
+            will connect automatically.
+          </p>
+          <p>— Lucid</p>
+        `,
+      });
+
+      await admin.firestore().collection("users").doc(userId).set({
+        chromeExtension: {
+          inviteSent: true,
+          inviteSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      }, {merge: true});
+
+      console.log(
+          `Chrome extension welcome email sent to ${email} for ${userId}`,
+      );
+    } catch (error) {
+      console.error(
+          `Failed to send Chrome extension welcome email for ${userId}:`,
+          error,
+      );
+      throw error;
+    }
+  },
+);
+
+/**
  * ============================================================================
- * DAILY REMINDERS (Scheduled - Hourly Batch)
+ * DAILY MORNING ACTIVATION (Scheduled - Hourly Batch)
  * ============================================================================
- * 
- * WHEN: Every hour (e.g., 9:00, 10:00, 11:00...)
- * WHO: Users who have dailyReminder.enabled = true
- * LOGIC: Send to users whose reminder time matches current hour
- * SKIP: Users who already completed a session today
- * 
- * SCALABILITY: Handles 10K+ users efficiently
- * - Batch processes all users in one function call
- * - Firestore query optimizations
- * - Parallel FCM sends
+ *
+ * WHEN: Every hour; each user is evaluated only at their local reminder hour
+ *   (dailyReminder.time, default 09:00).
+ * WHO: Everyone with a registered FCM token whose token doc id is a real
+ *   Firebase Auth uid. Iterates fcm_tokens, not users: only the Chrome
+ *   extension ever creates users/{uid} root docs, so iterating users skipped
+ *   every iOS-only user.
+ * WHAT (at most one push per user per local day, in priority order):
+ *   1. Behavior-based re-engagement (lapsed 3+ days / never started), with
+ *      its own cooldown and caps — see evaluateReengagement below. Only if
+ *      `reengagement` isn't false (default on).
+ *   2. Otherwise, a morning activation push for anyone who hasn't completed
+ *      a session yet today, with copy chosen from their real history
+ *      (new / active / consistent / returning — morningActivation.js). Only
+ *      if `dailyReminder.enabled` isn't false (opt-out, default on).
+ * SKIP: no valid timezone (never fall back to UTC), both categories off,
+ *   an active/paused session, a session already completed
+ *   today, a push already sent today, or 3 daily pushes in a row with no
+ *   session in between (resets once the user completes a session).
+ * INVALID TOKENS: deleted from fcm_tokens; the app re-registers on launch.
  */
 exports.dailyRemindersBatch = onSchedule(
     {
@@ -35,192 +142,182 @@ exports.dailyRemindersBatch = onSchedule(
       timeZone: "UTC",
     },
     async (event) => {
-      console.log("⏰ Starting hourly daily reminders batch...");
+      console.log("⏰ Starting hourly morning activation batch...");
 
-      const now = new Date();
-      const currentHour = now.getUTCHours();
+      const counts = {sent: 0, reengagement: 0, skipped: 0, errors: 0};
 
       try {
-        // Get all users with daily reminders enabled
-        const usersSnapshot = await admin.firestore()
-            .collection("users")
+        const tokensSnapshot = await admin.firestore()
+            .collection("fcm_tokens")
             .get();
 
-        let sentCount = 0;
-        let skippedCount = 0;
-        const errors = [];
-
-        // Process all users
-        const sendPromises = usersSnapshot.docs.map(async (userDoc) => {
-          const userId = userDoc.id;
-
+        const sendPromises = tokensSnapshot.docs.map(async (tokenDoc) => {
+          const userId = tokenDoc.id;
           try {
-            // Get user's notification preferences
-            const prefsDoc = await admin.firestore()
-                .collection("users")
-                .doc(userId)
-                .collection("preferences")
-                .doc("notifications")
-                .get();
-
-            if (!prefsDoc.exists) {
-              skippedCount++;
-              return;
-            }
-
-            const prefs = prefsDoc.data();
-
-            // Skip if daily reminders disabled
-            if (!prefs.dailyReminder?.enabled) {
-              skippedCount++;
-              return;
-            }
-
-            // Get user's timezone and reminder time
-            const timezone = prefs.dailyReminder.timezone || "UTC";
-            const reminderTime = prefs.dailyReminder.time || "09:00";
-            const [reminderHour] = reminderTime.split(":").map(Number);
-
-            // Convert user's reminder hour to UTC
-            const userLocalHour = new Date().toLocaleString("en-US", {
-              timeZone: timezone,
-              hour: "2-digit",
-              hour12: false,
-            });
-            const userCurrentHour = parseInt(userLocalHour);
-
-            // Check if it's the user's reminder hour
-            if (userCurrentHour !== reminderHour) {
-              return; // Not their reminder time yet
-            }
-
-            // Behavior-based re-engagement takes priority over the generic
-            // daily reminder at this same local hour — the two are mutually
-            // exclusive per run, so they can never land adjacent to each
-            // other. If no re-engagement notification is eligible (or one
-            // was eligible but blocked by cooldown/cap), fall through to the
-            // original, unmodified daily-reminder logic below.
-            const reengagementDecision = await evaluateReengagement(userId, timezone);
-            if (reengagementDecision) {
-              const reengagementSent = await trySendReengagement(userId, reengagementDecision, timezone);
-              if (reengagementSent) {
-                sentCount++;
-                return;
-              }
-            }
-
-            // Active-session guard for the generic reminder. evaluateReengagement's
-            // null result above does NOT tell us whether it was because of an
-            // active session or simply recent activity — so this is checked
-            // independently. Fails open (reminder proceeds) on read failure,
-            // logged, rather than silently disabling reminders for everyone.
-            let sessionBlocking = false;
-            try {
-              sessionBlocking = await isSessionCurrentlyBlocking(userId);
-            } catch (activeSessionError) {
-              console.warn(
-                  `⚠️ Could not read active-session status for ${userId} — ` +
-                  `failing open for the generic daily reminder:`,
-                  activeSessionError.message,
-              );
-              sessionBlocking = false;
-            }
-            if (sessionBlocking) {
-              console.log(`⏸️  User ${userId} has an active/paused session — skipping generic reminder`);
-              skippedCount++;
-              return;
-            }
-
-            // Check if user already completed a session today — reads
-            // users/{uid}/sessions directly (real, always-written data),
-            // not users/{uid}/daily_aggregates, which nothing in this
-            // codebase ever writes to.
-            let hasSessionToday = false;
-            try {
-              hasSessionToday = await hasCompletedSessionToday(userId, timezone);
-            } catch (sessionQueryError) {
-              console.warn(
-                  `⚠️ Could not read session history for ${userId} — ` +
-                  `failing open for the generic daily reminder:`,
-                  sessionQueryError.message,
-              );
-              hasSessionToday = false;
-            }
-            if (hasSessionToday) {
-              console.log(`⏭️  User ${userId} already focused today, skipping`);
-              skippedCount++;
-              return;
-            }
-
-            // Get FCM token
-            const tokenDoc = await admin.firestore()
-                .collection("fcm_tokens")
-                .doc(userId)
-                .get();
-
-            if (!tokenDoc.exists) {
-              console.warn(`⚠️ No FCM token for user: ${userId}`);
-              skippedCount++;
-              return;
-            }
-
-            const fcmToken = tokenDoc.data().token;
-
-            // Get current streak for personalization
-            const streak = await getCurrentStreak(userId);
-
-            // Build personalized message
-            const notification = buildDailyReminderMessage(
-                reminderHour,
-                streak,
-            );
-
-            // Send notification
-            await admin.messaging().send({
-              token: fcmToken,
-              notification: {
-                title: notification.title,
-                body: notification.body,
-              },
-              data: {
-                type: "daily_reminder",
-                hour: reminderHour.toString(),
-                streak: streak.toString(),
-              },
-              apns: {
-                payload: {
-                  aps: {
-                    sound: "default",
-                    badge: 1,
-                  },
-                },
-              },
-            });
-
-            console.log(`✅ Daily reminder sent to: ${userId}`);
-            sentCount++;
+            const outcome =
+                await processDailyActivation(userId, tokenDoc.data());
+            if (outcome === "activation") counts.sent++;
+            else if (outcome === "reengagement") counts.reengagement++;
+            else counts.skipped++;
           } catch (error) {
-            console.error(`❌ Error for user ${userId}:`, error);
-            errors.push({userId, error: error.message});
-            skippedCount++;
+            counts.errors++;
+            if (isInvalidTokenError(error)) {
+              console.warn(`🧹 Invalid FCM token for ${userId} — removing`);
+              await admin.firestore().collection("fcm_tokens").doc(userId)
+                  .delete().catch(() => {});
+            } else {
+              console.error(`❌ Error for user ${userId}:`, error);
+            }
           }
         });
 
         await Promise.all(sendPromises);
 
         console.log(`
-📊 Daily reminders batch complete:
-   ✅ Sent: ${sentCount}
-   ⏭️  Skipped: ${skippedCount}
-   ❌ Errors: ${errors.length}
+📊 Morning activation batch complete:
+   ✅ Activation sent: ${counts.sent}
+   🔁 Re-engagement sent: ${counts.reengagement}
+   ⏭️  Skipped / not their hour: ${counts.skipped}
+   ❌ Errors: ${counts.errors}
         `);
 
-        return {success: true, sent: sentCount, skipped: skippedCount};
+        return {success: true, ...counts};
       } catch (error) {
-        console.error("❌ Daily reminders batch failed:", error);
+        console.error("❌ Morning activation batch failed:", error);
         throw error;
       }
     });
+
+/**
+ * Evaluate and (maybe) send one user's daily push. Returns what was sent:
+ * "activation", "reengagement", or a skip reason string.
+ *
+ * @param {string} userId fcm_tokens doc id
+ * @param {object} tokenData fcm_tokens doc data
+ * @return {Promise<string>}
+ */
+async function processDailyActivation(userId, tokenData) {
+  const nowMs = Date.now();
+  const userRef = admin.firestore().collection("users").doc(userId);
+
+  const prefsDoc = await userRef
+      .collection("preferences").doc("notifications").get();
+  const prefs = prefsDoc.exists ? prefsDoc.data() : null;
+
+  // Two independently controlled categories share this hourly slot.
+  const dailyOn = isDailyReminderEnabled(prefs);
+  const reengagementOn = isReengagementEnabled(prefs);
+  if (!dailyOn && !reengagementOn) return "disabled";
+
+  const schedule = resolveSchedule(prefs, tokenData);
+  if (!schedule) return "no_timezone";
+  const {timezone, reminderHour} = schedule;
+
+  if (localHour(nowMs, timezone) !== reminderHour) return "not_their_hour";
+
+  if (!tokenData?.token) return "no_token";
+
+  // Token docs keyed by a device id (registered before auth was ready) can
+  // never be matched to sessions — skip rather than guess.
+  try {
+    await admin.auth().getUser(userId);
+  } catch (error) {
+    return "not_an_auth_user";
+  }
+
+  const todayLabel = localDateLabel(nowMs, timezone);
+  const stateRef = userRef
+      .collection("notificationState").doc("dailyActivation");
+  const stateDoc = await stateRef.get();
+  const state = stateDoc.exists ? stateDoc.data() : {};
+  if (state.lastSentDate === todayLabel) return "already_sent_today";
+
+  if (await isSessionCurrentlyBlocking(userId)) return "session_active";
+
+  const sessionsSnap = await userRef.collection("sessions")
+      .orderBy("timestamp", "desc")
+      .limit(REENGAGEMENT_SESSION_HISTORY_LIMIT)
+      .get();
+  const sessionTimestamps = sessionsSnap.docs
+      .map((d) => d.data().timestamp)
+      .filter((t) => typeof t === "number");
+  const lastSessionMs = sessionTimestamps.length ?
+    Math.max(...sessionTimestamps) : null;
+
+  // "Today" is the user's local calendar day — compared by timestamp, not
+  // the session's stored `date`, which the app derives from UTC.
+  if (lastSessionMs !== null &&
+      localDateLabel(lastSessionMs, timezone) === todayLabel) {
+    return "completed_today";
+  }
+
+  if (isUnansweredCapReached(state, lastSessionMs)) return "unanswered_cap";
+
+  // Claim today's slot before sending, so an overlapping run (e.g. a DST
+  // repeated hour) can't send a second push the same local day.
+  const claimed = await admin.firestore().runTransaction(async (tx) => {
+    const fresh = await tx.get(stateRef);
+    if (fresh.exists && fresh.data().lastSentDate === todayLabel) return false;
+    tx.set(stateRef, {
+      lastSentDate: todayLabel,
+      lastSentAtMs: nowMs,
+      consecutiveUnanswered: nextUnansweredCount(state, lastSessionMs),
+      lastEvaluatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+    return true;
+  });
+  if (!claimed) return "already_sent_today";
+
+  // Lapsed users get the existing re-engagement message instead, under its
+  // own cooldown and caps. If it's blocked or turned off, fall through to
+  // activation — if daily reminders are on.
+  if (reengagementOn) {
+    const reengagementDecision = await evaluateReengagement(userId, timezone);
+    if (reengagementDecision &&
+        await trySendReengagement(userId, reengagementDecision, timezone)) {
+      await stateRef.set(
+          {lastType: `reengagement:${reengagementDecision.type}`},
+          {merge: true});
+      return "reengagement";
+    }
+  }
+
+  if (!dailyOn) {
+    // Nothing was sent: release today's claim, so the app's 7 pm check and
+    // the unanswered counter don't treat this as a sent push.
+    await stateRef.set({
+      lastSentDate: state.lastSentDate ?? null,
+      lastSentAtMs: state.lastSentAtMs ?? null,
+      consecutiveUnanswered: state.consecutiveUnanswered ?? 0,
+    }, {merge: true});
+    return "daily_reminders_off";
+  }
+
+  const classification = classifySegment(sessionTimestamps, nowMs, timezone);
+  const message = buildMorningActivationMessage(classification);
+
+  await admin.messaging().send({
+    token: tokenData.token,
+    notification: {title: message.title, body: message.body},
+    data: {
+      type: "morning_activation",
+      segment: classification.segment,
+    },
+    apns: {
+      payload: {
+        aps: {
+          sound: "default",
+        },
+      },
+    },
+  });
+
+  await stateRef.set(
+      {lastType: `activation:${classification.segment}`}, {merge: true});
+  console.log(
+      `✅ Morning activation (${classification.segment}) sent to: ${userId}`);
+  return "activation";
+}
 
 /**
  * ============================================================================
@@ -228,7 +325,8 @@ exports.dailyRemindersBatch = onSchedule(
  * ============================================================================
  *
  * WHEN: Every Monday at 9:00 AM in each user's local timezone
- * WHO: Users who have weeklySummary.enabled = true
+ * WHO: Everyone with an fcm_tokens doc keyed by a real Auth uid, a known
+ *   timezone, and weeklySummary not explicitly false (no prefs doc = on)
  * CONTENT: Previous completed week vs. the week before it — sessions, focused
  *   minutes, and streak — with a tap target that opens Metrics -> Analytics.
  *
@@ -257,16 +355,19 @@ exports.weeklySummaryBatch = onSchedule(
       console.log("📊 Starting weekly performance batch...");
 
       try {
-        const usersSnapshot = await admin.firestore()
-            .collection("users")
+        // Audience = everyone with a registered push token, as in
+        // dailyRemindersBatch. Iterating users skipped every iOS-only user:
+        // only the Chrome extension ever creates users/{uid} root docs.
+        const tokensSnapshot = await admin.firestore()
+            .collection("fcm_tokens")
             .get();
 
         let sentCount = 0;
         let deferredCount = 0;
         let skippedCount = 0;
 
-        const sendPromises = usersSnapshot.docs.map(async (userDoc) => {
-          const userId = userDoc.id;
+        const sendPromises = tokensSnapshot.docs.map(async (tokenDoc) => {
+          const userId = tokenDoc.id;
 
           try {
             const prefsDoc = await admin.firestore()
@@ -276,28 +377,32 @@ exports.weeklySummaryBatch = onSchedule(
                 .doc("notifications")
                 .get();
 
-            if (!prefsDoc.exists) {
+            // A missing prefs doc means the app's defaults (weekly summary
+            // on); only an explicit weeklySummary === false opts out.
+            const prefs = prefsDoc.exists ? prefsDoc.data() : null;
+            if (!isWeeklySummaryEnabled(prefs)) {
               skippedCount++;
               return;
             }
 
-            const prefs = prefsDoc.data();
-
-            if (!prefs.weeklySummary) {
+            // Never fall back to UTC: 9 AM UTC is the middle of the night
+            // for most users.
+            const timezone = resolveTimezone(prefs, tokenDoc.data());
+            if (!timezone) {
               skippedCount++;
               return;
             }
 
-            const timezone = prefs.dailyReminder?.timezone || "UTC";
-
-            const userLocalHour = new Date().toLocaleString("en-US", {
-              timeZone: timezone,
-              hour: "2-digit",
-              hour12: false,
-            });
-
-            if (parseInt(userLocalHour, 10) !== 9) {
+            if (localHour(Date.now(), timezone) !== 9) {
               return; // Not 9 AM yet in their timezone
+            }
+
+            // Token docs keyed by a device id can't be matched to sessions.
+            try {
+              await admin.auth().getUser(userId);
+            } catch (authError) {
+              skippedCount++;
+              return;
             }
 
             const {startMs: prevStart, endMs: prevEnd, weekStartLabel} =
@@ -432,131 +537,107 @@ exports.deliverDeferredWeeklyNotification = onDocumentUpdated(
 
 /**
  * ============================================================================
- * HTTP ENDPOINT: Register FCM Token
+ * HTTP ENDPOINTS: Register / Unregister FCM Token
  * ============================================================================
- * 
- * Called from client when app launches or token refreshes
+ *
+ * Both require `Authorization: Bearer <Firebase ID token>`; the uid comes
+ * from that token, never the request body (see pushTokens.js). Called from
+ * the app on launch, sign-in and token refresh (register) and just before
+ * sign-out (unregister). Older app versions that don't send the header get
+ * 401 and keep whatever token doc they already have.
  */
+const handleTokenRequest = (handler) => async (req, res) => {
+  // Handle preflight OPTIONS request
+  if (req.method === "OPTIONS") {
+    res.set("Access-Control-Allow-Methods", "POST");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    return res.status(204).send("");
+  }
+  if (req.method !== "POST") {
+    return res.status(405).send({error: "Method not allowed"});
+  }
+
+  try {
+    const result = await handler(admin, {
+      authorization: req.get("Authorization"),
+      body: req.body,
+    });
+    return res.status(result.status).send(result.body);
+  } catch (error) {
+    console.error("❌ FCM token request failed:", error);
+    return res.status(500).send({error: "Token request failed"});
+  }
+};
+
 exports.registerToken = onRequest(
     {cors: true},
+    handleTokenRequest(registerPushToken),
+);
+
+exports.unregisterToken = onRequest(
+    {cors: true},
+    handleTokenRequest(unregisterPushToken),
+);
+
+/**
+ * ============================================================================
+ * EMAIL: unsubscribe + Resend bounce/complaint webhook
+ * ============================================================================
+ *
+ * Foundation only — no campaign sends from here (see email.js). Each uses
+ * its own secret:
+ *   EMAIL_UNSUBSCRIBE_SECRET  signs unsubscribe links (any long random value)
+ *   RESEND_WEBHOOK_SECRET     the "whsec_..." signing secret of the Resend
+ *                             webhook pointed at resendWebhook
+ */
+const emailUnsubscribeSecret = defineSecret("EMAIL_UNSUBSCRIBE_SECRET");
+const resendWebhookSecret = defineSecret("RESEND_WEBHOOK_SECRET");
+
+exports.emailUnsubscribe = onRequest(
+    {secrets: [emailUnsubscribeSecret]},
     async (req, res) => {
-      // Handle preflight OPTIONS request
-      if (req.method === "OPTIONS") {
-        res.set("Access-Control-Allow-Methods", "POST");
-        res.set("Access-Control-Allow-Headers", "Content-Type");
-        return res.status(204).send("");
-      }
-
-      const {fcmToken, platform, userId} = req.body;
-
-      if (!fcmToken || !userId) {
-        return res.status(400).send({
-          error: "Missing required fields: fcmToken and userId",
-        });
-      }
-
       try {
-        await admin.firestore().collection("fcm_tokens").doc(userId).set({
-          token: fcmToken,
-          platform,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, {merge: true});
-
-        console.log(`✅ Registered FCM token for user: ${userId}`);
-        return res.status(200).send({success: true});
-      } catch (error) {
-        console.error("❌ Error storing FCM token:", error);
-        return res.status(500).send({
-          error: "Failed to store token",
-          details: error.message,
+        const result = await handleUnsubscribe(admin, {
+          method: req.method,
+          query: req.query,
+          body: req.body,
+          secret: emailUnsubscribeSecret.value(),
         });
+        res.set("Content-Type", result.contentType);
+        return res.status(result.status).send(result.body);
+      } catch (error) {
+        console.error("❌ Unsubscribe failed:", error);
+        return res.status(500).send("Something went wrong. Please try again.");
       }
-    });
+    },
+);
+
+exports.resendWebhook = onRequest(
+    {secrets: [resendWebhookSecret]},
+    async (req, res) => {
+      if (req.method !== "POST") {
+        return res.status(405).send({error: "Method not allowed"});
+      }
+      try {
+        const result = await handleResendWebhook(admin, {
+          headers: req.headers,
+          rawBody: req.rawBody,
+          secret: resendWebhookSecret.value(),
+        });
+        return res.status(result.status).send(result.body);
+      } catch (error) {
+        console.error("❌ Resend webhook failed:", error);
+        // 5xx makes Svix retry, which is what we want for a transient failure.
+        return res.status(500).send({error: "Webhook handling failed"});
+      }
+    },
+);
 
 /**
  * ============================================================================
  * HELPER FUNCTIONS
  * ============================================================================
  */
-
-/**
- * Check if user completed a session today, reading users/{uid}/sessions
- * directly — the collection every completed session actually writes to
- * (via saveSessionToFirestore) — rather than users/{uid}/daily_aggregates,
- * which nothing in this codebase ever writes to. "Today" is computed in the
- * user's real local timezone via getLocalDateString, the same Intl-based
- * helper already used for weekly-performance and re-engagement date logic —
- * not the Cloud Functions container's own local/UTC time.
- */
-async function hasCompletedSessionToday(userId, timezone) {
-  const todayLabel = getLocalDateString(timezone, 0);
-
-  const snapshot = await admin.firestore()
-      .collection("users").doc(userId)
-      .collection("sessions")
-      .where("date", "==", todayLabel)
-      .limit(1)
-      .get();
-
-  return !snapshot.empty;
-}
-
-/**
- * Get user's current streak
- */
-async function getCurrentStreak(userId) {
-  const userDoc = await admin.firestore()
-      .collection("users")
-      .doc(userId)
-      .get();
-
-  return userDoc.data()?.currentStreak || 0;
-}
-
-/**
- * Build personalized daily reminder message
- */
-function buildDailyReminderMessage(hour, streak) {
-  // Morning (6-11)
-  if (hour >= 6 && hour < 12) {
-    if (streak >= 3) {
-      return {
-        title: `${streak}-day streak! 🔥`,
-        body: "Keep it going with a morning focus session",
-      };
-    }
-    return {
-      title: "Good morning! ☀️",
-      body: "Start your day with focused work",
-    };
-  }
-
-  // Afternoon (12-17)
-  if (hour >= 12 && hour < 18) {
-    if (streak >= 3) {
-      return {
-        title: `${streak}-day streak! 🔥`,
-        body: "Don't break it - quick afternoon session?",
-      };
-    }
-    return {
-      title: "Afternoon focus time 🎯",
-      body: "Beat the slump with a quick session",
-    };
-  }
-
-  // Evening (18-23)
-  if (streak >= 3) {
-    return {
-      title: `Protect your ${streak}-day streak! 🔥`,
-      body: "One more session before the day ends?",
-    };
-  }
-  return {
-    title: "Wind down with focus 🌙",
-    body: "One more session before the day ends?",
-  };
-}
 
 /**
  * ============================================================================

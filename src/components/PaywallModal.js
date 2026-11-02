@@ -10,6 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import Purchases from 'react-native-purchases';
+import { useSubscription } from '../context/SubscriptionContext';
 
 // Per-gate copy. `limitType` drives both title and body so each gate feels
 // contextually relevant rather than generic.
@@ -32,7 +33,7 @@ const GATE_COPY = {
   },
   quick_restart: {
     title: 'Stay in the zone',
-    body: 'Free users can quickly restart once per day. Upgrade for unlimited quick restarts.',
+    body: 'Free users can quickly restart once per day. Upgrade for 2 quick restarts a day.',
   },
   // Legacy fallback
   session: {
@@ -46,9 +47,11 @@ const GATE_COPY = {
 };
 
 export function PaywallModal({ visible, onClose, limitType, onSecondaryAction, secondaryCtaText }) {
+  const { checkSubscriptionStatus } = useSubscription();
   const [isLoading, setIsLoading] = useState(false);
   const [packages, setPackages] = useState([]);
   const [selectedPackage, setSelectedPackage] = useState(null);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -112,6 +115,31 @@ export function PaywallModal({ visible, onClose, limitType, onSecondaryAction, s
       }
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function handleRestore() {
+    if (isRestoring) return;
+    setIsRestoring(true);
+    try {
+      console.log('🔄 Restoring purchases...');
+      const customerInfo = await Purchases.restorePurchases();
+      await checkSubscriptionStatus();
+
+      if (customerInfo.entitlements.active['Pro']) {
+        console.log('✅ Restore successful — Pro entitlement active');
+        Alert.alert('Purchases Restored', 'Your premium access has been restored.', [
+          { text: 'OK', onPress: onClose }
+        ]);
+      } else {
+        console.log('ℹ️ Restore completed — no active Pro entitlement found');
+        Alert.alert('No Purchases Found', "We couldn't find an active subscription for this account.");
+      }
+    } catch (error) {
+      console.error('❌ Restore purchases error:', error);
+      Alert.alert('Restore Failed', error.message || 'Something went wrong. Please try again.');
+    } finally {
+      setIsRestoring(false);
     }
   }
 
@@ -277,8 +305,16 @@ export function PaywallModal({ visible, onClose, limitType, onSecondaryAction, s
               <Text style={styles.restoreButtonText}>{secondaryCtaText}</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity onPress={onClose} style={styles.restoreButton}>
-              <Text style={styles.restoreButtonText}>Restore Purchases</Text>
+            <TouchableOpacity
+              onPress={handleRestore}
+              disabled={isRestoring}
+              style={styles.restoreButton}
+            >
+              {isRestoring ? (
+                <ActivityIndicator size="small" color="#2563EB" />
+              ) : (
+                <Text style={styles.restoreButtonText}>Restore Purchases</Text>
+              )}
             </TouchableOpacity>
           )}
         </View>

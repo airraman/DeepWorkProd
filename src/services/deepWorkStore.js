@@ -436,6 +436,13 @@ getSessions: async () => {
         duration: parseFloat(session.duration),
         musicChoice: session.musicChoice,
         notes: session.notes || '',
+        // Captured at creation time so historical months keep showing the
+        // color the activity actually had when the session happened, even if
+        // the activity's color (or the activity itself) changes later.
+        // Optional — omitted entirely for callers that don't pass it, so
+        // existing behavior (fallback to the activity's current color) is
+        // unaffected for any session that predates this field.
+        ...(session.activityColor ? { activityColor: session.activityColor } : {}),
         timestamp: session.timestamp || now,
         completedAt: new Date().toISOString(),
         syncStatus: 'pending',

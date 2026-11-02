@@ -1,0 +1,477 @@
+{
+  "project": "Lucid – Creative Focus",
+  "generated": "2026-10-31",
+  "status": "All three sprints implemented and tested locally. Nothing deployed, published, built, submitted or committed.",
+  "sprint_grouping_note": "Sprint names come from the original brief. The assignment of each phase to a sprint is an inferred grouping by theme; the phases were delivered in the order listed under 'delivery_order'.",
+  "release_runbook": "RELEASE_RUNBOOK.md",
+  "environment": {
+    "firebase_project": "deepwork-8416f",
+    "eas_channel": "production",
+    "live_ios_build": {
+      "version": "1.0.12",
+      "build": "48",
+      "runtime": "1.0.10",
+      "native_fingerprint": "fffc77b9e79c456a28b0eb9f9df01456ce653aa0"
+    },
+    "working_tree_fingerprint": "c1a820c4893c46945a6f42d860bfe988a19a60e8",
+    "ota_blocker": "The working tree imports native modules missing from build 48 (Google Sign-In, Apple Authentication, Expo Crypto). No OTA from this tree to runtime 1.0.10. A new iOS binary is required first."
+  },
+  "delivery_order": [
+    "morning_activation_notifications",
+    "notification_gaps_phase_1a_1b",
+    "home_progress_line",
+    "session_summary_build_on_it",
+    "weekly_streak_modal_suppression",
+    "quick_start_defaults",
+    "analytics_instrumentation",
+    "notification_preferences",
+    "email_foundation",
+    "chrome_link_status",
+    "fix_quick_restart_entitlement"
+  ],
+  "sprints": [
+    {
+      "sprint": 1,
+      "name": "Core activation and experience",
+      "phases": [
+        {
+          "id": "home_progress_line",
+          "priority": "P0",
+          "summary": "Replaced the streak and total-hours pills on Home with one progress line built from real completed sessions; free and premium.",
+          "states": [
+            "first_session",
+            "today",
+            "this_week",
+            "welcome_back",
+            "quiet_week"
+          ],
+          "files_new": [
+            "src/services/homeProgress.js",
+            "src/services/__tests__/homeProgress.test.mjs"
+          ],
+          "files_modified": [
+            "src/screens/HomeScreen.js"
+          ],
+          "tests": "homeProgress 20/20 (incl. week recap)",
+          "cloud_deploy": false,
+          "chrome_release": false,
+          "ota_eligible": true,
+          "outstanding": [
+            "Visual verification deferred to the consolidated dev-client build"
+          ]
+        },
+        {
+          "id": "session_summary_build_on_it",
+          "priority": "P0",
+          "summary": "Added 'Build on it' to the session summary (real weekly count, the user's own next step) and a 'Start another' button that pre-fills Home. Never auto-starts; Done unchanged; Focus Lock not carried over.",
+          "files_new": [
+            "src/services/sessionPrefill.js",
+            "src/services/__tests__/sessionPrefill.test.mjs"
+          ],
+          "files_modified": [
+            "src/features/session-completion/screens/SessionSummaryScreen.js",
+            "src/features/session-completion/services/sessionService.js",
+            "src/screens/HomeScreen.js",
+            "src/services/homeProgress.js"
+          ],
+          "tests": "sessionPrefill 7/7; recap cases in homeProgress",
+          "cloud_deploy": false,
+          "chrome_release": false,
+          "ota_eligible": true,
+          "decisions": [
+            "Start another counts as a quick restart and uses the same entitlement as Home's quick-restart modal (fixed 2026-10-31; it previously bypassed the free limit)"
+          ],
+          "outstanding": [
+            "On-device verification deferred"
+          ]
+        },
+        {
+          "id": "weekly_streak_modal_suppression",
+          "priority": "P1",
+          "summary": "WeeklyStreakModal no longer opens when its 7-day grid would be empty; the check and the grid share one definition.",
+          "files_new": [
+            "src/services/weeklyActivity.js",
+            "src/services/__tests__/weeklyActivity.test.mjs"
+          ],
+          "files_modified": [
+            "src/components/WeeklyStreakModal.js",
+            "src/screens/HomeScreen.js"
+          ],
+          "tests": "weeklyActivity 10/10",
+          "cloud_deploy": false,
+          "chrome_release": false,
+          "ota_eligible": true,
+          "outstanding": [
+            "On-device verification deferred"
+          ]
+        },
+        {
+          "id": "quick_start_defaults",
+          "priority": "P1",
+          "summary": "Home pre-selects activity, duration and music: new users 5 min + first activity + no music; returning users their last session; 7+ days inactive 5 min; free users never defaulted to 45 min.",
+          "files_new": [
+            "src/services/sessionDefaults.js",
+            "src/services/__tests__/sessionDefaults.test.mjs"
+          ],
+          "files_modified": [
+            "src/screens/HomeScreen.js"
+          ],
+          "tests": "sessionDefaults 18/18",
+          "cloud_deploy": false,
+          "chrome_release": false,
+          "ota_eligible": true,
+          "decisions_open": [
+            "'Quick restart?' modal still appears for returning users although the same settings are now pre-selected"
+          ],
+          "outstanding": [
+            "On-device verification deferred"
+          ]
+        },
+        {
+          "id": "analytics_instrumentation",
+          "priority": "P1",
+          "summary": "GA4 user id (Firebase uid only) and user property internal_user; new events home_progress_viewed, session_summary_viewed, session_start_another_tapped, notification_opened. Allowlisted parameters only; existing events unchanged.",
+          "files_new": [
+            "src/services/analyticsEvents.js",
+            "src/config/analyticsInternalUsers.js",
+            "src/services/__tests__/analyticsEvents.test.mjs"
+          ],
+          "files_modified": [
+            "src/services/analytics.js",
+            "src/context/AuthContext.js",
+            "src/hooks/useNotificationHandlers.js",
+            "App.js",
+            "src/screens/HomeScreen.js",
+            "src/features/session-completion/screens/SessionSummaryScreen.js",
+            "src/services/homeProgress.js"
+          ],
+          "tests": "analyticsEvents 11/11",
+          "cloud_deploy": false,
+          "chrome_release": false,
+          "ota_eligible": true,
+          "console_steps": "GA4 custom definitions and internal_user filter (runbook section 3b)",
+          "decisions_open": [
+            "dw_session_start still sends free-text activity_name (pre-existing; left unchanged)"
+          ],
+          "outstanding": [
+            "Add production uids to analyticsInternalUsers.js",
+            "DebugView verification deferred"
+          ]
+        },
+        {
+          "id": "fix_quick_restart_entitlement",
+          "priority": "P0",
+          "summary": "Start another previously skipped the free daily quick-restart check and never recorded usage. All entry points now use one rule (quickRestartPolicy.js via monetizationService.checkQuickRestart): free 1/day, premium 2/day (decided 2026-10-31). Quick-start defaults still pre-fill the last session for everyone, but re-loading a session already done today counts as a quick restart: applied only if one is left, consumed on Begin if unchanged. Out of restarts, free users see the quick_restart paywall and premium users get a notice. A denied attempt records nothing.",
+          "files_new": [
+            "src/services/quickRestartPolicy.js",
+            "src/services/__tests__/quickRestartPolicy.test.mjs"
+          ],
+          "files_modified": [
+            "src/services/monetizationService.js",
+            "src/screens/HomeScreen.js",
+            "src/features/session-completion/screens/SessionSummaryScreen.js",
+            "src/services/sessionPrefill.js",
+            "src/services/sessionDefaults.js",
+            "src/components/PaywallModal.js (one copy string)",
+            "src/services/__tests__/sessionDefaults.test.mjs"
+          ],
+          "tests": "quickRestartPolicy 18/18; client 112/112",
+          "cloud_deploy": false,
+          "chrome_release": false,
+          "ota_eligible": true,
+          "decisions_resolved": [
+            "Premium cap: 2/day; paywall copy now 'Upgrade for 2 quick restarts a day.'",
+            "Quick-start defaults: last session for all users; a same-day re-load is a quick restart (free hits paywall when the 3rd session of the day would be pre-filled)"
+          ]
+        }
+      ]
+    },
+    {
+      "sprint": 2,
+      "name": "Retention and personalization",
+      "phases": [
+        {
+          "id": "morning_activation_notifications",
+          "priority": "P0",
+          "summary": "dailyRemindersBatch now loops over fcm_tokens (iOS-only users were skipped), sends at the user's local reminder hour, at most one push per day, with segment copy (new, active, consistent, returning), suppression rules, a 3-unanswered cap and invalid-token cleanup. Re-engagement keeps priority and its caps.",
+          "production_evidence": "Before: dailyRemindersBatch logged Sent: 0, Skipped: 101 every run",
+          "files_new": [
+            "functions/morningActivation.js",
+            "functions/__tests__/morningActivation.test.js"
+          ],
+          "files_modified": [
+            "functions/index.js",
+            "functions/package.json",
+            "src/hooks/useNotificationSetup.js",
+            "src/services/notificationPreferences.js"
+          ],
+          "tests": "morningActivation 26/26",
+          "cloud_deploy": [
+            "dailyRemindersBatch"
+          ],
+          "chrome_release": false,
+          "ota_eligible": true
+        },
+        {
+          "id": "notification_gaps_phase_1a_1b",
+          "priority": "P0",
+          "summary": "registerToken requires a Firebase ID token (uid from the token only) and moves a device's token on account switch; new unregisterToken removes it on sign-out; 7 pm streak note only for 2+ day streaks, respects preferences and skips days with a server push; weeklySummaryBatch includes iOS-only users with no UTC fallback.",
+          "files_new": [
+            "functions/pushTokens.js",
+            "functions/__tests__/pushTokens.test.js",
+            "functions/__tests__/weeklySummary.test.js",
+            "functions/__tests__/helpers/fakeAdmin.js",
+            "src/services/pushTokenService.js",
+            "src/services/streakRiskPolicy.js",
+            "src/services/__tests__/streakRiskPolicy.test.mjs"
+          ],
+          "files_modified": [
+            "functions/index.js",
+            "functions/morningActivation.js",
+            "src/hooks/useNotificationSetup.js",
+            "src/services/authService.js",
+            "src/services/streakService.js"
+          ],
+          "tests": "pushTokens 13/13, weeklySummary 10/10, streakRiskPolicy 9/9",
+          "cloud_deploy": [
+            "registerToken",
+            "unregisterToken",
+            "weeklySummaryBatch"
+          ],
+          "deploy_ordering": "registerToken only after the new iOS binary is live (build 48 sends no ID token)",
+          "chrome_release": false,
+          "ota_eligible": true
+        },
+        {
+          "id": "notification_preferences",
+          "priority": "P1",
+          "summary": "Settings > Notifications with three toggles, all on by default and opt-out: Daily focus reminder, Come-back reminders, Weekly recap. Each toggle merge-writes one field; iOS-permission notice; backend gates daily and re-engagement separately; session-end alerts unaffected.",
+          "schema": {
+            "doc": "users/{uid}/preferences/notifications",
+            "fields": {
+              "dailyReminder.enabled": "default on",
+              "reengagement": "new, default on",
+              "weeklySummary": "default on"
+            },
+            "migration": "none; defaults resolved at read time, never written over existing docs"
+          },
+          "files_new": [
+            "src/services/notificationPrefsRules.js",
+            "src/services/__tests__/notificationPrefsRules.test.mjs"
+          ],
+          "files_modified": [
+            "src/screens/SettingsScreen.js",
+            "src/services/notificationPreferences.js",
+            "src/hooks/useNotificationSetup.js",
+            "src/services/streakService.js",
+            "functions/morningActivation.js",
+            "functions/index.js"
+          ],
+          "tests": "notificationPrefsRules 7/7; preference cases in morningActivation",
+          "cloud_deploy": [
+            "dailyRemindersBatch"
+          ],
+          "chrome_release": false,
+          "ota_eligible": true,
+          "decisions": [
+            "Daily reminders on by default, opt-out (your call)"
+          ]
+        }
+      ]
+    },
+    {
+      "sprint": 3,
+      "name": "Re-engagement and ecosystem",
+      "phases": [
+        {
+          "id": "email_foundation",
+          "priority": "P1",
+          "summary": "Consent model (explicit opt-in; an address is never consent), signed unsubscribe links with RFC 8058 one-click, Resend (Svix-signed) webhook suppressing hard bounces and complaints, transactional vs marketing separation, reusable welcome-back template. No campaign activated; Chrome welcome email unchanged.",
+          "consent": {
+            "doc": "users/{uid}/preferences/email",
+            "field": "marketingConsent: granted | denied",
+            "missing": "no consent",
+            "opt_in": "Settings > Notifications > Product emails"
+          },
+          "suppression": "email_suppressions/{sha256(email)} for hard_bounce and complaint; blocks all categories",
+          "files_new": [
+            "functions/emailPolicy.js",
+            "functions/email.js",
+            "functions/emailTemplates.js",
+            "functions/__tests__/email.test.js",
+            "src/services/emailConsent.js"
+          ],
+          "files_modified": [
+            "functions/emailService.js",
+            "functions/index.js",
+            "functions/__tests__/helpers/fakeAdmin.js",
+            "src/screens/SettingsScreen.js"
+          ],
+          "tests": "email 27/27",
+          "cloud_deploy": [
+            "emailUnsubscribe",
+            "resendWebhook"
+          ],
+          "secrets_new": [
+            "EMAIL_UNSUBSCRIBE_SECRET",
+            "RESEND_WEBHOOK_SECRET"
+          ],
+          "chrome_release": false,
+          "ota_eligible": true,
+          "decisions_open": [
+            "Postal address for marketing email",
+            "Chrome welcome email classification (live, no unsubscribe)",
+            "syncEmailToMailchimp is deployed without source in this repo"
+          ]
+        },
+        {
+          "id": "chrome_link_status",
+          "priority": "P2",
+          "summary": "Settings > Lucid for Chrome shows Linked / Not linked yet / Couldn't check / Checking / signed-out / anonymous, from existing Firestore signals only. Read-only; never claims 'online'.",
+          "verified_source_of_truth": [
+            "users/{uid}.platforms.chrome === true (extension, Chrome-first accounts)",
+            "any users/{uid}/sessions doc with source == 'extension' (extension writeSessionToCloud)"
+          ],
+          "files_new": [
+            "src/services/chromeConnection.js",
+            "src/services/chromeConnectionService.js",
+            "src/services/__tests__/chromeConnection.test.mjs"
+          ],
+          "files_modified": [
+            "src/screens/SettingsScreen.js"
+          ],
+          "tests": "chromeConnection 10/10",
+          "cloud_deploy": false,
+          "chrome_release": false,
+          "ota_eligible": true,
+          "known_gap": "Mobile-first users show 'Not linked yet' until their first Chrome session; closing it needs an extension change and Web Store release"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "functions": {
+      "command": "cd functions && npm test",
+      "result": "76/76 passed",
+      "files": {
+        "email.test.js": 27,
+        "morningActivation.test.js": 26,
+        "pushTokens.test.js": 13,
+        "weeklySummary.test.js": 10
+      }
+    },
+    "client": {
+      "command": "node --test src/services/__tests__/*.test.mjs",
+      "result": "112/112 passed",
+      "files": {
+        "analyticsEvents": 11,
+        "chromeConnection": 10,
+        "homeProgress": 20,
+        "notificationPrefsRules": 7,
+        "sessionDefaults": 18,
+        "sessionPrefill": 7,
+        "streakRiskPolicy": 9,
+        "weeklyActivity": 10,
+        "quickRestartPolicy": 14
+      }
+    },
+    "insights_regression": {
+      "command": "npm run test:insights",
+      "result": "39/39 passed"
+    },
+    "lint": {
+      "new_functions_modules": "clean (morningActivation, pushTokens, emailPolicy, emailTemplates, email)",
+      "functions/index.js": "127 errors, all pre-existing (was 140 before the sprints)"
+    },
+    "preserved_unchanged": [
+      "sendChromeExtensionWelcomeEmail (byte-identical)",
+      "dw_session_start / session_complete and analyticsService.js",
+      "session-end notifications",
+      "deliverDeferredWeeklyNotification",
+      "evaluateReengagement / trySendReengagement",
+      "Chrome extension source"
+    ],
+    "not_yet_verified": [
+      "All UI on device (consolidated dev-client build)",
+      "GA4 DebugView",
+      "Live Firestore rules",
+      "Resend bounce payload fields"
+    ]
+  },
+  "release_requirements": {
+    "cloud_functions_deploy": [
+      {
+        "function": "dailyRemindersBatch",
+        "type": "update",
+        "command": "firebase deploy --only functions:dailyRemindersBatch --project deepwork-8416f",
+        "safe_independently": true
+      },
+      {
+        "function": "weeklySummaryBatch",
+        "type": "update",
+        "command": "firebase deploy --only functions:weeklySummaryBatch --project deepwork-8416f",
+        "safe_independently": true
+      },
+      {
+        "function": "unregisterToken",
+        "type": "new",
+        "command": "firebase deploy --only functions:unregisterToken --project deepwork-8416f",
+        "safe_independently": true
+      },
+      {
+        "function": "emailUnsubscribe",
+        "type": "new",
+        "command": "firebase deploy --only functions:emailUnsubscribe --project deepwork-8416f",
+        "requires": "EMAIL_UNSUBSCRIBE_SECRET",
+        "safe_independently": true
+      },
+      {
+        "function": "resendWebhook",
+        "type": "new",
+        "command": "firebase deploy --only functions:resendWebhook --project deepwork-8416f",
+        "requires": "RESEND_WEBHOOK_SECRET + Resend webhook",
+        "safe_independently": true
+      },
+      {
+        "function": "registerToken",
+        "type": "update",
+        "command": "firebase deploy --only functions:registerToken --project deepwork-8416f",
+        "requires": "new iOS binary live",
+        "safe_independently": false
+      }
+    ],
+    "never": [
+      "firebase deploy --only functions (would deploy the welcome email and try to delete syncEmailToMailchimp)",
+      "firebase deploy --only firestore:rules with the repo's firestore.rules (not the live ruleset)",
+      "eas update to runtime 1.0.10 / build 48 from this tree"
+    ],
+    "secrets_new": [
+      "EMAIL_UNSUBSCRIBE_SECRET",
+      "RESEND_WEBHOOK_SECRET"
+    ],
+    "firestore_schema_changes": [
+      "preferences/notifications.reengagement (new optional boolean)",
+      "preferences/email (new doc)",
+      "email_suppressions (new collection, server-only)",
+      "notificationState/dailyActivation (new doc, server-written)",
+      "fcm_tokens.timezone (new optional field)"
+    ],
+    "firestore_migrations": "none",
+    "ios_binary_required": true,
+    "chrome_extension_release_required": false,
+    "approval_required_for_every_deploy_build_submit_publish": true
+  },
+  "open_decisions": [
+    "Bump runtimeVersion for the new binary (currently 1.0.10)",
+    "Widget target version 1.0/build 1 vs app 1.0.13/build 50",
+    "aps-environment is 'development' in the app entitlements",
+    "Production uids for analyticsInternalUsers.js",
+    "dw_session_start free-text activity_name",
+    "Quick restart modal for returning users",
+    "Postal address for marketing email",
+    "Chrome welcome email classification",
+    "syncEmailToMailchimp source and consent",
+    "Chrome link gap for mobile-first users (extension change)",
+    "Possible crashes from the 2026-10-11 production OTA on build 48 (unconfirmed; check App Store Connect crash reports)"
+  ]
+}

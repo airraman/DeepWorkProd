@@ -43,21 +43,28 @@ export const restoreSessionsFromFirestore = async (firebaseUser) => {
 
   try {
     // ── Guard: already restored on this device for this account ────────────
+    // The flag alone isn't proof local history is still intact — it's just a
+    // timestamp from a prior successful pass. If local session data is
+    // completely empty despite the flag being set (e.g. local storage was
+    // wiped by something outside this service after that prior pass), trust
+    // what's actually on disk over a stale flag and retry the fetch instead
+    // of permanently suppressing restoration for this device/account.
     const alreadyRestored = await AsyncStorage.getItem(flagKey);
-    if (alreadyRestored) {
+    const localSessionsByDate = await deepWorkStore.getSessions();
+    const localSessionCount = Object.values(localSessionsByDate)
+      .reduce((sum, daySessions) => sum + daySessions.length, 0);
+
+    if (alreadyRestored && localSessionCount > 0) {
       console.log('✅ [sessionRestoreService] Already restored on this device — skipping');
       return { skipped: true, restored: 0, failed: false, skippedSessions: 0 };
     }
+    if (alreadyRestored && localSessionCount === 0) {
+      console.log('⚠️ [sessionRestoreService] Restore flag set but local history is empty — retrying restore instead of trusting stale flag');
+    }
 
-    // ── Fetch both sides (infrastructure-level failures here ARE fatal to
-    //    this pass — no data to work with, guard flag stays unset) ─────────
-    const [remoteSessions, localSessionsByDate] = await Promise.all([
-      getSessionsFromFirestore(),
-      deepWorkStore.getSessions(),
-    ]);
-
-    const localSessionCount = Object.values(localSessionsByDate)
-      .reduce((sum, daySessions) => sum + daySessions.length, 0);
+    // ── Fetch remote (infrastructure-level failures here ARE fatal to this
+    //    pass — no data to work with, guard flag stays unset) ───────────────
+    const remoteSessions = await getSessionsFromFirestore();
 
     console.log(
       `📦 [sessionRestoreService] fetched ${remoteSessions.length} remote session(s), ` +
@@ -169,6 +176,7 @@ const toLocalSessionShape = (remoteSession) => {
     duration: remoteSession.duration,
     musicChoice: remoteSession.musicChoice,
     notes: remoteSession.notes || '',
+    ...(remoteSession.activityColor ? { activityColor: remoteSession.activityColor } : {}),
     timestamp: timestampMs,
     completedAt: normalizeToIsoString(remoteSession.completedAt) || new Date(timestampMs).toISOString(),
     syncStatus: 'synced',

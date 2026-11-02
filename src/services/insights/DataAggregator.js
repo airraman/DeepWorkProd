@@ -72,6 +72,7 @@ class DataAggregator {
 
       if (!grouped[activity]) {
         grouped[activity] = {
+          name: session.activity_name || null,
           sessionCount: 0,
           totalDuration: 0,
           descriptions: [],
@@ -110,6 +111,7 @@ class DataAggregator {
     Object.keys(grouped).forEach(activity => {
       const data = grouped[activity];
       result[activity] = {
+        name: data.name,
         sessionCount: data.sessionCount,
         totalHours: secondsToHours(data.totalDuration),
         avgMinutes: secondsToMinutes(data.totalDuration / data.sessionCount),
@@ -132,7 +134,7 @@ class DataAggregator {
       .sort((a, b) => b[1].totalHours - a[1].totalHours)
       .slice(0, count)
       .map(([activity, data]) => ({
-        activity,
+        activity: data.name || activity,
         hours: data.totalHours,
         percentage: 0 // Will calculate after we have totals
       }));
@@ -314,8 +316,9 @@ class DataAggregator {
     // ── By activity ──
     const activityGroups = {};
     sessions.forEach(s => {
-      if (!activityGroups[s.activity_type]) activityGroups[s.activity_type] = [];
-      activityGroups[s.activity_type].push(s);
+      const label = s.activity_name || s.activity_type;
+      if (!activityGroups[label]) activityGroups[label] = [];
+      activityGroups[label].push(s);
     });
     const byActivity = {};
     Object.entries(activityGroups).forEach(([activity, group]) => {
@@ -384,7 +387,7 @@ class DataAggregator {
           date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
           dayOfWeek: d.toLocaleDateString('en-US', { weekday: 'short' }),
           timeOfDay: timeOfDayBucket(d.getHours()),
-          activity: s.activity_type,
+          activity: s.activity_name || s.activity_type,
           minutes: secondsToMinutes(s.duration),
           focusRating: s.focusRating,
           productivityRating: s.productivityRating,

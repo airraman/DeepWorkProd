@@ -4,7 +4,8 @@
 
 import SessionRepository from '../database/SessionRepository';
 import DataAggregator from './DataAggregator';
-import InsightGenerator from './InsightGenerator';
+import { generateInsights, localDateKey, startOfWeek, shiftDays } from './insightEngine';
+import { loadInsightHistory, recordShownInsights } from './insightHistory';
 import { getStartOfDay, getStartOfWeek, secondsToMinutes } from '../../utils/dateHelpers';
 import {
   buildAiInsightCard,
@@ -22,7 +23,14 @@ export async function buildInsightCards() {
   const thisWeekStart = getStartOfWeek(now);
   const lastWeekStart = thisWeekStart - 7 * DAY_MS;
 
-  const [todaySessions, thisWeekSessions, lastWeekSessions] = await Promise.all([
+  // The engine's widest window: this week plus the two before it, with a
+  // day of margin because storage buckets sessions by UTC date. The engine
+  // filters precisely by local start time itself.
+  const engineWindowStart = shiftDays(startOfWeek(now), -15);
+
+  const [windowSessions, history, todaySessions, thisWeekSessions, lastWeekSessions] = await Promise.all([
+    SessionRepository.getSessionsByDateRange(engineWindowStart, now),
+    loadInsightHistory(),
     SessionRepository.getSessionsByDateRange(todayStart, now),
     SessionRepository.getSessionsByDateRange(thisWeekStart, now),
     SessionRepository.getSessionsByDateRange(lastWeekStart, thisWeekStart - 1),
@@ -36,16 +44,15 @@ export async function buildInsightCards() {
     ? Math.max(...thisWeekSessions.map((s) => secondsToMinutes(s.duration)))
     : null;
 
-  const aiInsight = await InsightGenerator.generate('behavioral_30d', { referenceDate: new Date() }).catch(
-    () => ({ success: false })
-  );
+  const insightResult = generateInsights(windowSessions, { now, history });
+  recordShownInsights(insightResult.insights, localDateKey(now));
 
-  // Fixed priority order per the design system: AI Insight leads, Up Next closes.
+  // Fixed priority order per the design system: Insights lead, Up Next closes.
   return [
-    buildAiInsightCard({ aiInsight }),
+    buildAiInsightCard({ insightResult }),
     buildSoFarCard({ aggToday }),
     buildComparisonCard({ aggThisWeek, aggLastWeek }),
     buildDataCard({ aggThisWeek, longestSessionMinutes }),
-    buildUpNextCard({ aiInsight, aggThisWeek }),
+    buildUpNextCard({ aggThisWeek }),
   ];
 }

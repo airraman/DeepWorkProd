@@ -42,7 +42,11 @@ export const syncWidgetState = async () => {
           isActive: active.status === 'running',
           startTime: active.config.startTime ?? null,
           endTime: active.endTime ?? null,
-          durationMinutes: active.config.duration ?? null,
+          // Coerced to a number — the underlying stored value can be a
+          // string (see DeepWorkSession.js's route params), but the widget's
+          // Swift struct declares this field as Double? and fails to decode
+          // the entire payload if it receives a JSON string instead.
+          durationMinutes: active.config.duration != null ? Number(active.config.duration) : null,
         }
       : { isActive: false, startTime: null, endTime: null, durationMinutes: null };
 
@@ -50,7 +54,9 @@ export const syncWidgetState = async () => {
     const defaultSessionConfig = lastUsed
       ? {
           activity: lastUsed.activity ?? null,
-          durationMinutes: lastUsed.duration ?? null,
+          // Same coercion as activeSession.durationMinutes above — the
+          // stored value can be a string; the Swift struct requires Double?.
+          durationMinutes: lastUsed.duration != null ? Number(lastUsed.duration) : null,
           musicChoice: lastUsed.musicChoice ?? null,
           // Milestone 5: focusLockEnabled is now persisted going forward.
           // Records saved before this change won't have the field — default
@@ -60,13 +66,15 @@ export const syncWidgetState = async () => {
         }
       : null;
 
-    return await setWidgetSharedState({
+    const payload = {
       sessionsCompletedToday,
       weeklyActivity,
       activeSession,
       lastCompletedSession: null, // not yet needed by the current visualization; left null rather than guessed
       defaultSessionConfig,
-    });
+    };
+
+    return await setWidgetSharedState(payload);
   } catch (error) {
     console.warn('[widgetSyncService] syncWidgetState failed (non-critical):', error.message);
     return false;

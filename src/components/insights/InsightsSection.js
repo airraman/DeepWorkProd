@@ -6,6 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { spacing, radius, typeScale } from '../../theme/insightTokens';
 import InsightCarousel from './InsightCarousel';
 import InsightsBottomSheet from './InsightsBottomSheet';
+import InsightsDetailModal from './InsightsDetailModal';
 import { buildInsightCards } from '../../services/insights/insightCardService';
 import { getWeeklyOverview, getQuickStartDefaults } from '../../services/insights/overviewService';
 import { trackEvent } from '../../services/analytics';
@@ -20,6 +21,7 @@ export default function InsightsSection({ isPremium, onLockedPress, navigation, 
   const hasAutoOpenedFired = useRef(false);
 
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [detailVisible, setDetailVisible] = useState(false);
   const [sheetCardIndex, setSheetCardIndex] = useState(0);
   const [overview, setOverview] = useState(null);
   const [quickStartDefaults, setQuickStartDefaults] = useState(null);
@@ -46,6 +48,11 @@ export default function InsightsSection({ isPremium, onLockedPress, navigation, 
   }, [isPremium]);
 
   const handleCardPressed = useCallback(async (card, index) => {
+    if (card?.type === 'ai_insight') {
+      trackEvent('insight_cta_pressed', { cardType: 'insights_detail' });
+      setDetailVisible(true);
+      return;
+    }
     setSheetCardIndex(index);
     setSheetVisible(true);
     const [weeklyOverview, quickStart] = await Promise.all([
@@ -101,7 +108,7 @@ export default function InsightsSection({ isPremium, onLockedPress, navigation, 
   if (!isPremium) {
     return (
       <TouchableOpacity
-        style={[styles.locked, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}
+        style={[styles.locked, { backgroundColor: colors.cardBackground, borderColor: colors.success }]}
         onPress={() => {
           trackEvent('insight_cta_pressed', { cardType: 'paywall' });
           onLockedPress?.();
@@ -117,7 +124,7 @@ export default function InsightsSection({ isPremium, onLockedPress, navigation, 
 
   if (loading && !cards) {
     return (
-      <View style={[styles.locked, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
+      <View style={[styles.locked, { backgroundColor: colors.cardBackground, borderColor: colors.success }]}>
         <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
@@ -138,6 +145,7 @@ export default function InsightsSection({ isPremium, onLockedPress, navigation, 
         onStartSession={handleStartSession}
         onSetUpDifferently={handleSetUpDifferently}
       />
+      <InsightsDetailModal visible={detailVisible} onClose={() => setDetailVisible(false)} />
     </>
   );
 }

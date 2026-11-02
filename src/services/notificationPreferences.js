@@ -7,7 +7,9 @@
  *   the exact path/uid key functions/index.js's dailyRemindersBatch and
  *   weeklySummaryBatch read from.
  * - Fallback: AsyncStorage (local cache for offline / logged-out reads).
- * - Smart defaults: All notifications ON by default.
+ * - Defaults: every category ON, opt-out — daily focus reminders,
+ *   behavior re-engagement and weekly recap. A stored value always wins;
+ *   see notificationPrefsRules.js, which mirrors the Cloud Functions rules.
  *
  * v2 wrote this data to Realtime Database keyed by deviceId, which the
  * Cloud Functions never read (they read Firestore keyed by Auth uid) — so
@@ -19,6 +21,7 @@
 import auth from '@react-native-firebase/auth';
 import firestore from '../config/firebaseConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { categoryUpdate } from './notificationPrefsRules';
 
 const PREFS_STORAGE_KEY = '@notification_preferences';
 
@@ -32,6 +35,7 @@ const DEFAULT_PREFERENCES = {
     time: '09:00',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   },
+  reengagement: true,
   weeklySummary: true,
   updatedAt: new Date().toISOString(),
 };
@@ -92,6 +96,32 @@ class NotificationPreferencesService {
   }
 
   /**
+   * Whether users/{uid}/preferences/notifications exists in Firestore.
+   *
+   * Unlike getPreferences(), this never falls back to defaults or the cache,
+   * so callers can tell "never saved" (false) apart from "couldn't check"
+   * (null) and only write defaults in the first case.
+   *
+   * @returns {Promise<boolean|null>}
+   */
+  async hasRemotePreferences() {
+    const uid = auth().currentUser?.uid;
+    if (!uid) return null;
+    try {
+      const doc = await firestore()
+        .collection('users')
+        .doc(uid)
+        .collection('preferences')
+        .doc('notifications')
+        .get();
+      return doc.exists;
+    } catch (error) {
+      console.warn('⚠️ [NotificationPrefs] Could not check Firestore:', error.message);
+      return null;
+    }
+  }
+
+  /**
    * Save user's notification preferences
    *
    * DUAL-WRITE PATTERN:
@@ -143,6 +173,45 @@ class NotificationPreferencesService {
     }
   }
   
+  /**
+   * Turn one notification category on or off (Settings toggles).
+   *
+   * Writes ONLY that field with a Firestore merge — never the whole doc —
+   * so a stale cache or a failed read can't overwrite the user's other
+   * choices (unlike updatePreference, which rewrites every field).
+   *
+   * @param {'dailyReminders'|'reengagement'|'weeklyRecap'} key
+   * @param {boolean} enabled
+   * @returns {Promise<boolean>} true once saved to Firestore
+   */
+  async setCategoryEnabled(key, enabled) {
+    const update = categoryUpdate(key, enabled);
+    const uid = auth().currentUser?.uid;
+    if (!update || !uid) return false;
+    try {
+      await firestore()
+        .collection('users')
+        .doc(uid)
+        .collection('preferences')
+        .doc('notifications')
+        .set({ ...update, updatedAt: new Date().toISOString() }, { merge: true });
+
+      // Keep the offline cache in step without touching other fields.
+      const cached = (await this._getCachedPreferences()) || {};
+      await this._cachePreferences({
+        ...cached,
+        ...update,
+        ...(update.dailyReminder
+          ? { dailyReminder: { ...cached.dailyReminder, ...update.dailyReminder } }
+          : {}),
+      });
+      return true;
+    } catch (error) {
+      console.warn('⚠️ [NotificationPrefs] setCategoryEnabled failed:', error.message);
+      return false;
+    }
+  }
+
   /**
    * Update a specific preference field
    */
@@ -235,6 +304,10 @@ class NotificationPreferencesService {
           Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
       
+      reengagement: typeof prefs.reengagement === 'boolean'
+        ? prefs.reengagement
+        : true,
+
       weeklySummary: typeof prefs.weeklySummary === 'boolean'
         ? prefs.weeklySummary
         : true,

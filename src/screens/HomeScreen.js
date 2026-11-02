@@ -16,8 +16,14 @@ import {
   AppState
 } from 'react-native';
 import { Clock, Music, Pencil } from 'lucide-react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute, useIsFocused } from '@react-navigation/native';
 import { deepWorkStore } from '../services/deepWorkStore';
+import { getHomeProgress, normalizeStoreSessions } from '../services/homeProgress';
+import { resolveSessionPrefill } from '../services/sessionPrefill';
+import { resolveSessionDefaults } from '../services/sessionDefaults';
+import { isUntouchedRestart } from '../services/quickRestartPolicy';
+import { trackEvent } from '../services/analytics';
+import { EVENTS, homeProgressViewedParams } from '../services/analyticsEvents';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import SharedHeader from '../components/SharedHeader';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -28,6 +34,7 @@ import {
   discardActiveSession,
   getLastSessionConfig,
   markRestartOffered,
+  saveLastSessionConfig,
 } from '../services/sessionStateService';
 import { saveSessionToFirestore } from '../services/firestoreSessionService';
 import {
@@ -37,10 +44,11 @@ import {
   setLastStreakModalSeen,
 } from '../services/streakService';
 import { WeeklyStreakModal } from '../components/WeeklyStreakModal';
+import { hasQualifyingActivityLast7Days } from '../services/weeklyActivity';
 import {
   getBlockingUsedToday,
   recordBlockingUsed,
-  getQuickRestartsToday,
+  checkQuickRestart,
   incrementQuickRestarts,
 } from '../services/monetizationService';
 
@@ -56,14 +64,11 @@ const getGreeting = () => {
   return 'Good evening — finish strong';
 };
 
-const calculateTotalHours = (sessions) =>
-  Math.floor(
-    Object.values(sessions).flat().reduce((sum, s) => sum + (s.duration || 0), 0) / 60
-  );
 
 
 const HomeScreen = () => {
   const navigation = useNavigation();
+  const route = useRoute();
   const { colors, theme } = useTheme();
   const isDark = theme === THEMES.DARK;
   
@@ -95,7 +100,7 @@ const HomeScreen = () => {
   const [activeSession, setActiveSession]         = useState(null); // interrupted session prompt
   const [lastSessionConfig, setLastSessionConfig] = useState(null); // quick restart prompt
   const [streak, setStreak]                       = useState({ count: 0, lastSessionDate: null });
-  const [totalHours, setTotalHours]               = useState(0);
+  const [progress, setProgress]                   = useState(null); // contextual progress line
 
   // ── Streak modal state ───────────────────────────────────────────────────────
   const [showStreakModal, setShowStreakModal] = useState(false);
@@ -146,6 +151,13 @@ const HomeScreen = () => {
       if (nextState === 'active' && checkSessionStateRef.current) {
         checkSessionStateRef.current();
       }
+      // Keep the progress line current when Home is already the active tab
+      // (no focus event fires) — e.g. "Today" must not carry over overnight.
+      if (nextState === 'active') {
+        deepWorkStore.getSessions()
+          .then((sessions) => setProgress(getHomeProgress(normalizeStoreSessions(sessions), Date.now())))
+          .catch(() => {});
+      }
     });
     return () => subscription.remove();
   }, []);
@@ -167,15 +179,28 @@ const HomeScreen = () => {
     if (!config) { setActiveSession(null); return; }
 
     try {
+      const activityColor = activities.find(a => a.id === config.activity)?.color;
       const result = await deepWorkStore.addSession({
         activity:    config.activity,
         duration:    parseFloat(config.duration),
         musicChoice: config.musicChoice || 'none',
         notes:       '',
         timestamp:   activeSession.endTime,
+        ...(activityColor ? { activityColor } : {}),
       });
       await discardActiveSession();
       setActiveSession(null);
+
+      // Same field mapping DeepWorkSession.js uses on its own completion
+      // path — without this, the widget's defaultSessionConfig never gets
+      // populated for a session resolved here.
+      await saveLastSessionConfig({
+        activity: config.activity,
+        activityName: activities.find(a => a.id === config.activity)?.name || '',
+        duration: config.duration,
+        musicChoice: config.musicChoice,
+        focusLockEnabled: config.focusLockEnabled,
+      });
 
       if (result.success && result.session?.id) {
         // Mirror DeepWorkSession.handleSessionComplete's Firestore sync so
@@ -203,27 +228,34 @@ const HomeScreen = () => {
   // ── Quick restart handler ─────────────────────────────────────────────────────
 
   const handleQuickRestart = async () => {
-    // 🔒 GATE: second quick restart per day requires premium
-    if (!isPremium) {
-      const restartsToday = await getQuickRestartsToday();
-      if (restartsToday >= 1) {
-        dismissQuickRestart();
-        showGatedPaywall(
-          'quick_restart',
-          'Start manually',
-          null, // fallback just leaves the user on HomeScreen to configure manually
-        );
-        return;
-      }
+    // 🔒 GATE: free users get one quick restart per day (shared rule:
+    // services/quickRestartPolicy.js, also used by "Start another").
+    const decision = await checkQuickRestart(isPremium);
+    if (!decision.allowed) {
+      dismissQuickRestart();
+      showQuickRestartLimit(decision, 'Start manually');
+      return;
     }
 
     const cfg = lastSessionConfig;
     markRestartOffered();
     setLastSessionConfig(null);
+    restartDefaultsRef.current = null; // this restart is consumed here, not on Begin
     setDuration(String(cfg.duration));
     setActivity(cfg.activity);
     setMusicChoice(cfg.musicChoice);
     await incrementQuickRestarts();
+  };
+
+  // Out of quick restarts: free users see the paywall; premium users (2/day)
+  // already have the upgrade, so they're just told. Either way the user sets
+  // the session up themselves on Home.
+  const showQuickRestartLimit = (decision, secondaryText) => {
+    if (decision.showPaywall) {
+      showGatedPaywall('quick_restart', secondaryText, null);
+    } else {
+      Alert.alert('Quick restarts used', "You've used today's quick restarts. Set up your next session below.");
+    }
   };
 
   const dismissQuickRestart = () => {
@@ -243,6 +275,85 @@ const HomeScreen = () => {
     { value: 'lofi', label: 'Lo-fi' }
   ];
   const { isAvailable, selectionCount, refreshSelection } = useFocusLock();
+
+  // ── "Start another" prefill from the session summary ───────────────────────
+  // Selects the previous activity, duration and music — never starts a
+  // session; the user still presses Begin, so every gate in
+  // handleStartSession applies. Each value is applied only if it is still
+  // valid here (activity not deleted, duration/music still offered).
+  const prefill = route.params?.prefill;
+  useEffect(() => {
+    if (!prefill) return;
+    (async () => {
+      const settings = await deepWorkStore.getSettings().catch(() => null);
+      const apply = resolveSessionPrefill(prefill, {
+        activityIds: (settings?.activities || []).map(a => a.id),
+        durations:   availableDurations,
+        musicValues: musicOptions.map(o => o.value),
+      });
+      if (apply.activity) setActivity(apply.activity);
+      if (apply.duration) setDuration(apply.duration);
+      if (apply.musicChoice) setMusicChoice(apply.musicChoice);
+      // Clear only after applying (clearing re-runs this effect), so the
+      // prefill is used once and never re-applied on a later visit.
+      navigation.setParams({ prefill: undefined });
+    })();
+  }, [prefill]);
+
+  // ── Quick-start defaults ────────────────────────────────────────────────────
+  // Pre-selects activity, duration and music once per mount so Begin is one
+  // tap away (rules: services/sessionDefaults.js). Fills only empty fields,
+  // so it never overrides the user's own picks or a "Start another" prefill,
+  // whichever lands first. Waits for the subscription state so a free user
+  // is never defaulted into a premium-only duration. Never starts a session.
+  //
+  // Re-loading a session already done today is a quick restart
+  // (defaults.isQuickRestart): it's applied only if one is left today, and is
+  // consumed on Begin if started unchanged. Out of restarts, the fields stay
+  // empty and free users see the quick_restart paywall. Skipped entirely when
+  // Home was opened by "Start another" (already consumed) or its "Set up
+  // manually" fallback (already denied).
+  const defaultsAppliedRef = useRef(false);
+  const restartDefaultsRef = useRef(null);
+  // Set once the defaults have handled today's re-load of the last session,
+  // so the "Quick restart?" prompt (loaded on focus, possibly later) never
+  // offers it a second time.
+  const [defaultsHandledRestart, setDefaultsHandledRestart] = useState(false);
+  const skipDefaultsRef = useRef(!!route.params?.prefill || !!route.params?.manualSetup);
+  useEffect(() => {
+    if (defaultsAppliedRef.current || isSubscriptionLoading || activities.length === 0) return;
+    defaultsAppliedRef.current = true;
+    if (skipDefaultsRef.current) return;
+    (async () => {
+      const sessionsByDate = await deepWorkStore.getSessions().catch(() => null);
+      if (!sessionsByDate) return;
+      const defaults = resolveSessionDefaults({
+        sessionsByDate,
+        activityIds: activities.map(a => a.id),
+        durations:   availableDurations,
+        musicValues: musicOptions.map(o => o.value),
+        isPremium,
+        nowMs:       Date.now(),
+      });
+      if (defaults.isQuickRestart) {
+        const decision = await checkQuickRestart(isPremium);
+        // Home's "Quick restart?" prompt would offer this same session again.
+        markRestartOffered();
+        setLastSessionConfig(null);
+        setDefaultsHandledRestart(true);
+        if (!decision.allowed) {
+          showQuickRestartLimit(decision, 'Set up manually');
+          return;
+        }
+        restartDefaultsRef.current = {
+          activity: defaults.activity, duration: defaults.duration, musicChoice: defaults.musicChoice,
+        };
+      }
+      if (defaults.activity) setActivity(prev => prev || defaults.activity);
+      if (defaults.duration) setDuration(prev => prev || defaults.duration);
+      if (defaults.musicChoice) setMusicChoice(prev => prev || defaults.musicChoice);
+    })();
+  }, [activities, isSubscriptionLoading, isPremium]);
 const [focusLockEnabled, setFocusLockEnabled] = useState(false);
 
 
@@ -268,6 +379,10 @@ const [focusLockEnabled, setFocusLockEnabled] = useState(false);
       if (lastSeen === today) return;
 
       const sessions = await deepWorkStore.getSessions();
+      // Nothing to show: the 7-day grid would be empty. Not marked as seen,
+      // so it can still appear later today once a session is completed.
+      if (!hasQualifyingActivityLast7Days(sessions)) return;
+
       setStreakModalSessions(sessions);
       setShowStreakModal(true);
       await setLastStreakModalSeen(today);
@@ -283,6 +398,21 @@ const [focusLockEnabled, setFocusLockEnabled] = useState(false);
       refreshSelection();
     }, [])
   );
+
+  // home_progress_viewed: once per visit to Home, and again only if the
+  // state changes while Home stays open (e.g. after midnight). A foreground
+  // refresh that recomputes the same state doesn't log again.
+  const isFocused = useIsFocused();
+  const loggedProgressStateRef = useRef(null);
+  useEffect(() => {
+    if (!isFocused) {
+      loggedProgressStateRef.current = null;
+      return;
+    }
+    if (!progress || loggedProgressStateRef.current === progress.state) return;
+    loggedProgressStateRef.current = progress.state;
+    trackEvent(EVENTS.HOME_PROGRESS_VIEWED, homeProgressViewedParams(progress.state));
+  }, [isFocused, progress?.state]);
 
   // Function to load settings from deepWorkStore
   const loadSettings = async () => {
@@ -300,7 +430,7 @@ const [focusLockEnabled, setFocusLockEnabled] = useState(false);
       }
 
       const sessions = await deepWorkStore.getSessions();
-      setTotalHours(calculateTotalHours(sessions));
+      setProgress(getHomeProgress(normalizeStoreSessions(sessions), Date.now()));
     } catch (error) {
       console.error('Failed to load settings:', error);
     } finally {
@@ -331,6 +461,12 @@ const [focusLockEnabled, setFocusLockEnabled] = useState(false);
     }
     
     console.log('✅ Starting session - duration:', selectedDuration, 'minutes');
+
+    // Starting the quick-restart defaults unchanged uses today's quick restart.
+    if (isUntouchedRestart(restartDefaultsRef.current, { activity, duration, musicChoice })) {
+      incrementQuickRestarts();
+    }
+    restartDefaultsRef.current = null;
 
     const effectiveFocusLock = isAvailable && focusLockEnabled;
 
@@ -426,18 +562,18 @@ const [focusLockEnabled, setFocusLockEnabled] = useState(false);
         contentContainerStyle={styles.contentContainer}
       >
         <View style={styles.header}>
-          <View style={homeStyles.headerRow}>
-            <View style={homeStyles.streakPill}>
-              <Text style={homeStyles.streakPillText}>
-                {streak.count > 0 ? `${streak.count} day focus streak` : '0 day focus streak'}
+          {progress && (
+            <View style={homeStyles.progressLine} accessibilityRole="text">
+              <Text style={[homeStyles.progressHeadline, { color: colors.text }]} numberOfLines={2}>
+                {progress.headline}
               </Text>
+              {progress.detail ? (
+                <Text style={[homeStyles.progressDetail, { color: colors.textSecondary }]} numberOfLines={2}>
+                  {progress.detail}
+                </Text>
+              ) : null}
             </View>
-            {totalHours > 0 && (
-              <View style={homeStyles.hoursPill}>
-                <Text style={homeStyles.hoursPillText}>{totalHours}h total focus hours</Text>
-              </View>
-            )}
-          </View>
+          )}
           <Text style={[styles.headerTitle, { color: colors.text }]}>{getGreeting()}</Text>
         </View>
         
@@ -681,7 +817,7 @@ const [focusLockEnabled, setFocusLockEnabled] = useState(false);
 
       {/* ── Quick restart modal ──────────────────────────────────────────────── */}
       <Modal
-        visible={!!lastSessionConfig}
+        visible={!!lastSessionConfig && !defaultsHandledRestart}
         transparent
         animationType="fade"
         onRequestClose={dismissQuickRestart}
@@ -938,33 +1074,16 @@ const styles = StyleSheet.create({
 });
 
 const homeStyles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
+  progressLine: {
+    marginBottom: 8,
   },
-  streakPill: {
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: 'rgba(234,88,12,0.12)',
-  },
-  streakPillText: {
-    fontSize: 13,
+  progressHeadline: {
+    fontSize: 15,
     fontWeight: '600',
-    color: '#ea580c',
   },
-  hoursPill: {
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: 'rgba(21,128,61,0.12)',
-  },
-  hoursPillText: {
+  progressDetail: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#15803D',
+    marginTop: 2,
   },
   overlay: {
     flex: 1,

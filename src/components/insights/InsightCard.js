@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { ChevronRight } from 'lucide-react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useTheme } from '../../context/ThemeContext';
 import { spacing, radius, typeScale, motion, pressFeedback, shadow, INSIGHT_TYPE_LAYOUT } from '../../theme/insightTokens';
@@ -66,6 +67,8 @@ export default function InsightCard({ card, onPress, isActive = true, onExpandCh
   const isLive = card.state === 'live';
   const isEmpty = card.state === 'empty' || card.state === 'offline' || card.state === 'loading';
   const layout = INSIGHT_TYPE_LAYOUT[card.type] || 'text-lead';
+  const hasInsightList = card.type === 'ai_insight' && Array.isArray(card.insights) && card.insights.length > 0;
+  const opensDetail = card.type === 'ai_insight' && !!onPress;
 
   const shadowColor = isLive ? colors.success : '#000000';
 
@@ -76,26 +79,53 @@ export default function InsightCard({ card, onPress, isActive = true, onExpandCh
         shadow.card.wide,
         { shadowColor },
       ]}
+      onLayout={
+        card.type === 'ai_insight' && expanded
+          ? (e) => onExpandChange?.(true, e.nativeEvent.layout.height)
+          : undefined
+      }
     >
       <AnimatedPressable
         onPress={handlePress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         disabled={!onPress && !(card.type === 'ai_insight' && truncated)}
+        accessibilityRole="button"
+        accessibilityLabel={`${card.eyebrow}. ${card.value ?? ''}`}
+        accessibilityHint={opensDetail ? 'Opens your insights for this week, this month and the last six months' : undefined}
         style={[
           styles.card,
           shadow.card.tight,
           animatedStyle,
           {
             backgroundColor: colors.cardBackground,
-            borderColor: colors.cardBorder,
+            borderColor: colors.success,
             shadowColor,
           },
         ]}
       >
-        <Text style={[typeScale.eyebrow, { color: colors.subText }]}>{card.eyebrow}</Text>
+        <View style={styles.eyebrowRow}>
+          <Text style={[typeScale.eyebrow, { color: colors.subText }]}>{card.eyebrow}</Text>
+          {opensDetail ? <ChevronRight size={14} color={colors.subText} /> : null}
+        </View>
 
-        {layout === 'rows' && card.rows ? (
+        {hasInsightList ? (
+          <View style={styles.insightList}>
+            {card.insights.map((insight) => (
+              <Text
+                key={insight.key}
+                style={[typeScale.cardValue, styles.insightLine, { color: colors.text }]}
+                numberOfLines={2}
+              >
+                {insight.segments.map((part, i) => (
+                  <Text key={i} style={part.accent ? { color: colors.success } : null}>
+                    {part.text}
+                  </Text>
+                ))}
+              </Text>
+            ))}
+          </View>
+        ) : layout === 'rows' && card.rows ? (
           <View style={styles.rows}>
             {card.rows.map((row, i) => (
               <View
@@ -129,7 +159,7 @@ export default function InsightCard({ card, onPress, isActive = true, onExpandCh
             {card.sub ? (
               <Text
                 style={[typeScale.subText, { color: colors.subText, marginTop: spacing.xs }]}
-                numberOfLines={card.type === 'ai_insight' ? 2 : undefined}
+                numberOfLines={card.type === 'ai_insight' && !expanded ? 2 : undefined}
               >
                 {card.sub}
               </Text>
@@ -155,6 +185,18 @@ const styles = StyleSheet.create({
   },
   rows: {
     marginTop: spacing.xs,
+  },
+  eyebrowRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  insightList: {
+    marginTop: spacing.sm,
+    gap: spacing.sm,
+  },
+  insightLine: {
+    lineHeight: 18,
   },
   row: {
     flexDirection: 'row',

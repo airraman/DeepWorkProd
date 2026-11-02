@@ -102,12 +102,29 @@ class FocusLockModule: NSObject {
         return
       }
 
-      let pickerView = FamilyActivityPicker(
-        selection: Binding(
-          get: { self.activitySelection },
-          set: { newSelection in self.activitySelection = newSelection }
+      // Bare FamilyActivityPicker has no navigation chrome of its own — it
+      // needs a NavigationStack to get a close control, otherwise the user
+      // has no way to leave the screen without making a selection.
+      var dismissPicker: (() -> Void)?
+
+      let pickerView = NavigationStack {
+        FamilyActivityPicker(
+          selection: Binding(
+            get: { self.activitySelection },
+            set: { newSelection in self.activitySelection = newSelection }
+          )
         )
-      )
+        .toolbar {
+          ToolbarItem(placement: .cancellationAction) {
+            Button {
+              dismissPicker?()
+            } label: {
+              Image(systemName: "xmark.circle.fill")
+                .foregroundColor(.gray)
+            }
+          }
+        }
+      }
 
       let hostingVC = PickerHostingController(rootView: pickerView)
       hostingVC.modalPresentationStyle = .formSheet
@@ -117,6 +134,9 @@ class FocusLockModule: NSObject {
           self.applyShields()
         }
         resolve(self.selectionSummary())
+      }
+      dismissPicker = { [weak hostingVC] in
+        hostingVC?.dismiss(animated: true)
       }
 
       rootVC.present(hostingVC, animated: true)

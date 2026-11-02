@@ -10,6 +10,15 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
+import auth from '@react-native-firebase/auth';
+import firestore from '../config/firebaseConfig';
+import notificationPreferences from './notificationPreferences';
+import {
+  decideStreakRisk,
+  buildStreakRiskContent,
+  localDateKey,
+} from './streakRiskPolicy';
+import { resolveNotificationCategories } from './notificationPrefsRules';
 
 const STREAK_KEY              = '@streak_data';
 const STREAK_RISK_NOTIF_KEY   = '@streak_risk_notif_id';
@@ -93,25 +102,59 @@ export const incrementStreak = async () => {
 // ─── Streak risk notification ─────────────────────────────────────────────────
 
 /**
+ * Whether the backend already sent today's morning activation or
+ * re-engagement push (users/{uid}/notificationState/dailyActivation, written
+ * by functions/index.js). Fails open — returns false — if it can't be read,
+ * so a read error never silences a streak reminder.
+ */
+const wasDailyPushSentToday = async () => {
+  try {
+    const uid = auth().currentUser?.uid;
+    if (!uid) return false;
+    const doc = await firestore()
+      .collection('users')
+      .doc(uid)
+      .collection('notificationState')
+      .doc('dailyActivation')
+      .get();
+    return doc.exists && doc.data()?.lastSentDate === localDateKey(new Date());
+  } catch (_) {
+    return false;
+  }
+};
+
+/**
  * Schedule a local notification for 7 pm today if the user hasn't focused yet.
  * Safe to call on every app open — cancels and replaces any existing one.
- * Skips scheduling if the current time is already past 7 pm.
+ *
+ * Only for streaks of 2+ days, only while daily reminders are enabled, and
+ * not on a day the backend already sent a morning push — at most one Lucid
+ * nudge a day (decision logic: streakRiskPolicy.js).
  *
  * @param {{ count: number, lastSessionDate: string|null }} streak
  */
 export const scheduleStreakRiskNotification = async (streak) => {
   try {
-    // If user already focused today, no risk — cancel any pending notification
-    if (streak.lastSessionDate === utcToday()) {
+    const prefs = await notificationPreferences.getPreferences().catch(() => null);
+    const input = {
+      streak,
+      streakTodayKey:       utcToday(),
+      now:                  new Date(),
+      dailyReminderEnabled: resolveNotificationCategories(prefs).dailyReminders,
+      dailyPushSentToday:   false,
+    };
+
+    // Cheap checks first; only read Firestore when we'd otherwise schedule.
+    let decision = decideStreakRisk(input);
+    if (decision.action === 'schedule' && await wasDailyPushSentToday()) {
+      decision = decideStreakRisk({ ...input, dailyPushSentToday: true });
+    }
+
+    if (decision.action === 'cancel') {
       await cancelStreakRiskNotification();
       return;
     }
-
-    // Past 7 pm — too late to schedule for today
-    const now    = new Date();
-    const sevenPm = new Date();
-    sevenPm.setHours(19, 0, 0, 0);
-    if (now >= sevenPm) return;
+    if (decision.action !== 'schedule') return;
 
     // Cancel any stale notification from a previous app open
     const existingId = await AsyncStorage.getItem(STREAK_RISK_NOTIF_KEY);
@@ -119,20 +162,18 @@ export const scheduleStreakRiskNotification = async (streak) => {
       await Notifications.cancelScheduledNotificationAsync(existingId).catch(() => {});
     }
 
-    const title = streak.count > 1
-      ? `Keep your ${streak.count}-day streak alive 🔥`
-      : 'Time for a focus session 🧠';
+    const { title, body } = buildStreakRiskContent(streak.count);
 
     const id = await Notifications.scheduleNotificationAsync({
       content: {
         title,
-        body:  "You haven't focused yet today. Start a session before the day ends.",
+        body,
         data:  { type: 'streak_risk' },
         sound: true,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: sevenPm,
+        date: decision.date,
       },
     });
 

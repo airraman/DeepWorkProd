@@ -14,7 +14,7 @@
  * - Timezone-aware time selection
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -29,19 +29,31 @@ import {
   Dimensions,
   Platform,
   Modal,
+  AppState,
+  Linking,
+  Share,
 } from 'react-native';
 import { Plus, X } from 'lucide-react-native';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { deepWorkStore } from '../services/deepWorkStore';
 import SharedHeader from '../components/SharedHeader';
 import { useFocusLock } from '../context/FocusLockContext';
 import focusLockService from '../services/focusLockService';
 import { useAuth } from '../context/AuthContext';
-import { signOut } from '../services/authService';
+import { signOut, deleteAccount } from '../services/authService';
 import { PaywallModal } from '../components/PaywallModal';
 import * as Updates from 'expo-updates';
+import * as Notifications from 'expo-notifications';
+import notificationPreferences from '../services/notificationPreferences';
+import {
+  NOTIFICATION_CATEGORIES,
+  resolveNotificationCategories,
+} from '../services/notificationPrefsRules';
+import { getMarketingConsent, setMarketingConsent } from '../services/emailConsent';
+import { resolveChromeConnection, CHROME_WEB_STORE_URL } from '../services/chromeConnection';
+import { getChromeConnectionSignals } from '../services/chromeConnectionService';
 
 const isTablet = Platform.isPad || Dimensions.get('window').width > 768;
 const HEADER_HEIGHT = isTablet ? 60 : 50;
@@ -73,6 +85,19 @@ const SettingsScreen = () => {
   // Focus Lock
   const { isAuthorized, selectionCount, refreshSelection } = useFocusLock();
   const [focusLockSelecting, setFocusLockSelecting] = useState(false);
+
+  // ── Notification preferences ──────────────────────────────────────────────
+  // Categories resolve from Firestore (missing fields use the defaults in
+  // notificationPrefsRules.js). Each toggle saves just its own field.
+  const [notifCategories, setNotifCategories] = useState(null);
+  const [notifPermission, setNotifPermission] = useState(null); // OS-level status
+  const [savingCategory, setSavingCategory] = useState(null);
+  // Marketing email consent: explicit opt-in, never inferred from having an
+  // email address. null = unknown / not loaded.
+  const [emailConsent, setEmailConsent] = useState(null);
+  // Lucid for Chrome link status (read-only; see services/chromeConnection.js).
+  // undefined = still loading.
+  const [chromeSignals, setChromeSignals] = useState(undefined);
 
 
 
@@ -107,6 +132,99 @@ const SettingsScreen = () => {
     setAlertMessage(message);
     setShowAlert(true);
     setTimeout(() => setShowAlert(false), 2000);
+  };
+
+  const loadNotificationPrefs = useCallback(async () => {
+    try {
+      const [prefs, permission] = await Promise.all([
+        notificationPreferences.getPreferences(),
+        Notifications.getPermissionsAsync().catch(() => null),
+      ]);
+      setNotifCategories(resolveNotificationCategories(prefs));
+      setNotifPermission(permission?.status ?? null);
+      setEmailConsent(await getMarketingConsent());
+    } catch (error) {
+      console.warn('[Settings] Failed to load notification preferences:', error);
+    }
+  }, []);
+
+  const loadChromeConnection = useCallback(async () => {
+    const uid = user?.uid;
+    if (!uid || user?.isAnonymous) return;
+    setChromeSignals(await getChromeConnectionSignals(uid));
+  }, [user?.uid, user?.isAnonymous]);
+
+  // Reload on every visit (a change on another device shows up) and when
+  // returning from iOS Settings (the OS permission may have changed).
+  useFocusEffect(useCallback(() => {
+    loadNotificationPrefs();
+    loadChromeConnection();
+  }, [loadNotificationPrefs, loadChromeConnection]));
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') loadNotificationPrefs();
+    });
+    return () => sub.remove();
+  }, [loadNotificationPrefs]);
+
+  const handleToggleEmailConsent = async () => {
+    if (emailConsent === null || savingCategory) return;
+    const next = !emailConsent;
+    setEmailConsent(next); // optimistic
+    setSavingCategory('email');
+    const saved = await setMarketingConsent(next);
+    setSavingCategory(null);
+    if (!saved) {
+      setEmailConsent(!next);
+      showFeedback("Couldn't save. Check your connection and try again.");
+    }
+  };
+
+  const handleToggleCategory = async (key) => {
+    if (!notifCategories || savingCategory) return;
+    const next = !notifCategories[key];
+    setNotifCategories((prev) => ({ ...prev, [key]: next })); // optimistic
+    setSavingCategory(key);
+    const saved = await notificationPreferences.setCategoryEnabled(key, next);
+    setSavingCategory(null);
+    if (!saved) {
+      setNotifCategories((prev) => ({ ...prev, [key]: !next }));
+      showFeedback("Couldn't save. Check your connection and try again.");
+    }
+  };
+
+  const confirmDeleteAccount = async (password) => {
+    try {
+      await deleteAccount(password);
+      // Firebase Auth signs the user out automatically once the account is
+      // deleted — AuthContext's existing onAuthStateChanged listener picks
+      // that up and returns the app to LoginScreen on its own.
+    } catch (error) {
+      if (error.code === 'REQUIRES_PASSWORD') {
+        Alert.prompt(
+          'Confirm Password',
+          'Re-enter your password to delete your account.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: (pwd) => confirmDeleteAccount(pwd) },
+          ],
+          'secure-text'
+        );
+      } else {
+        showFeedback(error.message || 'Could not delete account');
+      }
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account?',
+      'This permanently deletes your account and all session history. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => confirmDeleteAccount() },
+      ]
+    );
   };
 
   const handleAddActivity = async () => {
@@ -472,6 +590,161 @@ const SettingsScreen = () => {
           </View>
         )}
 
+        {/* Notifications Section */}
+        {user && notifCategories && (
+          <View style={[
+            styles.section,
+            {
+              backgroundColor: isDark ? '#1f1f1f' : colors.card,
+              borderColor: colors.border,
+              borderWidth: 1,
+              borderRadius: 12,
+            }
+          ]}>
+            <View style={styles.sectionHeader}>
+              <Text style={{ fontSize: 20 }}>🔔</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Notifications
+              </Text>
+            </View>
+
+            {notifPermission === 'denied' && (
+              <View style={{ marginBottom: 8 }}>
+                <Text style={[styles.helpText, { color: colors.textSecondary }]}>
+                  Notifications are turned off for Lucid in iOS Settings. Your choices
+                  below are saved and apply once you turn them on.
+                </Text>
+                <TouchableOpacity onPress={() => Linking.openSettings()} style={{ marginTop: 6 }}>
+                  <Text style={[styles.helpText, { color: colors.primary, fontWeight: '600' }]}>
+                    Open iOS Settings
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {NOTIFICATION_CATEGORIES.map(({ key, label, description }) => {
+              const enabled = notifCategories[key];
+              return (
+                <View key={key} style={styles.settingRow}>
+                  <View style={[styles.settingInfo, { flexDirection: 'column', alignItems: 'flex-start' }]}>
+                    <Text style={[styles.settingLabel, { color: colors.text }]}>{label}</Text>
+                    <Text style={[styles.helpText, { color: colors.textSecondary, marginTop: 4 }]}>
+                      {description}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.toggle,
+                      enabled && { backgroundColor: colors.primary },
+                      savingCategory === key && { opacity: 0.6 },
+                    ]}
+                    onPress={() => handleToggleCategory(key)}
+                    disabled={!!savingCategory}
+                    accessibilityRole="switch"
+                    accessibilityLabel={label}
+                    accessibilityState={{ checked: enabled, busy: savingCategory === key }}
+                  >
+                    <View style={[styles.toggleCircle, enabled && styles.toggleCircleActive]} />
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+
+            {user.email && emailConsent !== null && (
+              <View style={styles.settingRow}>
+                <View style={[styles.settingInfo, { flexDirection: 'column', alignItems: 'flex-start' }]}>
+                  <Text style={[styles.settingLabel, { color: colors.text }]}>Product emails</Text>
+                  <Text style={[styles.helpText, { color: colors.textSecondary, marginTop: 4 }]}>
+                    Occasional emails about your progress and what's new. Off unless you turn it on.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.toggle,
+                    emailConsent && { backgroundColor: colors.primary },
+                    savingCategory === 'email' && { opacity: 0.6 },
+                  ]}
+                  onPress={handleToggleEmailConsent}
+                  disabled={!!savingCategory}
+                  accessibilityRole="switch"
+                  accessibilityLabel="Product emails"
+                  accessibilityState={{ checked: emailConsent, busy: savingCategory === 'email' }}
+                >
+                  <View style={[styles.toggleCircle, emailConsent && styles.toggleCircleActive]} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <Text style={[styles.helpText, { color: colors.textSecondary, marginTop: 8 }]}>
+              Session-complete alerts are part of your focus session and aren't affected by these settings.
+            </Text>
+          </View>
+        )}
+
+        {/* Lucid for Chrome Section */}
+        {(() => {
+          const chrome = resolveChromeConnection({
+            signedIn:    !!user,
+            isAnonymous: !!user?.isAnonymous,
+            loading:     chromeSignals === undefined,
+            signals:     chromeSignals,
+          });
+          const statusColor = chrome.state === 'linked' ? colors.primary : colors.textSecondary;
+          return (
+            <View style={[
+              styles.section,
+              {
+                backgroundColor: isDark ? '#1f1f1f' : colors.card,
+                borderColor: colors.border,
+                borderWidth: 1,
+                borderRadius: 12,
+              }
+            ]}>
+              <View style={styles.sectionHeader}>
+                <Text style={{ fontSize: 20 }}>💻</Text>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  Lucid for Chrome
+                </Text>
+              </View>
+
+              <View style={[styles.settingInfo, { flexDirection: 'column', alignItems: 'flex-start', marginRight: 0 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  {chrome.state === 'loading' ? (
+                    <ActivityIndicator size="small" color={colors.textSecondary} style={{ marginRight: 8 }} />
+                  ) : (
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: statusColor, marginRight: 8 }} />
+                  )}
+                  <Text style={[styles.settingLabel, { color: colors.text }]} accessibilityLiveRegion="polite">
+                    {chrome.title}
+                  </Text>
+                </View>
+                {chrome.detail ? (
+                  <Text style={[styles.helpText, { color: colors.textSecondary, marginTop: 6 }]}>
+                    {chrome.detail}
+                  </Text>
+                ) : null}
+              </View>
+
+              {chrome.showGetExtension && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                  <TouchableOpacity
+                    style={[styles.changeAppsBtn, { borderColor: colors.primary }]}
+                    onPress={() => Share.share({ message: `Lucid for Chrome: ${CHROME_WEB_STORE_URL}` }).catch(() => {})}
+                  >
+                    <Text style={[styles.changeAppsBtnText, { color: colors.primary }]}>Send link to my computer</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.changeAppsBtn, { borderColor: colors.border }]}
+                    onPress={() => Linking.openURL(CHROME_WEB_STORE_URL).catch(() => {})}
+                  >
+                    <Text style={[styles.changeAppsBtnText, { color: colors.textSecondary }]}>View in Web Store</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          );
+        })()}
+
         {/* Save Button */}
         <TouchableOpacity
           style={[
@@ -566,6 +839,15 @@ const SettingsScreen = () => {
               }}
             >
               <Text style={styles.signOutBtnText}>Sign Out</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.deleteAccountBtn}
+              onPress={() => {
+                setShowProfileModal(false);
+                handleDeleteAccount();
+              }}
+            >
+              <Text style={styles.deleteAccountBtnText}>Delete Account</Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -964,6 +1246,16 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  deleteAccountBtn: {
+    marginTop: 16,
+    padding: 12,
+    alignItems: 'center',
+  },
+  deleteAccountBtnText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '500',
   },
   bundleInfo: {
     fontSize: 10,
