@@ -35,7 +35,8 @@
     "production": {
       "ios": {
         "resourceClass": "m-medium",
-        "scheme": "DeepWorkio"
+        "scheme": "DeepWorkio",
+        "cocoapods": "1.17.0"
       },
       "channel": "production",
       "env": {
