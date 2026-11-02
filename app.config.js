@@ -5,7 +5,7 @@ export default {
   expo: {
     name: IS_PROD ? "Lucid" : "Lucid (Dev)",
     slug: "DeepWorkApp",
-    version: "1.0.13",
+    version: "1.0.14",
     orientation: "portrait",
     icon: "./assets/applogo.png",
     userInterfaceStyle: "light",
@@ -69,7 +69,7 @@ export default {
       supportsTablet: true,
       usesAppleSignIn: true,
       bundleIdentifier: IS_PROD ? "com.airraman.deepwork" : "com.airraman.deepwork.dev",
-      buildNumber: "51",
+      buildNumber: "52",
       googleServicesFile: "./ios/DeepWorkioDev/GoogleService-Info.plist",
       infoPlist: {
         // PHASE 4: dropped "fetch" and "processing" — no BackgroundFetch tasks
